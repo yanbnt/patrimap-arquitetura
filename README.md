@@ -20,6 +20,14 @@ Onde está cada máquina · quem usa · como ela está · o que já aconteceu co
 
 ## As telas
 
+<div align="center">
+<img src="docs/telas/00-login.jpg" alt="Tela de entrada: painel de marca à esquerda com o resumo do que o sistema faz, formulário de acesso à direita" width="880">
+<br><sub><b>A entrada.</b> É a régua de qualidade do projeto — foi o desenho
+aprovado aqui que definiu o padrão das outras telas.</sub>
+</div>
+
+<br>
+
 <table>
 <tr>
 <td width="50%"><img src="docs/telas/01-mapa-do-parque.jpg" alt="Mapa do parque: lojas e setores com as baias, cada uma mostrando o colaborador, a configuração da máquina e o índice de desempenho"><br>
