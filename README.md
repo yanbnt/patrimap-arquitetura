@@ -18,6 +18,30 @@ Onde está cada máquina · quem usa · como ela está · o que já aconteceu co
 > o código de produção e os dados são privados. Nomes de pessoa que aparecem em
 > testes e exemplos são fictícios.
 
+## As telas
+
+<table>
+<tr>
+<td width="50%"><img src="docs/telas/01-mapa-do-parque.jpg" alt="Mapa do parque: lojas e setores com as baias, cada uma mostrando o colaborador, a configuração da máquina e o índice de desempenho"><br>
+<b>Mapa do parque</b><br><sub>A planta da rede: loja → setor → baia. Cada mesa mostra quem senta,
+a configuração da máquina e o índice de desempenho. Mesa vazia aparece vazia.</sub></td>
+<td width="50%"><img src="docs/telas/02-ficha-da-maquina.jpg" alt="Ficha da máquina aberta no mapa, com índice de desempenho, aviso de estado crítico e ações de chamado"><br>
+<b>Ficha da máquina</b><br><sub>Clicar numa baia abre o equipamento: saúde, tempo ligado, preventiva,
+e as ações possíveis. Máquina em estado crítico diz o que fazer.</sub></td>
+</tr>
+<tr>
+<td><img src="docs/telas/03-tabela-de-computadores.jpg" alt="Tabela de computadores com baia, local, colaborador, situação, score e configuração"><br>
+<b>Parque em tabela</b><br><sub>O mesmo dado do mapa, para quem precisa filtrar, ordenar e exportar.
+Mesa sem máquina continua na lista — ausência também é informação.</sub></td>
+<td><img src="docs/telas/04-cadastro-de-colaborador.jpg" alt="Central de cadastros com a lista de colaboradores e a ficha lateral aberta"><br>
+<b>Central de cadastros</b><br><sub>Colaboradores, setores, lojas, computadores e notebooks numa tela.
+A ficha diz, inclusive, quando a pessoa <i>não</i> tem conta de acesso.</sub></td>
+</tr>
+</table>
+
+<sub>Capturas de um ambiente de demonstração. Todos os nomes, lojas e números de
+patrimônio são fictícios.</sub>
+
 ## O problema
 
 Inventário de TI quase sempre começa numa planilha, e quase sempre morre nela.
