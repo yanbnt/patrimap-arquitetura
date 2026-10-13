@@ -1,0 +1,800 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% comment %}
+USUÁRIOS E ACESSOS — uma tela no lugar de três.
+
+Era a lista de usuários do admin, a lista de grupos do admin, e o mapa
+"qual grupo abre qual tela" — que não tinha tela nenhuma: vivia nas condições
+do menu e dentro de cada view, em duas cópias que divergiram.
+
+O DESENHO É UM CIRCUITO, e não por enfeite: a pessoa é o CHIP no meio, cada
+grupo é um COMPONENTE carregando os balões das telas que destrava, e ligar o
+acesso FECHA O CIRCUITO — trilha de placa, pad de solda, pino, e a energia
+correndo uma vez. O que se vê de uma vez aqui é o que três telas juntas não
+mostravam: grupo que não destrava nada, grupos gêmeos, gente sem grupo.
+
+O ANEL em volta do avatar é a fração de telas que a pessoa vê — o mesmo número
+do "vê N de M", em forma. Quem vê todas ganha corrente girando e o raio: é o
+nível de poder, e serve para varrer a lista sem ler número.
+
+DUAS GRAVAÇÕES, PERMISSÕES DIFERENTES (apps/orgs/views_acessos.py):
+  · pessoa ↔ grupo — quem abre a tela, com a trava de não conceder o que não tem;
+  · grupo → tela   — só superusuário; reescreve o acesso de todo mundo.
+
+O CSS nasceu do protótipo aprovado e foi religado aos tokens do sistema
+(--md-*) e escopado em #ac. Os fios são medidos no navegador (getBoundingClientRect)
+e redesenhados no resize; abaixo de 1081px a placa desmancha em coluna e as
+trilhas somem, porque trilha em pilha vira risco torto.
+
+Acesso: registro único de telas, tela "acessos" (apps/orgs/acessos.py).
+{% endcomment %}
+
+{% block extrastyle %}{{ block.super }}
+<style>
+  #ac {
+    --e1: 4px; --e2: 8px; --e3: 12px; --e4: 16px; --e5: 20px; --e6: 24px;
+    /* a cor da trilha acompanha o tema: no claro o verde escuro da marca, no
+       escuro o verde claro — os dois já existem como primário */
+    --linha: var(--md-primary);
+  }
+#ac * { box-sizing: border-box; }
+#ac { margin: 0; background: var(--md-surface); color: var(--md-on-surface);
+         font: 400 14px/20px var(--md-font); letter-spacing: .25px; -webkit-font-smoothing: antialiased; }
+#ac .wrap { max-width: 1320px; margin: 0 auto; padding: 28px 20px 56px; }
+#ac .eyebrow { font: 500 11px/16px var(--md-font); letter-spacing: 1.2px; text-transform: uppercase;
+             color: var(--md-on-surface-variant); margin: 0 0 4px; }
+#ac h1 { font: 400 30px/38px var(--md-font); margin: 0 0 6px; letter-spacing: 0; }
+#ac .sub { color: var(--md-on-surface-variant); margin: 0 0 20px; font: 400 15px/22px var(--md-font);
+         max-width: 76ch; }
+/* ---------- a janela ---------- */
+#ac .jan { border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-lg);
+         background: var(--md-surface-container-low); overflow: hidden; box-shadow: var(--md-elev-1); }
+#ac .jan__corpo { display: grid; grid-template-columns: 272px minmax(0, 1fr); }
+/* ---------- lateral: pessoas e grupos ---------- */
+#ac .lado { border-right: 1px solid var(--md-outline-variant); display: flex; flex-direction: column;
+          max-height: 700px; }
+#ac .abas { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: var(--e3) var(--e3) 0; }
+#ac .abas button { border: 0; background: transparent; cursor: pointer; padding: 10px 8px;
+                 font: 500 13.5px/18px var(--md-font); color: var(--md-on-surface-variant);
+                 border-bottom: 2px solid transparent; display: flex; align-items: center;
+                 justify-content: center; gap: 6px; }
+#ac .abas button b { font: 600 11px/16px var(--md-font); background: var(--md-surface-container-highest);
+                   border-radius: var(--md-shape-full); padding: 0 6px; }
+#ac .abas button[aria-selected="true"] { color: var(--md-primary); border-bottom-color: var(--md-primary); }
+#ac .abas button[aria-selected="true"] b { background: var(--md-secondary-container);
+                                         color: var(--md-on-secondary-container); }
+#ac .busca { display: flex; align-items: center; gap: var(--e2); height: 38px; margin: var(--e3);
+           padding: 0 var(--e3); border-radius: var(--md-shape-full); background: var(--md-surface-container-high); }
+#ac .busca svg { width: 18px; height: 18px; color: var(--md-on-surface-variant); flex: none; }
+#ac .busca input { border: 0; background: transparent; outline: 0; color: var(--md-on-surface);
+                 font: 400 14px/20px var(--md-font); width: 100%; }
+/* Porta para CRIAR usuário.
+   Esta tela substituiu /admin/auth/user/ e /admin/auth/group/ no menu, mas
+   criar conta nova ficou sem caminho: a tela do admin continua de pé e ninguém
+   mais chega nela. O dono relatou como "a parte de criar usuário não existe
+   mais". Aqui não se cria o usuário — se mostra onde ele nasce. */
+#ac .ac-novo { display: flex; align-items: center; gap: var(--e2);
+             margin: 0 var(--e3) var(--e3); padding: 9px var(--e3);
+             border-radius: var(--md-shape-full); border: 1px solid var(--md-outline-variant);
+             color: var(--md-primary); text-decoration: none;
+             font: 500 13px/1 var(--md-font); }
+#ac .ac-novo:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+#ac .ac-novo svg { width: 16px; height: 16px; flex: none; }
+#ac .rol { overflow-y: auto; padding: 0 var(--e2) var(--e3); flex: 1; }
+#ac .li { display: grid; grid-template-columns: 36px minmax(0,1fr) auto; gap: var(--e3);
+        align-items: center; width: 100%; border: 0; background: transparent; cursor: pointer;
+        text-align: left; padding: var(--e2); border-radius: var(--md-shape-md);
+        transition: background 140ms var(--md-ease-standard); }
+#ac .li:hover { background: var(--md-action-hover); }
+#ac .li[aria-current="true"] { background: var(--md-secondary-container);
+                             color: var(--md-on-secondary-container); }
+#ac .av { width: 36px; height: 36px; border-radius: var(--md-shape-full); display: grid;
+        place-items: center; font: 600 13px/1 var(--md-font); background: var(--md-primary-container);
+        color: var(--md-on-primary-container); flex: none; }
+#ac .av--su { background: var(--md-primary); color: var(--md-on-primary); }
+#ac .av--gr { background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); }
+#ac .li__n { min-width: 0; }
+#ac .li__n b { display: block; font: 500 13.5px/18px var(--md-font); overflow: hidden;
+             text-overflow: ellipsis; white-space: nowrap; }
+#ac .li__n span { display: block; font: 400 11.5px/16px var(--md-font);
+                color: var(--md-on-surface-variant); overflow: hidden;
+                text-overflow: ellipsis; white-space: nowrap; }
+#ac .li[aria-current="true"] .li__n span { color: inherit; opacity: .8; }
+#ac .li__t { font: 600 11px/16px var(--md-font); color: var(--md-on-surface-variant);
+           font-variant-numeric: tabular-nums; white-space: nowrap; }
+#ac .li[aria-current="true"] .li__t { color: inherit; }
+#ac .li__t--alerta { color: var(--md-st-warn); }
+/* ---------- o palco ---------- */
+#ac .palco { padding: var(--e5); min-width: 0; position: relative; }
+#ac .palco__topo { display: flex; align-items: flex-start; gap: var(--e4); flex-wrap: wrap;
+                 margin-bottom: var(--e4); }
+#ac .palco__topo h2 { margin: 0; font: 400 22px/29px var(--md-font); }
+#ac .palco__topo p { margin: 2px 0 0; color: var(--md-on-surface-variant);
+                   font: 400 13px/18px var(--md-font); }
+#ac .palco__acao { margin-left: auto; display: flex; gap: var(--e2); align-items: center; }
+#ac .bt { border: 0; cursor: pointer; height: 40px; padding: 0 20px; border-radius: var(--md-shape-full);
+        font: 500 14px/20px var(--md-font); display: inline-grid; place-items: center; }
+#ac .bt--p { background: var(--md-primary); color: var(--md-on-primary); }
+#ac .bt--p:disabled { background: var(--md-surface-container-highest); color: var(--md-on-surface-variant);
+                    cursor: default; }
+#ac .bt--s { background: transparent; color: var(--md-primary);
+           box-shadow: inset 0 0 0 1px var(--md-outline); }
+#ac .bt--s:disabled { color: var(--md-on-surface-variant); opacity: .5; cursor: default; }
+/* O ANEL: 3x3 com a pessoa no meio. São oito grupos — cabe exato.
+     A POSIÇÃO DE CADA CARTÃO É CLASSE, NÃO ESTILO INLINE. Com `grid-column: 3`
+     escrito no elemento, a media query de celular nao tinha como desmanchar: a
+     grade de UMA coluna criava colunas implicitas e os cartoes 2 e 3 nasciam
+     fora da caixa, cortados. Placement so' entra na largura em que existe. */
+#ac .anel { position: relative; display: grid; gap: var(--e3);
+          grid-template-columns: minmax(0, 1fr); }
+#ac .fios { display: none; position: absolute; inset: 0; width: 100%; height: 100%;
+          pointer-events: none; z-index: 0; overflow: visible; }
+#ac .fios path { fill: none; stroke: var(--linha); stroke-width: 2; stroke-linecap: round;
+               opacity: .9; transition: opacity 220ms var(--md-ease-standard); }
+#ac .fios path.off { stroke: var(--md-outline); stroke-width: 1.5; stroke-dasharray: 3 5;
+                   opacity: .35; }
+#ac .fios circle { fill: var(--linha); }
+#ac .eu { z-index: 2; display: grid; place-items: center;
+        gap: var(--e2); padding: var(--e4); border-radius: var(--md-shape-lg);
+        background: var(--md-surface-container); border: 1px solid var(--md-outline-variant);
+        text-align: center; }
+#ac .eu__av { width: 76px; height: 76px; border-radius: var(--md-shape-full); display: grid;
+            place-items: center; font: 600 27px/1 var(--md-font);
+            background: var(--md-primary-container); color: var(--md-on-primary-container);
+            box-shadow: 0 0 0 6px var(--md-surface-container-low); }
+#ac .eu__av--su { background: var(--md-primary); color: var(--md-on-primary); }
+#ac .eu__n { font: 500 16px/21px var(--md-font); }
+#ac .eu__d { font: 400 12px/16px var(--md-font); color: var(--md-on-surface-variant); }
+#ac .eu__c { font: 600 12px/17px var(--md-font); color: var(--md-primary); }
+#ac .gr { position: relative; z-index: 1; border: 1px solid var(--md-outline-variant);
+        background: var(--md-surface-container-low); border-radius: var(--md-shape-lg); padding: var(--e3) var(--e4);
+        cursor: pointer; text-align: left; display: grid; gap: 6px; align-content: start;
+        transition: background 160ms var(--md-ease-standard), border-color 160ms var(--md-ease-standard),
+                    transform 160ms var(--md-ease-standard); }
+#ac .gr:hover { background: var(--md-action-hover); transform: translateY(-1px); }
+#ac .gr:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+#ac .gr[aria-pressed="true"] { background: var(--md-secondary-container);
+                             color: var(--md-on-secondary-container);
+                             border-color: var(--md-primary); }
+#ac .gr__t { display: flex; align-items: center; gap: var(--e2); }
+#ac .gr__t b { font: 600 14px/19px var(--md-font); }
+#ac .gr__t i { margin-left: auto; font: 400 11px/16px var(--md-font); font-style: normal;
+             color: var(--md-on-surface-variant); white-space: nowrap; }
+#ac .gr[aria-pressed="true"] .gr__t i { color: inherit; opacity: .75; }
+#ac .gr__esc { width: 22px; height: 22px; border-radius: var(--md-shape-full); display: grid;
+             place-items: center; background: var(--md-surface-container-highest); flex: none; }
+#ac .gr__esc svg { width: 14px; height: 14px; color: var(--md-on-surface-variant); }
+#ac .gr[aria-pressed="true"] .gr__esc { background: var(--md-primary); }
+#ac .gr[aria-pressed="true"] .gr__esc svg { color: var(--md-on-primary); }
+#ac .baloes { display: flex; flex-wrap: wrap; gap: 4px; }
+/* BALÃO = uma tela. É o que o grupo carrega. */
+#ac .balao { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px;
+           border-radius: var(--md-shape-full); font: 500 11.5px/16px var(--md-font);
+           background: var(--md-surface-container-highest); color: var(--md-on-surface-variant);
+           transition: background 160ms var(--md-ease-standard), color 160ms var(--md-ease-standard); }
+#ac .balao svg { width: 13px; height: 13px; }
+#ac .gr[aria-pressed="true"] .balao { background: var(--md-primary-container);
+                                    color: var(--md-on-primary-container); }
+#ac .balao.eco { background: var(--md-tertiary-container); color: var(--md-on-tertiary-container);
+               box-shadow: 0 0 0 2px var(--md-tertiary-container); }
+#ac .gr__nada { font: 400 12px/17px var(--md-font); color: var(--md-st-warn);
+              display: flex; align-items: center; gap: 6px; }
+#ac .gr__nada svg { width: 14px; height: 14px; flex: none; }
+/* ---------- rodapé: o que não depende de grupo ---------- */
+#ac .base { margin-top: var(--e5); padding: var(--e4); border-radius: var(--md-shape-lg);
+          background: var(--md-surface-container); border: 1px dashed var(--md-outline-variant); }
+#ac .base p { margin: 0 0 var(--e2); font: 500 12.5px/18px var(--md-font);
+            color: var(--md-on-surface-variant); }
+/* ---------- diff pendente ---------- */
+#ac .diff { position: sticky; bottom: 0; margin-top: var(--e5); display: flex; gap: var(--e3);
+          align-items: center; flex-wrap: wrap; padding: var(--e3) var(--e4);
+          border-radius: var(--md-shape-lg); background: var(--md-surface-container-high);
+          border: 1px solid var(--md-outline-variant); }
+#ac .diff__t { font: 500 13.5px/19px var(--md-font); }
+#ac .diff__l { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; min-width: 160px; }
+#ac .marca { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px;
+           border-radius: var(--md-shape-full); font: 600 11.5px/16px var(--md-font); }
+#ac .marca--mais { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+#ac .marca--menos { background: var(--md-st-crit-cont); color: var(--md-st-crit); }
+/* ---------- modo grupo ---------- */
+#ac .duo { display: grid; grid-template-columns: minmax(0,1fr); gap: var(--e4);
+         align-items: start; }
+#ac .cx { border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-lg);
+        background: var(--md-surface-container-low); padding: var(--e4); }
+#ac .cx h3 { margin: 0 0 var(--e1); font: 500 15px/20px var(--md-font); }
+#ac .cx p.d { margin: 0 0 var(--e3); font: 400 12.5px/18px var(--md-font);
+            color: var(--md-on-surface-variant); }
+#ac .membros { display: grid; gap: 2px; }
+#ac .telas { display: grid; gap: var(--e2); }
+#ac .tela { display: grid; grid-template-columns: 24px minmax(0,1fr) auto; gap: var(--e3);
+          align-items: center; padding: 8px; border-radius: var(--md-shape-sm); background: var(--md-surface-container); }
+#ac .tela svg { width: 18px; height: 18px; color: var(--md-primary); }
+/* b e span eram inline: "Registros" e "/parque/registros/" saiam colados */
+#ac .tela b { display: block; font: 500 13px/18px var(--md-font); }
+#ac .tela span { display: block; font: 400 11.5px/16px var(--md-font);
+               color: var(--md-on-surface-variant); font-family: var(--md-font); }
+#ac .tela__s { font: 600 11px/16px var(--md-font); padding: 2px 8px; border-radius: var(--md-shape-full);
+             background: var(--md-st-ok-cont); color: var(--md-st-ok); white-space: nowrap; }
+#ac .tela__s--n { background: transparent; color: var(--md-on-surface-variant); font-weight: 500; }
+#ac .tela--fora { background: transparent; box-shadow: inset 0 0 0 1px var(--md-outline-variant); }
+#ac .tela--fora svg { color: var(--md-on-surface-variant); opacity: .5; }
+#ac .tela--fora b { color: var(--md-on-surface-variant); }
+#ac .nota { margin: var(--e4) 0 0; padding: var(--e3) var(--e4); border-radius: var(--md-shape-md);
+          background: var(--md-surface-container); font: 400 13px/19px var(--md-font);
+          color: var(--md-on-surface-variant); border-left: 3px solid var(--md-outline-variant); }
+#ac .nota b { color: var(--md-on-surface); }
+#ac .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+           background: #1b1f1c; color: #eef2ee; padding: 12px 18px; border-radius: var(--md-shape-sm);
+           font: 500 13.5px/19px var(--md-font); box-shadow: var(--md-elev-2); z-index: 50; }
+.dark #ac .toast {
+    background: #e6ede8; color: #171d19; }
+#ac .notas { margin-top: var(--e5); display: grid; gap: var(--e2); }
+#ac .notas p { margin: 0; padding: var(--e3) var(--e4); border-radius: var(--md-shape-md);
+             background: var(--md-surface-container-low); border: 1px solid var(--md-outline-variant);
+             font: 400 13px/19px var(--md-font); color: var(--md-on-surface-variant); }
+#ac .notas b { color: var(--md-on-surface); }
+/* ================= CELULAR: UMA COISA POR VEZ ============================
+   Empilhado nao funcionou. A lista de pessoas ficava presa numa caixa de 320px
+   com rolagem interna (a quarta pessoa nascia cortada ao meio, o que le como
+   defeito), e embaixo dela vinham os oito cartoes em coluna: 1.272px de placa,
+   2.696px de pagina. Ninguem escolhe pessoa assim.
+
+   No telefone a tela passa a ter DOIS estados: a lista ocupando a tela, e a
+   ficha da pessoa ocupando a tela, com um "voltar" no topo. E' o padrao de
+   lista/detalhe do celular — e e' o que a placa vira quando nao ha espaco
+   para placa nenhuma. */
+@media (max-width: 820px) {
+#ac .sub { display: none; }
+#ac .jan__corpo { grid-template-columns: 1fr; }
+#ac .lado { border-right: 0; max-height: none; }
+#ac .rol { overflow: visible; padding-bottom: var(--e4); }
+#ac .palco { padding: var(--e4); }
+#ac .duo { grid-template-columns: 1fr; }
+#ac h1 { font-size: 25px; line-height: 32px; }
+#ac .jan__corpo.mob-detalhe .lado { display: none; }
+#ac .jan__corpo:not(.mob-detalhe) .palco { display: none; }
+/* especificidade maior de proposito: a regra base `#ac .voltar-mob {display:none}`
+   fica DEPOIS deste bloco no arquivo e, com a mesma especificidade, vencia — o
+   botao de voltar simplesmente nao aparecia no telefone. */
+#ac .palco .palco__topo .voltar-mob { display: inline-flex; }
+#ac .gr { padding: 10px var(--e3); }
+#ac .baloes { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 3px;
+              overscroll-behavior-x: contain; }
+#ac .baloes .balao { flex: none; }
+#ac .gr__tag { top: -8px; left: var(--e3); }
+#ac .eu { padding: var(--e4); }
+#ac .eu__av { width: 60px; height: 60px; font-size: 21px; }
+#ac .eu__d { font-size: 11px; line-height: 15px; }
+#ac .palco__topo { gap: var(--e2); }
+#ac .palco__acao { margin-left: 0; width: 100%; }
+#ac .palco__acao .bt { flex: 1; }
+#ac .anel { gap: var(--e2); }
+  }
+/* o voltar existe so' no telefone: no desktop a lista esta do lado */
+#ac .voltar-mob { display: none; }
+@media (min-width: 821px) {
+#ac .anel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#ac .eu { grid-column: 1 / -1; }
+#ac .duo { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  }
+/* Só aqui existe anel de verdade — e só aqui os fios fazem sentido. */
+@media (min-width: 1081px) {
+/* o vão maior existe para a TRILHA: com 12px o cotovelo não cabia e a
+       ligação virava um risquinho entre duas caixas */
+#ac .anel { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 30px; }
+#ac .fios { display: block; }
+#ac .eu { grid-column: 2; grid-row: 2; }
+#ac .gr--1 { grid-column: 1; grid-row: 1; }
+#ac .gr--2 { grid-column: 2; grid-row: 1; }
+#ac .gr--3 { grid-column: 3; grid-row: 1; }
+#ac .gr--4 { grid-column: 1; grid-row: 2; }
+#ac .gr--5 { grid-column: 3; grid-row: 2; }
+#ac .gr--6 { grid-column: 1; grid-row: 3; }
+#ac .gr--7 { grid-column: 2; grid-row: 3; }
+#ac .gr--8 { grid-column: 3; grid-row: 3; }
+  }
+@media (prefers-reduced-motion: reduce) {
+#ac * { transition-duration: 1ms !important; }
+  }
+/* ======================= MOVIMENTO =======================================
+     Três momentos, e só três: a tela chegando, o fio sendo ligado, e o eco
+     avisando que a tela já vinha de outro grupo. Movimento que não responde a
+     uma pergunta é enfeite — e enfeite numa tela de permissão atrapalha. */
+@keyframes axSobe { from { opacity: 0; transform: translateY(12px) scale(.985); }
+                      to   { opacity: 1; transform: none; } }
+@keyframes axPop { from { opacity: 0; transform: scale(.88); }
+                      to   { opacity: 1; transform: none; } }
+@keyframes axDesenha { from { stroke-dashoffset: var(--len); }
+                         to   { stroke-dashoffset: 0; } }
+@keyframes axPulso { from { stroke-dashoffset: var(--len); }
+                         to   { stroke-dashoffset: calc(var(--len) * -2); } }
+@keyframes axEco { 0%   { box-shadow: 0 0 0 0 var(--md-tertiary-container); }
+                     55%  { box-shadow: 0 0 0 8px transparent; }
+                     100% { box-shadow: 0 0 0 2px var(--md-tertiary-container); } }
+@keyframes axBrilho { from { opacity: .55; transform: scale(.9); }
+                        to   { opacity: 0; transform: scale(1.5); } }
+/* a entrada só roda quando a PESSOA muda — não a cada clique num grupo */
+#ac .anel--entra .eu { animation: axPop 420ms var(--md-ease-emphasized) both; }
+#ac .anel--entra .gr { animation: axSobe 460ms var(--md-ease-emphasized) both;
+                     animation-delay: calc(var(--i) * 45ms + 60ms); }
+#ac .eu__av { position: relative; }
+#ac .eu__av::after { content: ""; position: absolute; inset: -10px; border-radius: 50%;
+                   border: 2px solid var(--md-primary); opacity: 0; pointer-events: none; }
+#ac .eu__av.brilha::after { animation: axBrilho 620ms var(--md-ease-standard); }
+#ac .eu__c { font-variant-numeric: tabular-nums; transition: color 200ms var(--md-ease-standard); }
+#ac .fios path { transition: stroke 240ms var(--md-ease-standard), opacity 240ms var(--md-ease-standard),
+                           stroke-width 200ms var(--md-ease-standard); }
+#ac .fios path.desenha { animation: axDesenha 560ms var(--md-ease-emphasized) both; }
+#ac .fios path.pulso { stroke: var(--linha); stroke-width: 4; opacity: .95;
+                     stroke-linecap: round; animation: axPulso 760ms var(--md-ease-standard) both; }
+#ac .fios path.realce { stroke: var(--md-primary); opacity: .8; stroke-width: 2.5;
+                      stroke-dasharray: none; }
+#ac .balao { transition: background 220ms var(--md-ease-standard), color 220ms var(--md-ease-standard),
+                       box-shadow 220ms var(--md-ease-standard); }
+#ac .balao.eco { animation: axEco 560ms var(--md-ease-standard); }
+#ac .gr { transition: background 200ms var(--md-ease-standard), border-color 200ms var(--md-ease-standard),
+                    box-shadow 200ms var(--md-ease-standard), transform 200ms var(--md-ease-emphasized); }
+#ac .gr[aria-pressed="true"] { box-shadow: 0 2px 10px -4px var(--md-primary); }
+#ac .gr:active { transform: scale(.99); }
+#ac .gr__esc { transition: background 220ms var(--md-ease-standard); }
+#ac .gr__esc svg { transition: transform 300ms var(--md-ease-emphasized); }
+#ac .gr[aria-pressed="true"] .gr__esc svg { transform: rotate(360deg); }
+#ac .diff { animation: axSobe 300ms var(--md-ease-emphasized) both; }
+@media (prefers-reduced-motion: reduce) {
+#ac .anel--entra .eu, #ac .anel--entra .gr, #ac .fios path.desenha, #ac .fios path.pulso, #ac .balao.eco, #ac .diff, #ac .eu__av.brilha::after { animation: none !important; }
+  }
+/* ======================= NÍVEL DE PODER ==================================
+     O anel em volta do avatar é a fração de telas que a pessoa vê. Não é
+     enfeite: é o mesmo número do "vê 14 de 19", em forma — dá para varrer a
+     lista de gente e ver quem tem muito acesso sem ler nenhum número.
+
+     `--poder` é propriedade REGISTRADA porque o navegador só interpola o que
+     tem tipo declarado; sem isto o anel salta em vez de crescer. Mesma regra
+     do <angle> da borda viva do Dashboard. */
+@property --ax-poder { syntax: '<number>'; inherits: false; initial-value: 0; }
+@property --ax-giro { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+#ac .eu__av::before {
+    content: ""; position: absolute; inset: -9px; border-radius: 50%;
+    background: conic-gradient(var(--md-primary) calc(var(--ax-poder) * 1%),
+                               var(--md-outline-variant) 0);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 0);
+    mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 0);
+    transition: --ax-poder 620ms var(--md-ease-emphasized);
+    pointer-events: none;
+  }
+/* PODER MÁXIMO: vê tudo. O anel deixa de ser medida e vira corrente — e o
+     raio no canto diz por quê. Só quem vê as 19 telas ganha isto. */
+#ac .eu__av--max::before {
+    background: conic-gradient(from var(--ax-giro),
+      var(--md-primary), #7cecab, #ffd54a, #7cecab, var(--md-primary));
+    animation: axGira 3.4s linear infinite;
+  }
+@keyframes axGira { to { --ax-giro: 360deg; } }
+#ac .eu__raio { position: absolute; right: -4px; bottom: -4px; width: 28px; height: 28px;
+              border-radius: 50%; display: grid; place-items: center;
+              background: #ffd54a; color: #3d2b00; box-shadow: 0 2px 8px rgba(0,0,0,.28);
+              animation: axRaio 2.6s var(--md-ease-standard) infinite; }
+#ac .eu__raio svg { width: 16px; height: 16px; }
+@keyframes axRaio {
+    0%, 72%, 100% { transform: scale(1); }
+    78% { transform: scale(1.18) rotate(-6deg); }
+    86% { transform: scale(.96) rotate(4deg); }
+  }
+#ac .eu__nivel { display: inline-flex; align-items: center; gap: 5px; height: 22px;
+               padding: 0 10px; border-radius: var(--md-shape-full);
+               font: 600 11px/16px var(--md-font); letter-spacing: .3px;
+               text-transform: uppercase; background: var(--md-surface-container-highest);
+               color: var(--md-on-surface-variant); }
+#ac .eu__nivel--max { background: #ffd54a; color: #3d2b00; }
+/* ======================= A PLACA =========================================
+     O desenho é um circuito: o avatar é o CHIP no meio, cada grupo é um
+     componente, e o que liga os dois é TRILHA — segmento reto, cotovelo de 90°
+     e pad de solda nas pontas. Curva orgânica não parece circuito; trilha
+     parece. Ligar o grupo é fechar o circuito: a energia corre pela trilha uma
+     vez e ela fica acesa. */
+#ac .fios path.aceso { filter: drop-shadow(0 0 3px var(--linha)); }
+#ac .fios .pad { fill: var(--linha); }
+#ac .fios .pad--off { fill: var(--md-outline); opacity: .45; }
+#ac .fios .pino { fill: var(--linha); }
+#ac .fios .pino--off { fill: var(--md-outline); opacity: .4; }
+@media (prefers-reduced-motion: reduce) {
+#ac .eu__av--max::before, #ac .eu__raio { animation: none !important; }
+#ac .eu__av::before { transition: none !important; }
+  }
+
+  /* ---- o que muda por ser tela do sistema, e nao maquete ---- */
+  /* No modo Grupos a linha da tela passa a ser BOTAO quando quem olha pode
+     gravar. Botao herda estilo do admin, entao o reset vem explicito. */
+  /* O SUPERUSUARIO NAO RECEBE ACESSO PELA TRILHA — ele tem bypass.
+     Sem dizer isso, a tela mostra "PODER MAXIMO / ve 18 de 18" ao lado de seis
+     cartoes apagados, e quem le conclui, com razao, que o dado esta errado. */
+  #ac .eu__su { display: grid; grid-template-columns: 18px minmax(0,1fr); gap: 8px;
+                align-items: start; text-align: left; margin-top: 4px;
+                padding: 8px 10px; border-radius: var(--md-shape-sm);
+                background: #ffd54a; color: #3d2b00;
+                font: 500 11.5px/16px var(--md-font); }
+  #ac .eu__su svg { width: 16px; height: 16px; }
+  #ac .eu__su b { display: block; font: 700 11px/16px var(--md-font);
+                  letter-spacing: .4px; text-transform: uppercase; }
+
+  /* criar grupo, na propria lista */
+  #ac .novo { padding: 0 var(--e2) var(--e2); }
+  #ac .novo__b { display: flex; align-items: center; gap: var(--e2); width: 100%;
+                 border: 1px dashed var(--md-outline); background: transparent;
+                 color: var(--md-primary); cursor: pointer; padding: 9px var(--e3);
+                 border-radius: var(--md-shape-md); font: 500 13px/18px var(--md-font); }
+  #ac .novo__b:hover { background: var(--md-action-hover); }
+  #ac .novo__b svg { width: 16px; height: 16px; }
+  #ac .novo__f { display: grid; gap: var(--e2); }
+  #ac .novo__f input { height: 38px; padding: 0 var(--e3); border-radius: var(--md-shape-sm);
+                       border: 1px solid var(--md-outline); background: var(--md-surface);
+                       color: var(--md-on-surface); font: 400 13.5px/18px var(--md-font); }
+  #ac .novo__f div { display: flex; gap: var(--e2); }
+  #ac .novo__f .bt { height: 34px; padding: 0 14px; font-size: 13px; flex: 1; }
+
+  /* ================= RASCUNHO x SALVO =====================================
+     O cartao clicado ficava IDENTICO ao cartao que ja tinha o acesso, e a
+     unica pista era a barra no rodape — fora da vista quando a placa esta na
+     tela. Resultado: quem explorou a tela viu oito grupos "ligados" que nao
+     existem no banco, e leu isso como dado falso. Com razao.
+
+     Agora rascunho tem cara de rascunho: contorno tracejado, etiqueta "nao
+     salvo", e a trilha em formigas andando em vez de linha cheia. */
+  #ac .gr--rascunho { border-style: dashed; border-color: var(--md-primary);
+                      border-width: 1.5px; }
+  #ac .gr__tag { position: absolute; top: -9px; left: var(--e4); height: 18px;
+                 padding: 0 8px; border-radius: var(--md-shape-full);
+                 background: var(--md-primary); color: var(--md-on-primary);
+                 font: 600 10px/18px var(--md-font); letter-spacing: .4px;
+                 text-transform: uppercase; white-space: nowrap; }
+  #ac .fios path.provisorio { stroke-dasharray: 7 6; animation: axFormigas 700ms linear infinite;
+                              filter: none; }
+  @keyframes axFormigas { to { stroke-dashoffset: -13; } }
+  /* a barra de mudancas para de ser rodape discreto */
+  #ac .diff { border: 1.5px solid var(--md-primary);
+              background: var(--md-secondary-container);
+              color: var(--md-on-secondary-container); z-index: 4; }
+  #ac .diff__t { font-weight: 600; }
+
+  #ac button.tela { width: 100%; border: 0; cursor: pointer; text-align: left;
+                    font: inherit; color: inherit;
+                    transition: background 160ms var(--md-ease-standard),
+                                box-shadow 160ms var(--md-ease-standard); }
+  #ac button.tela:hover { background: var(--md-surface-container-high); }
+  #ac button.tela[aria-pressed="true"] { box-shadow: inset 0 0 0 1.5px var(--md-primary); }
+  #ac button.tela:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+  #ac .toast--ruim { background: var(--md-st-crit-cont); color: var(--md-st-crit);
+                     box-shadow: inset 0 0 0 1px var(--md-st-crit), var(--md-elev-2); }
+  /* o admin poe margem nos h1/h2 de dentro do content */
+  #ac h1, #ac h2, #ac h3 { color: inherit !important; }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="ac">
+<div class="wrap">
+  <p class="eyebrow">Patrimap · acessos</p>
+  <h1>Usuários e permissões</h1>
+  <p class="sub">Uma tela no lugar de três: a lista de pessoas, a lista de grupos e o que cada
+    grupo abre. No meio fica a pessoa; em volta, os grupos, cada um carregando os balões das
+    telas que ele destrava. Clicar num grupo liga o fio — e é isso que dá ou tira o acesso.</p>
+
+
+  <div class="jan">
+    <div class="jan__corpo">
+      <aside class="lado">
+        <div class="abas" role="tablist">
+          <button type="button" role="tab" id="aba-p" aria-selected="true">Pessoas
+            <b id="n-p">{{ n_pessoas }}</b></button>
+          <button type="button" role="tab" id="aba-g" aria-selected="false">Grupos
+            <b id="n-g">{{ n_grupos }}</b></button>
+        </div>
+        <div class="busca">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input id="q" type="search" placeholder="Buscar pessoa ou grupo…" aria-label="Buscar">
+        </div>
+        {% comment %}
+        Esta tela veio para substituir /admin/auth/user/ e /admin/auth/group/ no
+        menu — e com elas foi embora o caminho para CRIAR conta. A tela do admin
+        continua existindo e funcionando; o que sumiu foi como chegar nela.
+
+        A condição é `is_superuser`, NÃO a permissão `auth.add_user`: quem
+        guarda a tela é o `SoSuperusuarioAdmin` (apps/orgs/admin.py), que
+        redireciona não-superusuário com "acesso negado". Checar a permissão
+        aqui mostraria o link para quem seria barrado na porta seguinte.
+        {% endcomment %}
+        {% if request.user.is_superuser %}
+          <a class="ac-novo" href="/admin/auth/user/add/">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
+            Criar conta de acesso
+          </a>
+        {% endif %}
+        <div class="rol" id="lista"></div>
+      </aside>
+      <main class="palco" id="palco"></main>
+    </div>
+  </div>
+
+  <div class="notas">
+    <p><b>O balão com anel amarelo é o eco:</b> mais de um grupo ligado dando a mesma tela.
+      É a resposta para “tirei do RH e ela continua vendo Registros”.
+      {{ n_restritas }} das {{ n_telas }} telas dependem de grupo; as outras são abertas a toda a
+      equipe e ficam na faixa cinza, no rodapé da placa.</p>
+  </div>
+</div>
+</div>
+
+{{ dados_js|json_script:"ac-dados" }}
+
+<script>
+(function () {
+  "use strict";
+  var D = JSON.parse(document.getElementById("ac-dados").textContent);
+  var RAIZ = document.getElementById("ac");
+  var URL_PESSOA = "{% url 'orgs_acessos_pessoa' %}";
+  var URL_GRUPO = "{% url 'orgs_acessos_grupo' %}";
+  var URL_CRIAR = "{% url 'orgs_acessos_criar' %}";
+  var URL_EXCLUIR = "{% url 'orgs_acessos_excluir' %}";
+  var CSRF = "{{ csrf_token }}";
+
+  var TELA = {}, GRUPO = {};
+  D.telas.forEach(function (t) { TELA[t.id] = t; });
+  D.grupos.forEach(function (g) { GRUPO[g.nome] = g; });
+  var ABERTAS = D.telas.filter(function (t) { return t.aberta; });
+  var RESTRITAS = D.telas.filter(function (t) { return !t.aberta; });
+
+  var est = {
+    modo: "pessoa",
+    sel: D.usuarios[0] ? D.usuarios[0].user : null,
+    selGrupo: D.grupos[0] ? D.grupos[0].nome : null,
+    busca: "",
+    rascunho: {},        // pessoa: grupo -> true/false
+    rascunhoTela: {}     // grupo: tela -> true/false
+  };
+
+  var lista = document.getElementById("lista"), palco = document.getElementById("palco");
+  var corpoJan = document.querySelector("#ac .jan__corpo");
+
+  // No telefone a tela e' lista OU ficha, nunca as duas. No desktop esta
+  // classe nao muda nada — quem decide e' a media query.
+  function mostrarDetalhe(sim) {
+    if (corpoJan) corpoJan.classList.toggle("mob-detalhe", !!sim);
+    if (sim) window.scrollTo({ top: 0, behavior: "auto" });
+  }
+
+  function esc(t) {
+    return String(t == null ? "" : t).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  var IC = {
+    home: "M3 10.5 12 3l9 7.5V21H3z",
+    map: "M9 3 3 6v15l6-3 6 3 6-3V3l-6 3z",
+    insights: "M4 19V9M9 19V5M14 19v-7M19 19v-4",
+    topic: "M3 7a2 2 0 0 1 2-2h3.6l2 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
+    event_repeat: "M4 5h16v16H4zM4 10h16M9 3v4M15 3v4M9 15l2 2-2 2M15 19l-2-2 2-2",
+    event_available: "M4 5h16v16H4zM4 10h16M9 3v4M15 3v4M9 15l2 2 4-4",
+    handyman: "m14 7 3-3 3 3-3 3zM4 20l6-6M10 14l-3-3 4-4 3 3z",
+    home_repair_service: "M3 9h18v11H3zM8 9V6h8v3M12 13v3",
+    request_quote: "M6 3h9l3 3v15H6zM9 8h6M9 12h6M9 16h3",
+    how_to_reg: "M12 15H8a4 4 0 0 0-4 4v1M10 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM15 17l2 2 4-4",
+    inventory_2: "M3 7h18v13H3zM3 7l2-4h14l2 4M12 11v5",
+    swap_horiz: "M4 9h13l-3-3M20 15H7l3 3",
+    folder_managed: "M3 7a2 2 0 0 1 2-2h3.6l2 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
+    sensors: "M12 12h.01M8.5 8.5a5 5 0 0 0 0 7M15.5 15.5a5 5 0 0 0 0-7M5.5 5.5a9 9 0 0 0 0 13M18.5 18.5a9 9 0 0 0 0-13",
+    manage_accounts: "M10 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM2 21v-2a5 5 0 0 1 5-5h4M18 14v2M18 20v2M21 17h-2M17 17h-2M20.5 15.5 19 17M17 17l-1.5 1.5",
+    shield_person: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM12 9a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM8.5 17a3.5 3.5 0 0 1 7 0",
+    wifi: "M2 8.5a15 15 0 0 1 20 0M5 12a11 11 0 0 1 14 0M8.5 15.5a6 6 0 0 1 7 0M12 19h.01",
+    history: "M12 8v5l4 2M3 12a9 9 0 1 0 3-6.7V3M3 5.3h3.3",
+    help: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.3M12 17h.01",
+    alerta: "m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3zM12 9v4M12 17h.01",
+    check: "M20 6 9 17l-5-5",
+    raio: "M13 2 4.5 13.5H11l-1 8.5 8.5-11.5H12z",
+    mais: "M12 5v14M5 12h14",
+    lixo: "M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6",
+    gente: "M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M10 7a4 4 0 1 0 0 .01"
+  };
+  function ico(nome) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" ' +
+      'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' +
+      (IC[nome] || IC.help) + '"/></svg>';
+  }
+  function pessoas(n) { return n + (n === 1 ? " pessoa" : " pessoas"); }
+  function conta(n) { return n + (n === 1 ? " tela" : " telas"); }
+
+  // ------------------------------------------------------------ estado atual
+  function usuario() {
+    return D.usuarios.filter(function (u) { return u.user === est.sel; })[0] || null;
+  }
+  function ligado(nomeGrupo) {
+    if (nomeGrupo in est.rascunho) return est.rascunho[nomeGrupo];
+    var u = usuario();
+    return !!(u && u.grupos.indexOf(nomeGrupo) >= 0);
+  }
+  function gruposLigados() {
+    return D.grupos.filter(function (g) { return ligado(g.nome); })
+                   .map(function (g) { return g.nome; });
+  }
+  function telasDaPessoa() {
+    var u = usuario();
+    if (u && u.su) return D.telas.map(function (t) { return t.id; });
+    var set = {};
+    ABERTAS.forEach(function (t) { set[t.id] = 1; });
+    gruposLigados().forEach(function (n) {
+      (GRUPO[n] ? GRUPO[n].telas : []).forEach(function (id) { set[id] = 1; });
+    });
+    return Object.keys(set);
+  }
+  function quantosDao(idTela) {
+    return gruposLigados().filter(function (n) {
+      return GRUPO[n] && GRUPO[n].telas.indexOf(idTela) >= 0;
+    }).length;
+  }
+  function mudancas() {
+    var u = usuario(), out = [];
+    if (!u) return out;
+    Object.keys(est.rascunho).forEach(function (n) {
+      var antes = u.grupos.indexOf(n) >= 0, agora = est.rascunho[n];
+      if (antes !== agora) out.push({ grupo: n, mais: agora });
+    });
+    return out;
+  }
+  function telaLigada(id) {
+    if (id in est.rascunhoTela) return est.rascunhoTela[id];
+    var g = GRUPO[est.selGrupo];
+    return !!(g && g.telas.indexOf(id) >= 0);
+  }
+  function mudancasTela() {
+    var g = GRUPO[est.selGrupo], out = [];
+    if (!g) return out;
+    Object.keys(est.rascunhoTela).forEach(function (id) {
+      var antes = g.telas.indexOf(id) >= 0, agora = est.rascunhoTela[id];
+      if (antes !== agora) out.push({ tela: id, mais: agora });
+    });
+    return out;
+  }
+
+  // NÃO EXISTE MAIS UMA FAIXA DE AVISOS AQUI, de propósito.
+  //
+  // Ela listava três achados meus da auditoria — grupo que não destrava nada,
+  // gente sem grupo, grupos gêmeos — em três caixas no topo da tela. Isso é
+  // relatório de quem estava consertando o sistema, não informação de quem usa
+  // a tela todo dia: o RH não precisa saber que Gerente e Supervisor têm a
+  // mesma lista, e não pode fazer nada a respeito.
+  //
+  // Os dois achados que valem já aparecem ONDE valem: o cartão do grupo diz
+  // "não destrava tela restrita" na cara de quem abre a pessoa, e quem está
+  // sem grupo aparece com "sem grupo" e o contador em âmbar na lista. Aviso
+  // que repete o que já está na tela é ruído.
+
+  // ------------------------------------------------------------- a lateral
+  function pintarLista() {
+    var q = est.busca.trim().toLowerCase();
+    if (est.modo === "pessoa") {
+      var us = D.usuarios.filter(function (u) {
+        return !q || (u.nome + " " + u.user + " " + u.grupos.join(" ")).toLowerCase().indexOf(q) >= 0;
+      });
+      lista.innerHTML = us.map(function (u) {
+        var sub = u.su ? "superusuário" : (u.grupos.join(" · ") || "sem grupo");
+        return '<button type="button" class="li" data-u="' + esc(u.user) + '"' +
+          (est.sel === u.user ? ' aria-current="true"' : "") + ">" +
+          '<span class="av' + (u.su ? " av--su" : "") + '">' + esc(u.inicial) + "</span>" +
+          '<span class="li__n"><b>' + esc(u.nome) + "</b><span>" + esc(sub) + "</span></span>" +
+          '<span class="li__t' + (!u.su && !u.grupos.length ? " li__t--alerta" : "") + '">' +
+          conta(u.telas) + "</span></button>";
+      }).join("");
+      lista.querySelectorAll("[data-u]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          if (mudancas().length &&
+              !confirm("Há mudanças não salvas. Trocar de pessoa e perder?")) return;
+          est.sel = b.getAttribute("data-u"); est.rascunho = {};
+          pintar(true); mostrarDetalhe(true);
+        });
+      });
+      return;
+    }
+    var gs = D.grupos.filter(function (g) {
+      return !q || g.nome.toLowerCase().indexOf(q) >= 0;
+    });
+    lista.innerHTML = (D.pode_grupo
+      ? '<div class="novo" id="caixa-novo">' +
+        '<button type="button" class="novo__b" id="bt-novo">' +
+        ico("mais") + "Novo grupo</button></div>"
+      : "") + gs.map(function (g) {
+      return '<button type="button" class="li" data-g="' + esc(g.nome) + '"' +
+        (est.selGrupo === g.nome ? ' aria-current="true"' : "") + ">" +
+        '<span class="av av--gr">' + ico("shield_person") + "</span>" +
+        '<span class="li__n"><b>' + esc(g.nome) + "</b><span>" +
+        (g.membros ? pessoas(g.membros) : "ninguém") + "</span></span>" +
+        '<span class="li__t' + (g.vazio ? " li__t--alerta" : "") + '">' +
+        (g.vazio ? "nenhuma tela" : conta(g.telas.length)) + "</span></button>";
+    }).join("");
+    var btNovo = document.getElementById("bt-novo");
+    if (btNovo) btNovo.addEventListener("click", abrirNovoGrupo);
+    lista.querySelectorAll("[data-g]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (mudancasTela().length &&
+            !confirm("Há mudanças não salvas neste grupo. Trocar e perder?")) return;
+        est.selGrupo = b.getAttribute("data-g"); est.rascunhoTela = {};
+        pintar(true); mostrarDetalhe(true);
+      });
+    });
+  }
+
+{# ---- daqui para baixo é o miolo do protótipo, com o salvar de verdade ---- #}
+{% include "orgs/_acessos_js.html" %}
+
+  // CRIAR GRUPO na própria tela. Sem isto ela substituiu /admin/auth/group/
+  // pela metade: para abrir um grupo novo era preciso voltar ao admin.
+  function abrirNovoGrupo() {
+    var caixa = document.getElementById("caixa-novo");
+    if (!caixa) return;
+    caixa.innerHTML =
+      '<div class="novo__f"><input id="novo-nome" type="text" maxlength="150" ' +
+      'placeholder="Nome do grupo (ex.: Diretoria)" aria-label="Nome do novo grupo">' +
+      '<div><button type="button" class="bt bt--p" id="novo-ok">Criar</button>' +
+      '<button type="button" class="bt bt--s" id="novo-nao">Cancelar</button></div></div>';
+    var campo = document.getElementById("novo-nome");
+    campo.focus();
+    campo.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") criarGrupo();
+      if (e.key === "Escape") pintarLista();
+    });
+    document.getElementById("novo-ok").addEventListener("click", criarGrupo);
+    document.getElementById("novo-nao").addEventListener("click", function () {
+      pintarLista();
+    });
+  }
+
+  function criarGrupo() {
+    var campo = document.getElementById("novo-nome");
+    if (!campo) return;
+    var nome = campo.value.trim();
+    if (nome.length < 2) { aviso("O nome precisa de pelo menos 2 letras.", true); return; }
+    enviar(URL_CRIAR, corpoForm([["nome", nome]]),
+           document.getElementById("novo-ok"), "Criar",
+           function () { location.reload(); });
+  }
+
+  function excluirGrupo() {
+    var g = GRUPO[est.selGrupo];
+    if (!g) return;
+    if (!confirm("Excluir o grupo " + g.nome + "? Isto não pode ser desfeito.")) return;
+    enviar(URL_EXCLUIR, corpoForm([["grupo", g.id]]),
+           document.getElementById("bt-excluir"), "Excluir grupo",
+           function () { location.reload(); });
+  }
+
+  function aviso(t, ruim) {
+    var d = document.createElement("div");
+    d.className = "toast" + (ruim ? " toast--ruim" : "");
+    d.textContent = t;
+    document.body.appendChild(d);
+    setTimeout(function () { d.remove(); }, ruim ? 6000 : 3000);
+  }
+
+  function pintar(entrada) {
+    pintarLista();
+    if (est.modo === "pessoa") pintarPessoa(!!entrada); else pintarGrupo(!!entrada);
+  }
+
+  document.getElementById("aba-p").addEventListener("click", function () {
+    mostrarDetalhe(false);
+    est.modo = "pessoa"; this.setAttribute("aria-selected", "true");
+    document.getElementById("aba-g").setAttribute("aria-selected", "false"); pintar(true);
+  });
+  document.getElementById("aba-g").addEventListener("click", function () {
+    mostrarDetalhe(false);
+    est.modo = "grupo"; this.setAttribute("aria-selected", "true");
+    document.getElementById("aba-p").setAttribute("aria-selected", "false"); pintar(true);
+  });
+  document.getElementById("q").addEventListener("input", function (e) {
+    est.busca = e.target.value; pintarLista();
+  });
+  window.addEventListener("resize", function () { requestAnimationFrame(desenharFios); });
+
+  pintar(true);
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+{% load static %}
+{% comment %}
+  etiquetas.html — DOCUMENTO IMPRESSO (rolo adesivo 70 × 30 mm).
+
+  TEMA CLARO ÚNICO, por decisão de projeto: isto é papel. Não existe versão
+  escura, não há tokens `--ui-*` aqui e as cores são pretas/brancas explícitas.
+
+  Por que aqui NÃO é `@page A4`: a etiqueta sai em impressora térmica de rolo;
+  a página É a etiqueta (70 × 30 mm, margem 0) e cada uma quebra em página
+  própria. O timbre da marca vive só na barra de tela — a logo da Make é
+  BRANCA e sumiria no adesivo branco; na etiqueta a assinatura é a palavra
+  "MAKE DISTRIBUIDORA" em texto, que a térmica imprime bem.
+
+  Na impressão: sem moldura, sem sombra e sem fundo — só traço preto sobre
+  branco, que é o que a térmica entende e o que dura no adesivo.
+{% endcomment %}
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>Etiquetas de patrimônio</title>
+  <style>
+    /* Mesma família do sistema (Figtree). Estes documentos são páginas
+       independentes: não carregam o CSS do app, por isso importam a fonte. */
+    @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap');
+    :root {
+      --et-larg: 70mm; --et-alt: 30mm;
+      --et-band: #0a2416;
+      --et-lima: #cbf542;
+      --et-verde: #00a651;
+      --et-ink: #111318;
+      --et-ink-soft: #5f6f66;
+      --et-hair: #d2dad4;
+      --et-hair-forte: #a9b3ac;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 24px;
+      font-family: Figtree, "Segoe UI", Arial, sans-serif;
+      background: #eef1ef; color: var(--et-ink);
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+
+    /* ---------- Barra de ações / timbre (só tela) ---------- */
+    .barra-acoes {
+      display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+      background: var(--et-band); border-bottom: 2.5px solid var(--et-lima);
+      border-radius: 13px 13px 0 0; padding: 14px 18px;
+      max-width: 1120px; margin: 0 auto;
+    }
+    .barra-acoes__logo { height: 28px; width: auto; display: block; flex: none; }
+    .barra-acoes h1 {
+      flex: 1; min-width: 200px; margin: 0; font-size: 15px; font-weight: 800;
+      letter-spacing: -.01em; color: #fff;
+    }
+    .barra-acoes h1 small {
+      display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--et-lima);
+    }
+    .barra-acoes h1 b { font-variant-numeric: tabular-nums; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 0; border-radius: 9px; padding: 9px 16px; font-weight: 700;
+      font-size: 13px; font-family: inherit; cursor: pointer; text-decoration: none;
+      color: #0b2e18; background: var(--et-lima);
+    }
+    .btn:hover { filter: brightness(1.05); }
+    .btn svg { width: 16px; height: 16px; flex: none; }
+    .btn--sec { background: rgba(255, 255, 255, .14); color: #fff; }
+    .btn--sec:hover { background: rgba(255, 255, 255, .22); }
+
+    /* ---------- Folha: grade precisa de etiquetas ---------- */
+    .folha {
+      display: grid; grid-template-columns: repeat(auto-fill, var(--et-larg));
+      gap: 6px; justify-content: start;
+      background: #fff; border: 1px solid var(--et-hair-forte); border-top: 0;
+      border-radius: 0 0 13px 13px; padding: 12px;
+      max-width: 1120px; margin: 0 auto;
+    }
+
+    /* Etiqueta 70 × 30 mm (impressora térmica / rolo) */
+    .etiqueta {
+      width: var(--et-larg); height: var(--et-alt);
+      background: #fff; border: 1px solid var(--et-hair);
+      padding: 1.5mm 2mm; display: flex; align-items: center; gap: 2mm;
+      overflow: hidden;
+    }
+    .etiqueta__qr { flex: 0 0 23mm; height: 23mm; }
+    .etiqueta__qr svg { width: 100%; height: 100%; display: block; }
+    .etiqueta__dados {
+      flex: 1 1 auto; min-width: 0; height: 100%;
+      display: flex; flex-direction: column; justify-content: space-between;
+      align-items: center; padding: 0.5mm 0;
+    }
+    .etiqueta__marca {
+      font-size: 2.5mm; font-weight: 800; letter-spacing: .14em;
+      color: var(--et-ink); text-transform: uppercase; line-height: 1;
+    }
+    .etiqueta__barcode { width: 100%; height: 12mm; }
+    .etiqueta__barcode svg { width: 100%; height: 100%; display: block; }
+    .etiqueta__patrimonio {
+      font-size: 4mm; font-weight: 800; letter-spacing: .12em; color: var(--et-ink);
+      font-variant-numeric: tabular-nums; line-height: 1;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+    }
+
+    /* ---------- Estado vazio ---------- */
+    .vazio {
+      grid-column: 1 / -1;
+      display: grid; justify-items: center; gap: 8px; text-align: center;
+      padding: 30px 18px; border: 1px dashed var(--et-hair-forte); border-radius: 13px;
+      background: #f7faf8;
+    }
+    .vazio__ico {
+      width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
+      background: rgba(0, 166, 81, .14); color: var(--et-verde);
+    }
+    .vazio__ico svg { width: 19px; height: 19px; display: block; }
+    .vazio__tit { margin: 2px 0 0; font-size: 13.5px; font-weight: 700; }
+    .vazio__hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--et-ink-soft); max-width: 46ch; }
+
+    /* ---------- Impressão: uma etiqueta por página, sem enfeite ---------- */
+    @media print {
+      @page { size: 70mm 30mm; margin: 0; }
+      body { background: #fff; padding: 0; }
+      .barra-acoes { display: none !important; }
+      .folha {
+        display: block; gap: 0; padding: 0; margin: 0; max-width: none;
+        border: 0; border-radius: 0; background: transparent;
+      }
+      .etiqueta {
+        border: 0; box-shadow: none; background: transparent;
+        page-break-inside: avoid; page-break-after: always; break-after: page;
+      }
+      .etiqueta:last-child { page-break-after: auto; break-after: auto; }
+      .vazio { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="barra-acoes">
+    <img class="barra-acoes__logo" src="{% static 'img/make-logo.webp' %}" alt="Make Distribuidora">
+    <h1><small>Impressão · rolo adesivo 70 × 30 mm</small>Etiquetas de patrimônio · <b>{{ itens|length }}</b></h1>
+    <button class="btn" onclick="window.print()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M8 17h8v4H8z"/></svg>
+      Imprimir
+    </button>
+    {% comment %}
+    NÃO use history.back() aqui: este documento é aberto por redirect
+    depois do POST que o gerou, então "voltar" no histórico devolve o
+    formulário já enviado — reenviar dali duplica o registro. A view diz
+    para onde voltar; sem isso, o mapa do parque é o destino seguro.
+    {% endcomment %}
+    <a class="btn btn--sec" href="{{ voltar_url|default:"/parque/mapa-completo/" }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+      {{ voltar_nome|default:"Voltar" }}
+    </a>
+  </div>
+
+  <div class="folha">
+    {% for it in itens %}
+      <div class="etiqueta">
+        <div class="etiqueta__qr">{{ it.qr }}</div>
+        <div class="etiqueta__dados">
+          <div class="etiqueta__marca">Make Distribuidora</div>
+          <div class="etiqueta__barcode">{{ it.svg }}</div>
+          <div class="etiqueta__patrimonio">{{ it.patrimonio }}</div>
+        </div>
+      </div>
+    {% empty %}
+      <div class="vazio">
+        <span class="vazio__ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4z"/><path d="M7.5 7.5h.01"/></svg>
+        </span>
+        <p class="vazio__tit">Nenhuma etiqueta para imprimir</p>
+        <p class="vazio__hint">Volte à lista, marque os computadores ou notebooks desejados e use <b>Etiqueta(s)</b>. Itens sem patrimônio não geram etiqueta.</p>
+      </div>
+    {% endfor %}
+  </div>
+</body>
+</html>

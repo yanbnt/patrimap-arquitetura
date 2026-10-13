@@ -1,0 +1,18 @@
+{% comment %}
+Badge da trilha de navegação. `conteudo` = texto a exibir.
+
+As cores do Tailwind (bg-red-100 / bg-orange-100 / bg-primary-100…) deram lugar
+ao BADGE do M3: cada variante é um par de papéis `--md-*` (X + on-X) em
+label-small (DESIGN-SYSTEM.md §2). A folha .mkbadge vive no <style> de
+`unfold/helpers/header.html` — este arquivo é incluído uma vez POR ITEM de menu,
+então repetir um <style> aqui seria repetir CSS N vezes; o header sai uma vez
+por página e está sempre presente junto da gaveta.
+
+NÃO REMOVER a classe `uppercase`: o make-admin.js esconde badge vazio/zero com
+`sidebar.querySelectorAll("span.uppercase")` (initSidebarBadges).
+{% endcomment %}
+<span class="mkbadge mkpro-tabular uppercase
+             {% if item.badge_variant == "success" %}mkbadge--ok
+             {% elif item.badge_variant == "warning" %}mkbadge--warn
+             {% elif item.badge_variant == "info" or item.badge_variant == "primary" %}mkbadge--marca
+             {% else %}mkbadge--crit{% endif %}">{{ conteudo }}</span>

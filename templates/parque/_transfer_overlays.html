@@ -1,0 +1,212 @@
+{% comment %}Caminhão (drop) + animação + escolha de destino + confirmação da
+transferência entre lojas. Usado na tela dedicada e no mapa completo. Espera
+`destinos` no contexto. Operado por initTransferLojas (make-admin.js).
+O DESENHO do caminhão e as animações não mudam — só os ícones de UI ao redor
+viraram SVG de linha (DESIGN-PRO.md §3).{% endcomment %}
+<style>
+  /* _transfer_overlays.html — prefixo .tlo-  ·  Material Design 3
+     Estes blocos FLUTUAM (diálogo/dock), então aqui a sombra é legítima — no
+     resto do sistema a elevação é TOM. Diálogo do M3: surface-container-high,
+     raio 28px, nível 3; o conteúdo dentro dele sobe de tom em vez de ganhar
+     borda. O desenho do caminhão não muda. */
+  .tlo-hint { display: inline-flex; align-items: center; gap: 8px; }
+  .tlo-hint svg { width: 18px; height: 18px; flex: none; }
+  .tlo-tt { display: flex; align-items: center; gap: 12px; }
+  .tlo-ico { display: grid; place-items: center; }
+  .tlo-ico svg { width: 18px; height: 18px; }
+
+  /* Diálogo M3. */
+  .tl-overlay__card, .mov-modal__card {
+    background: var(--md-surface-container-high) !important;
+    border: 0 !important; border-radius: var(--md-shape-xl) !important;
+    box-shadow: var(--md-elev-3) !important;
+    padding: 24px !important;
+  }
+  .tl-overlay__title, .mov-modal__title {
+    font: 400 24px/32px var(--md-font) !important; letter-spacing: 0 !important;
+    color: var(--md-on-surface) !important;
+  }
+  .tl-overlay__sub, .mov-modal__msg {
+    font: 400 14px/20px var(--md-font) !important; letter-spacing: .25px !important;
+    color: var(--md-on-surface-variant) !important;
+  }
+  .tl-overlay__close, .tl-overlay__back { color: var(--md-on-surface-variant) !important; }
+  /* Rodapé do diálogo: cancelar como text button, confirmar como filled. */
+  .mov-btn {
+    min-height: 40px; padding: 0 24px !important;
+    border: 0 !important; border-radius: var(--md-shape-full) !important;
+    font: 500 14px/20px var(--md-font) !important; letter-spacing: .1px !important;
+    box-shadow: none !important; text-transform: none !important;
+  }
+  .mov-btn--cancel { background: transparent !important; color: var(--md-primary) !important; }
+  .mov-btn--cancel:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important; }
+  .mov-btn--ok { background: var(--md-action) !important; color: var(--md-on-action) !important; }
+
+  /* Escolha da loja de destino: cartões filled, sem moldura. */
+  .tl-overlay .tl-units { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+  .tl-overlay .tl-unit {
+    display: flex; align-items: center; gap: 16px; width: 100%; text-align: left;
+    padding: 16px; cursor: pointer; text-decoration: none;
+    background: var(--md-surface-container-low) !important; border: 0 !important;
+    border-radius: var(--md-shape-md) !important; box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .tl-overlay .tl-unit:hover {
+    transform: none !important; background: var(--md-surface-container) !important;
+  }
+  .tl-overlay .tl-unit__icon { color: var(--md-primary); flex: none; }
+  .tl-overlay .tl-unit__nome { font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface); }
+  .tl-overlay .tl-unit__cidade { font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant); }
+  .tl-overlay .tl-unit__seta { color: var(--md-on-surface-variant); flex: none; }
+
+  /* Mapa do destino: setor como seção tonal sem borda; a VAGA é selecionável,
+     por isso ela — e só ela — mantém contorno (contrato §4). */
+  .tl-overlay .dest-setor {
+    background: var(--md-surface-container-low) !important; border: 0 !important;
+    border-radius: var(--md-shape-lg) !important; box-shadow: none !important; padding: 16px;
+  }
+  .tl-overlay .dest-setor__titulo {
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface);
+    margin: 0 0 12px; padding: 0; border: 0;
+  }
+  .tl-overlay .dest-baia {
+    display: flex; align-items: center; gap: 8px; padding: 12px; cursor: pointer;
+    background: var(--md-surface-container) !important; border: 0 !important;
+    border-radius: var(--md-shape-md) !important; box-shadow: none !important;
+    color: var(--md-on-surface); font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .tl-overlay .dest-baia__icon { color: var(--md-on-surface-variant); }
+  .tl-overlay .dest-baia.is-vaga { border: 1px solid var(--md-outline-variant) !important; background: transparent !important; }
+  .tl-overlay .dest-baia.is-vaga:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important; }
+  .tl-overlay .dest-baia.is-vaga .dest-baia__icon { color: var(--md-primary); }
+  .tl-overlay .dest-baia.is-ocupada { opacity: .38; cursor: not-allowed; }
+  /* "vaga" é o único rótulo em maiúscula (overline / label-small). */
+  .tl-overlay .dest-baia__tag {
+    margin-left: auto; height: 20px; padding: 0 8px;
+    display: inline-flex; align-items: center; border-radius: var(--md-shape-sm);
+    background: var(--md-primary-container); color: var(--md-on-primary-container);
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; text-transform: uppercase;
+  }
+  .tl-overlay .dest-baia--nova {
+    border: 1px dashed var(--md-outline-variant) !important; background: transparent !important;
+    color: var(--md-on-surface-variant);
+  }
+  .tl-overlay .dest-baia--nova:hover { border-color: var(--md-primary) !important; color: var(--md-primary); }
+
+  /* Campo dos diálogos: outlined text field do M3 (56px, raio 4px). */
+  .tl-input {
+    min-height: 56px; padding: 16px !important; box-sizing: border-box; width: 100%;
+    border: 1px solid var(--md-outline) !important; border-radius: var(--md-shape-xs) !important;
+    background: transparent !important; color: var(--md-on-surface) !important;
+    font: 400 16px/24px var(--md-font) !important; letter-spacing: .5px !important;
+    box-shadow: none !important; outline: 0;
+  }
+  .tl-input::placeholder { color: var(--md-on-surface-variant) !important; opacity: 1; }
+  .tl-input:focus { border-color: var(--md-primary) !important; box-shadow: inset 0 0 0 1px var(--md-primary) !important; }
+  .tl-campo { display: block; font: 500 12px/16px var(--md-font); letter-spacing: .5px; color: var(--md-on-surface-variant); }
+  .tlo-req { color: var(--md-error); }
+</style>
+
+{# ---------- Dock do caminhão (zona de drop) ---------- #}
+<div class="truck-dock" id="truck-dock" aria-hidden="true">
+  <div class="truck-dock__hint tlo-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h3"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg> Solte a máquina aqui para enviar</div>
+  <svg class="truck-dock__svg" viewBox="0 0 220 110" aria-hidden="true">
+    <rect class="tr-body" x="8" y="34" width="120" height="54" rx="6"/>
+    <rect class="tr-cab" x="128" y="48" width="56" height="40" rx="6"/>
+    <rect class="tr-window" x="150" y="54" width="28" height="20" rx="3"/>
+    <rect class="tr-bumper" x="184" y="80" width="14" height="10" rx="3"/>
+    <circle class="tr-wheel" cx="44" cy="92" r="13"/>
+    <circle class="tr-wheel" cx="150" cy="92" r="13"/>
+    <circle class="tr-hub" cx="44" cy="92" r="5"/>
+    <circle class="tr-hub" cx="150" cy="92" r="5"/>
+  </svg>
+</div>
+
+{# ---------- Overlay: escolher a loja de DESTINO ---------- #}
+<div class="tl-overlay" id="dest-units" aria-hidden="true">
+  <div class="tl-overlay__card tl-overlay__card--wide">
+    <button type="button" class="tl-overlay__close" data-close-dest>×</button>
+    <h2 class="tl-overlay__title tlo-tt"><span class="mkpro-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg></span>Para qual loja vai a máquina?</h2>
+    <div class="tl-units">
+      {% for d in destinos %}
+        <button type="button" class="tl-unit" data-unidade="{{ d.unidade.id }}">
+          <span class="tl-unit__icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 9.5 2-5.5h15l2 5.5"/><path d="M4 9.5V20h16V9.5"/><path d="M9.5 20v-6h5v6"/></svg></span>
+          <span class="tl-unit__txt">
+            <span class="tl-unit__nome">{{ d.unidade.name }}</span>
+            {% if d.unidade.city %}<span class="tl-unit__cidade">{{ d.unidade.city }}</span>{% endif %}
+          </span>
+          <svg class="tl-unit__seta" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{# ---------- Overlay: mapa do DESTINO (escolher setor/vaga) ---------- #}
+<div class="tl-overlay" id="dest-map" aria-hidden="true">
+  <div class="tl-overlay__card tl-overlay__card--wide">
+    <button type="button" class="tl-overlay__close" data-close-dest>×</button>
+    <button type="button" class="tl-overlay__back" id="dest-back">← Trocar loja</button>
+    <h2 class="tl-overlay__title" id="dest-map-title">Escolha o setor e a posição</h2>
+    <p class="tl-overlay__sub">Clique numa <b>vaga livre</b> ou crie uma <b>nova baia</b> no setor.</p>
+    {% for d in destinos %}
+      <div class="dest-unidade" data-unidade="{{ d.unidade.id }}" data-unidade-nome="{{ d.unidade.name }}" hidden>
+        {% for grupo in d.estrutura %}
+          <section class="dest-setor">
+            <header class="dest-setor__titulo">{{ grupo.setor.nome }}</header>
+            <div class="dest-setor__baias">
+              {% for b in grupo.baias %}
+                <button type="button"
+                        class="dest-baia {% if b.vaga %}is-vaga{% else %}is-ocupada{% endif %}"
+                        {% if not b.vaga %}disabled{% endif %}
+                        data-baia="{{ b.pk }}"
+                        data-setor="{{ grupo.setor.id }}"
+                        data-setor-nome="{{ grupo.setor.nome }}"
+                        data-nome="{{ b.nome }}">
+                  <span class="dest-baia__icon tlo-ico">{% if b.vaga %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>{% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>{% endif %}</span>
+                  <span class="dest-baia__nome">{{ b.nome }}</span>
+                  {% if b.vaga %}<span class="dest-baia__tag">vaga</span>{% endif %}
+                </button>
+              {% endfor %}
+              <button type="button" class="dest-baia dest-baia--nova"
+                      data-setor="{{ grupo.setor.id }}" data-setor-nome="{{ grupo.setor.nome }}" data-novo="1"
+                      title="Criar uma baia nova neste setor">
+                <span class="dest-baia__icon tlo-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
+                <span class="dest-baia__nome">Nova baia</span>
+              </button>
+            </div>
+          </section>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+{# ---------- Modal: nome da nova baia ---------- #}
+<div class="mov-modal" id="tl-novabaia" aria-hidden="true">
+  <div class="mov-modal__card">
+    <h3 class="mov-modal__title">Nova baia no setor</h3>
+    <p class="mov-modal__msg" id="tl-novabaia-msg">Informe o nome da nova baia (ex.: <b>"5 - João"</b>).</p>
+    <input type="text" id="tl-novabaia-input" class="tl-input" placeholder="Nome da baia" autocomplete="off" maxlength="120">
+    <div class="mov-modal__acoes">
+      <button type="button" class="mov-btn mov-btn--cancel" id="tl-novabaia-cancel">Cancelar</button>
+      <button type="button" class="mov-btn mov-btn--ok" id="tl-novabaia-ok">Continuar</button>
+    </div>
+  </div>
+</div>
+
+{# ---------- Modal de confirmação ---------- #}
+<div class="mov-modal" id="tl-confirm" aria-hidden="true">
+  <div class="mov-modal__card">
+    <h3 class="mov-modal__title">Confirmar transferência</h3>
+    <p class="mov-modal__msg" id="tl-confirm-msg"></p>
+    <label class="tl-campo" id="tl-bitrix-wrap" hidden>Código da tarefa do Bitrix <b class="tlo-req">*</b>
+      <input type="text" id="tl-bitrix" class="tl-input" placeholder="ex.: 12345" autocomplete="off" maxlength="40" inputmode="numeric">
+    </label>
+    <div class="mov-modal__acoes">
+      <button type="button" class="mov-btn mov-btn--cancel" id="tl-cancel">Cancelar</button>
+      <button type="button" class="mov-btn mov-btn--ok" id="tl-ok">Confirmar transferência</button>
+    </div>
+  </div>
+</div>

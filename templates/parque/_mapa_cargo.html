@@ -1,0 +1,87 @@
+{% comment %}
+Filtro de CARGO (client-side) — filtra os cards do mapa pelo cargo (job_title) do
+colaborador. Integrado ao mesmo pipeline da busca/filtros rápidos (initMapaBusca).
+Só aparece quando há cargos preenchidos (`cargos`). Casado com data-cargo do card.
+
+HOOK (não remover): #mapa-cargo-sel — initMapaBusca() escuta o `change` dele.
+O "×" abaixo é só um atalho de limpeza: zera o valor e redispara o MESMO evento.
+{% endcomment %}
+{% if cargos %}
+<style>
+  /* _mapa_cargo.html — prefixo .crgx-. É um CHIP M3 (32px, raio 8px, borda
+     outline-variant) que abre a lista nativa do <select>; cargo escolhido =
+     filter chip SELECIONADO (secondary-container preenchido) com "×".
+     `#main` na frente para vencer o campo global de make-m3.css §7, que é
+     !important e mais específico (id + elemento). */
+  .mapa-cargo { display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+  .mapa-cargo__lbl {
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: uppercase; color: var(--md-on-surface-variant);
+  }
+  .crgx-field { position: relative; display: inline-flex; align-items: center; }
+  #main .mapa-cargo .mapa-cargo__sel {
+    height: 32px; min-height: 32px; min-width: 0; box-sizing: border-box;
+    padding: 0 36px 0 12px !important;
+    border-radius: var(--md-shape-sm) !important;
+    border: 1px solid var(--md-outline-variant) !important;
+    background: transparent !important; color: var(--md-on-surface) !important;
+    font: 500 14px/20px var(--md-font) !important; letter-spacing: .1px !important;
+    cursor: pointer; box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  #main .mapa-cargo .mapa-cargo__sel:hover {
+    border-color: var(--md-outline-variant) !important;
+    background: color-mix(in srgb, var(--md-on-surface) 8%, transparent) !important;
+  }
+  #main .mapa-cargo .mapa-cargo__sel:focus {
+    outline: none; border-color: var(--md-outline-variant) !important;
+    box-shadow: none !important;
+  }
+  /* Cargo escolhido = chip selecionado. */
+  #main .crgx-field.is-on .mapa-cargo__sel {
+    background: var(--md-secondary-container) !important;
+    color: var(--md-on-secondary-container) !important;
+    border-color: transparent !important;
+  }
+  .crgx-x {
+    position: absolute; right: 4px; width: 24px; height: 24px;
+    display: grid; place-items: center; padding: 0;
+    border: 0; border-radius: var(--md-shape-full); cursor: pointer;
+    background: transparent; color: var(--md-on-secondary-container);
+  }
+  .crgx-x svg { width: 16px; height: 16px; display: block; }
+  .crgx-x:hover { background: color-mix(in srgb, var(--md-on-secondary-container) 12%, transparent); }
+  .crgx-x[hidden] { display: none !important; }
+</style>
+<div class="mapa-cargo">
+  <span class="mapa-cargo__lbl">Cargo</span>
+  <span class="crgx-field" id="crgx-field">
+    <select id="mapa-cargo-sel" class="mapa-cargo__sel" aria-label="Filtrar por cargo">
+      <option value="">Todos</option>
+      {% for c in cargos %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+    </select>
+    <button type="button" class="crgx-x" id="crgx-x" aria-label="Remover o filtro de cargo" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </span>
+</div>
+<script>
+(function () {
+  var sel = document.getElementById("mapa-cargo-sel");
+  var wrap = document.getElementById("crgx-field");
+  var x = document.getElementById("crgx-x");
+  if (!sel || !wrap || !x) return;
+  function sync() {
+    var on = !!sel.value;
+    wrap.classList.toggle("is-on", on);
+    x.hidden = !on;
+  }
+  sel.addEventListener("change", sync);
+  x.addEventListener("click", function () {
+    sel.value = "";
+    // Redispara o change para o initMapaBusca reaplicar os filtros do mapa.
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    sync();
+  });
+  sync();
+})();
+</script>
+{% endif %}

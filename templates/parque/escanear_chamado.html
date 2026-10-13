@@ -1,0 +1,212 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  /* =========================================================================
+     escanear_chamado — UMA COLUNA de 640px em Material Design 3: visor da
+     câmera, ação primária e a saída manual como último recurso.
+
+     O que SAIU (DESIGN-SYSTEM.md §5): a borda e a sombra do painel, a borda do
+     visor, a borda do aviso de status, a borda do bloco manual e o peso 650 nos
+     rótulos.
+
+     O que ENTROU (§4): superfícies tonais aninhadas (container-low no painel,
+     container no visor); o status vira contêiner tonal — neutro em
+     surface-container/on-surface-variant e erro no par error-container +
+     on-error-container, com ícone; campo outlined de 56px/raio 4 com rótulo
+     acima. O JS só troca a classe .is-erro — nenhum hook foi mexido.
+     Escopado em .scanx; cor por var(--md-*).
+     ====================================================================== */
+  .scanx { display: flex; flex-direction: column; gap: 16px; max-width: 640px; }
+  .scanx *, .scanx *::before, .scanx *::after { box-sizing: border-box; }
+  .scanx svg { display: block; }
+
+  /* --- botões: base de layout do sistema M3 + o text button -------------- */
+  .scanx .pvx-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  .scanx .pvx-btn svg { width: 18px; height: 18px; flex: none; }
+  /* `#main` na frente vence o `!important` do CSS histórico (§9.2). */
+  #main .scan-txt {
+    background: transparent !important; color: var(--md-primary) !important;
+    padding: 0 12px !important;
+  }
+
+  .scan-panel {
+    background: var(--md-surface-container-low);
+    border: 0; border-radius: var(--md-shape-lg); box-shadow: none;
+    padding: 16px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+
+  /* --- visor: bloco tonal aninhado -------------------------------------- */
+  .scanx .scan-reader {
+    width: 100%; max-width: none; margin: 0; min-height: 260px; overflow: hidden;
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container);
+    display: grid; place-items: center;
+  }
+  .scanx .scan-reader video, .scanx .scan-reader canvas, .scanx .scan-reader img { max-width: 100%; display: block; }
+  .scan-acoes { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+
+  /* --- status: contêiner tonal + ícone (máscara pega a cor do par on-) --- */
+  .scanx .scan-status { margin: 0; }
+  .scanx .scan-status:not(:empty) {
+    --scan-ico: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>');
+    display: flex; align-items: flex-start; gap: 12px; text-align: left;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container); color: var(--md-on-surface-variant);
+    padding: 16px;
+  }
+  .scanx .scan-status:not(:empty)::before {
+    content: ""; width: 18px; height: 18px; flex: none; margin-top: 1px;
+    background-color: currentColor;
+    -webkit-mask: var(--scan-ico) center / 18px 18px no-repeat;
+    mask: var(--scan-ico) center / 18px 18px no-repeat;
+  }
+  .scanx .scan-status.is-erro:not(:empty) {
+    --scan-ico: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/></svg>');
+    background: var(--md-error-container); color: var(--md-on-error-container);
+  }
+
+  /* --- saída manual ----------------------------------------------------- */
+  .scanx .scan-manual {
+    margin: 0; max-width: none; padding: 0;
+    background: var(--md-surface-container-low);
+    border: 0; border-radius: var(--md-shape-lg);
+  }
+  .scanx .scan-manual > summary {
+    list-style: none; cursor: pointer; padding: 16px;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface);
+    display: flex; align-items: center; gap: 12px;
+    border-radius: var(--md-shape-lg);
+  }
+  .scanx .scan-manual > summary::-webkit-details-marker { display: none; }
+  .scanx .scan-manual > summary::after {
+    content: ""; margin-left: auto; width: 8px; height: 8px; flex: none;
+    border-right: 2px solid var(--md-on-surface-variant); border-bottom: 2px solid var(--md-on-surface-variant);
+    transform: rotate(45deg); transition: transform var(--md-dur-short) var(--md-ease-standard);
+  }
+  .scanx .scan-manual[open] > summary::after { transform: rotate(-135deg); }
+  /* Divisor de lista em outline-variant — a única linha permitida (§5.1). */
+  .scanx .scan-manual[open] > summary { border-bottom: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-lg) var(--md-shape-lg) 0 0; }
+  .scanx .scan-manual__form { display: flex; align-items: flex-end; gap: 8px; padding: 16px; margin: 0; }
+  .scanx .scan-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+  .scanx .scan-field > span { font: 500 12px/16px var(--md-font); letter-spacing: .5px; color: var(--md-on-surface-variant); }
+  .scanx .scan-manual__form input[type="text"] {
+    width: 100%; min-width: 0; min-height: 56px; padding: 16px;
+    border: 1px solid var(--md-outline); border-radius: var(--md-shape-xs);
+    background: transparent; color: var(--md-on-surface);
+    font-family: var(--md-font); font-size: 16px; line-height: 24px; letter-spacing: .5px;
+    box-shadow: none;
+  }
+  .scanx .scan-manual__form input[type="text"]:hover { border-color: var(--md-on-surface); }
+  .scanx .scan-manual__form input[type="text"]:focus {
+    outline: none; border-color: var(--md-primary); box-shadow: inset 0 0 0 1px var(--md-primary);
+  }
+  .scanx .scan-manual__form ::placeholder { color: var(--md-on-surface-variant); opacity: 1; }
+</style>
+
+<div class="scan-wrap scanx">
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · Reparos</p>
+    <h1 class="mkpro-head__title">Escanear máquina</h1>
+    <p class="mkpro-head__sub">Aponte a câmera para o <b>QR Code</b> da etiqueta de patrimônio do
+       computador ou notebook. O chamado da máquina abre automaticamente.</p>
+    <div class="mkpro-head__actions">
+      <a data-mk-voltar class="pvx-btn scan-txt" href="{{ voltar_url }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg> {{ voltar_nome }}
+      </a>
+    </div>
+  </header>
+
+  <div class="scan-panel">
+    <div id="scan-reader" class="scan-reader"></div>
+
+    <div class="scan-acoes">
+      {# A ÚNICA ação filled da tela. #}
+      <button type="button" id="scan-start" class="pvx-btn pvx-btn--ok">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg> Ligar câmera
+      </button>
+      <button type="button" id="scan-stop" class="pvx-btn pvx-btn--ghost" hidden>Parar</button>
+    </div>
+
+    <p id="scan-status" class="scan-status" role="status"></p>
+  </div>
+
+  <details class="scan-manual">
+    <summary>Sem câmera? Digitar o patrimônio</summary>
+    <form id="scan-form-manual" class="scan-manual__form">
+      <label class="scan-field" for="scan-codigo">
+        <span>Patrimônio da máquina</span>
+        <input type="text" id="scan-codigo" placeholder="Ex.: PC-B0001 ou NB-0001" autocomplete="off">
+      </label>
+      <button type="submit" class="pvx-btn pvx-btn--soft">Abrir</button>
+    </form>
+  </details>
+</div>
+
+<script src="{% static 'js/vendor/html5-qrcode.min.js' %}"></script>
+<script>
+(function () {
+  var statusEl = document.getElementById("scan-status");
+  var startBtn = document.getElementById("scan-start");
+  var stopBtn = document.getElementById("scan-stop");
+  var RESOLVER = "{% url 'parque_resolver_patrimonio' %}";
+  var qr = null, ocupado = false;
+
+  function msg(t, erro) {
+    statusEl.textContent = t || "";
+    statusEl.className = "scan-status" + (erro ? " is-erro" : "");
+  }
+
+  function resolver(codigo) {
+    msg("Buscando " + codigo + "…");
+    fetch(RESOLVER + "?codigo=" + encodeURIComponent(codigo))
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (res.ok && res.j.ok && res.j.url) {
+          msg("Máquina " + (res.j.nome || codigo) + " encontrada. Abrindo chamado…");
+          window.location = res.j.url;
+        } else {
+          msg((res.j && res.j.erro) || "Não foi possível abrir o chamado.", true);
+          ocupado = false;   // libera pra tentar de novo
+        }
+      })
+      .catch(function () { msg("Erro de conexão.", true); ocupado = false; });
+  }
+
+  function onScan(texto) {
+    if (ocupado) return;       // evita disparos repetidos do mesmo QR
+    ocupado = true;
+    pararCamera();
+    resolver((texto || "").trim());
+  }
+
+  function ligarCamera() {
+    if (typeof Html5Qrcode === "undefined") { msg("Não foi possível carregar o leitor de câmera.", true); return; }
+    qr = new Html5Qrcode("scan-reader");
+    qr.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, onScan, function () {})
+      .then(function () { startBtn.hidden = true; stopBtn.hidden = false; msg("Aponte para o QR Code da etiqueta."); })
+      .catch(function (e) { msg("Não foi possível abrir a câmera. Verifique a permissão do navegador.", true); });
+  }
+  function pararCamera() {
+    if (qr) { qr.stop().then(function () { qr.clear(); }).catch(function () {}); qr = null; }
+    startBtn.hidden = false; stopBtn.hidden = true;
+  }
+
+  startBtn.addEventListener("click", ligarCamera);
+  stopBtn.addEventListener("click", function () { pararCamera(); msg(""); });
+
+  document.getElementById("scan-form-manual").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var cod = document.getElementById("scan-codigo").value.trim();
+    if (cod) { ocupado = false; resolver(cod); }
+  });
+})();
+</script>
+{% endblock %}

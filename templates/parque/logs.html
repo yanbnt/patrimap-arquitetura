@@ -1,0 +1,198 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+{% comment %}
+LOGS DO SISTEMA — acessos e ações no mesmo lugar.
+
+Pedido do dono: "quero juntar todos os logs em um lugar só. Log de acessos e
+ações". Antes eram duas telas do admin, cada uma com sua lista e seus filtros.
+Aqui é uma linha do tempo só, com o TIPO como ficha de filtro, busca única e
+janela de período.
+
+Prefixo `lgx-`. Sem regra solta em `svg` e sem tocar em CSS global: quem
+dimensiona ícone aqui é `.lgx-*`.
+{% endcomment %}
+<style>
+  .lgx { display: flex; flex-direction: column; gap: 16px; }
+  .lgx * { box-sizing: border-box; }
+  .lgx a { text-decoration: none; color: inherit; }
+
+  /* Barra: A MESMA de toda tela de lista — botão "Filtrar" + busca.
+
+     Antes esta barra era um formulário próprio com três coisas soltas: fichas
+     de tipo (links), o par de datas e um "Aplicar" só do período. Agora o tipo
+     e o período moram no popup do sistema (host = pai da `.flt-bar`) e a barra
+     só tem "Filtrar" e o campo de busca. De quebra, isto resolve o estouro no
+     celular anotado abaixo: não há mais `.lgx-per` na linha. */
+  .lgx-bar {
+    display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap;
+    padding: 10px 12px;
+    background: var(--md-surface);
+    border: 1px solid var(--md-outline-variant);
+    border-radius: var(--md-shape-lg);
+  }
+  /* "Filtrando por…" em linha própria: não empurra a busca (make-m3 §21.1). */
+  .lgx-bar .fltx-active { flex: 1 0 100%; order: 99; margin: 2px 0 0 !important; }
+  .lgx-busca {
+    flex: 1 1 300px; min-width: 0;
+    display: flex; align-items: center; gap: 8px;
+    height: 42px; padding: 0 14px;
+    background: var(--md-surface-container);
+    border-radius: var(--md-shape-full);
+  }
+  .lgx-busca svg { width: 19px; height: 19px; flex: none; color: var(--md-on-surface-variant); }
+  .lgx-busca input {
+    flex: 1 1 auto; min-width: 0;
+    height: 42px !important; min-height: 42px !important;
+    padding: 0 !important; border: 0 !important; background: transparent !important;
+    box-shadow: none !important; outline: none !important;
+    font: 400 13.5px/42px var(--md-font) !important;
+    color: var(--md-on-surface) !important;
+  }
+
+  /* Tabela: mesmo fio do resto do sistema (um só: outline-variant). */
+  .lgx-tab {
+    background: var(--md-surface);
+    border: 1px solid var(--md-outline-variant);
+    border-radius: var(--md-shape-lg);
+    overflow: hidden;
+  }
+  .lgx-tab table { width: 100%; border-collapse: collapse; }
+  .lgx-tab thead th {
+    padding: 10px 14px; text-align: left; white-space: nowrap;
+    font: 600 9.5px/13px var(--md-font); letter-spacing: .14em;
+    text-transform: uppercase; color: var(--md-on-surface-variant);
+    background: var(--md-surface-container);
+    border-bottom: 1px solid var(--md-outline-variant);
+  }
+  .lgx-tab tbody td {
+    padding: 11px 14px; vertical-align: top;
+    font: 400 13px/18px var(--md-font);
+    color: var(--md-on-surface);
+    border-bottom: 1px solid var(--md-outline-variant);
+  }
+  .lgx-tab tbody tr:last-child td { border-bottom: 0; }
+  .lgx-tab tbody tr:hover td { background: var(--mk-hover-lista, rgba(125,138,128,.06)); }
+  .lgx-quando { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .lgx-quando small { display: block; color: var(--md-on-surface-variant); font-size: 11.5px; }
+  .lgx-tipo {
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: 24px; padding: 0 10px;
+    border-radius: var(--md-shape-full);
+    font: 600 11px/1 var(--md-font);
+    background: var(--md-surface-container); color: var(--md-on-surface-variant);
+    white-space: nowrap;
+  }
+  .lgx-tipo--acesso { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+  .lgx-tipo--acao { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+  .lgx-ev { font-weight: 600; }
+  .lgx-ev--falha { color: var(--md-error); }
+  .lgx-ev--delete { color: var(--md-error); }
+  .lgx-sobre { color: var(--md-on-surface-variant); }
+  .lgx-det {
+    color: var(--md-on-surface-variant); font-size: 12px;
+    max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .lgx-rodape {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 10px 14px;
+    font: 500 12px/16px var(--md-font); color: var(--md-on-surface-variant);
+    background: var(--md-surface-container);
+    border-top: 1px solid var(--md-outline-variant);
+  }
+  .lgx-vazio { padding: 34px 16px; text-align: center; color: var(--md-on-surface-variant); }
+  @media (max-width: 900px) {
+    /* CELULAR: quem estourava a página era o período NA BARRA.
+       Medido em 375px: `.lgx-per` (rótulo + duas datas + "Aplicar") ia de 43 a
+       537px — 494px de largura — e levava o documento a 537px numa janela de
+       375px, 162px de rolagem horizontal na PÁGINA. Era um flex sem `wrap`, e
+       como item do `.lgx-bar` nascia com `flex-basis: auto` (largura de
+       conteúdo) e não encolhia.
+
+       O bloco `.lgx-per` deixou de existir: o período foi para dentro do popup
+       "Filtrar", que já é limitado a `min(520px, 100vw - 40px)`. Na barra sobrou
+       o botão e a busca, os dois com `min-width: 0`. */
+    .lgx-tab { overflow-x: auto; }
+    .lgx-tab table { min-width: 760px; }
+  }
+</style>
+
+<div class="lgx">
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Administração · Auditoria</p>
+    <h1 class="mkpro-head__title">Logs do sistema</h1>
+    <p class="mkpro-head__sub">
+      Acessos e ações na mesma linha do tempo · mostrando
+      <span class="mkpro-num">{{ linhas|length }}</span>
+      {% if cortado %}de {{ total_janela }} registros da janela{% else %}registro{{ linhas|length|pluralize }}{% endif %}.
+    </p>
+  </header>
+
+  {% comment %}
+  A barra é um DIV, não um formulário: o parcial `_filtros.html` traz dentro
+  dele o formulário que o "Aplicar" do popup envia, e formulário dentro de
+  formulário é jogado fora pelo parser do HTML. A busca fica no seu próprio
+  form, com os filtros em vigor como campos escondidos para não zerá-los.
+  {% endcomment %}
+  <div class="lgx-bar">
+    {% include "parque/_filtros.html" %}
+
+    <form class="lgx-busca" method="get" role="search">
+      {% if tipo %}<input type="hidden" name="tipo" value="{{ tipo }}">{% endif %}
+      {% if de %}<input type="hidden" name="de" value="{{ de }}">{% endif %}
+      {% if ate %}<input type="hidden" name="ate" value="{{ ate }}">{% endif %}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="search" name="q" value="{{ busca }}"
+             placeholder="Buscar por usuário, IP, objeto ou descrição…"
+             aria-label="Buscar nos logs">
+    </form>
+  </div>
+
+  <div class="lgx-tab">
+    {% if linhas %}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Quando</th>
+            <th scope="col">Tipo</th>
+            <th scope="col">O que aconteceu</th>
+            <th scope="col">Quem</th>
+            <th scope="col">Sobre</th>
+            <th scope="col">Detalhe</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in linhas %}
+          <tr>
+            <td class="lgx-quando">
+              {{ l.quando|date:"d/m/Y" }}
+              <small>{{ l.quando|date:"H:i" }}</small>
+            </td>
+            <td><span class="lgx-tipo lgx-tipo--{{ l.tipo }}">{{ l.tipo_rotulo }}</span></td>
+            <td><span class="lgx-ev lgx-ev--{{ l.evento_key }}">{{ l.evento }}</span></td>
+            <td>{{ l.quem }}</td>
+            <td class="lgx-sobre">
+              {% if l.url %}<a href="{{ l.url }}">{{ l.sobre|default:"—" }}</a>
+              {% else %}{{ l.sobre|default:"—" }}{% endif %}
+            </td>
+            <td class="lgx-det" title="{{ l.detalhe }}">{{ l.detalhe|default:"—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="lgx-rodape">
+        <span>{{ linhas|length }} de {{ total_janela }} registro{{ total_janela|pluralize }} na janela</span>
+        {% if cortado %}
+          <span>·</span>
+          <span>Refine a busca ou o período para ver o resto — a tela mostra os {{ por_pagina }} mais recentes.</span>
+        {% endif %}
+      </div>
+    {% else %}
+      <p class="lgx-vazio">Nenhum registro com esses filtros.</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

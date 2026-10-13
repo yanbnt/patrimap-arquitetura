@@ -1,0 +1,822 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% comment %}
+ARQUIVO DO PATRIMÔNIO — todo documento do parque em um só lugar.
+
+O QUE ESTA TELA MOSTRA QUE NENHUMA OUTRA MOSTRA: o que DEVERIA existir e não
+existe. Uma lista de anexos diria "3 arquivos"; esta diz "falta a nota fiscal e
+o protocolo da transferência de 19/06" — e isso vira fila de trabalho.
+
+O dossiê de cada pasta é derivado do que ACONTECEU com o equipamento
+(apps/parque/arquivo.py): comprou → nota fiscal; entregou → termo; voltou →
+termo de devolução; transferiu → um protocolo por transferência; mandou para a
+autorizada → laudo, orçamento e nota de serviço. Nada é lista fixa, então quem
+transferir uma máquina amanhã aumenta o denominador dela sozinho.
+
+QUATRO CAMINHOS ATÉ O MESMO PAPEL: por equipamento, por pessoa, por evento e
+por tipo. "Por evento" existe porque o protocolo de uma transferência pertence
+à transferência (que envolve DUAS lojas) e o laudo pertence ao envio — não à
+máquina. O documento tem um dono só no banco; a tela oferece vários caminhos.
+
+A NAVEGAÇÃO ACONTECE NO NAVEGADOR. O servidor manda a árvore inteira uma vez
+(`dados_js`); clicar em pasta não vai ao servidor. Um explorador que pisca a
+cada clique não parece um explorador. O que vai ao servidor é o que ALTERA:
+anexar arquivo e validar documento.
+
+O CSS nasceu do protótipo aprovado e foi religado aos tokens do sistema
+(--md-*, make-m3.css) e escopado em #ax, para não cruzar com o CSS do admin.
+
+Acesso: superusuário, grupos Gerente / Supervisor / RH / Visão total, ou quem
+já pode ver documentos no admin (arquivo.py:pode_ler).
+{% endcomment %}
+
+{% block extrastyle %}{{ block.super }}
+<style>
+  /* Tokens locais: espaçamento e a cor da pasta. A pasta não é uma cor do
+     sistema — ela é derivada do container primário, então acompanha o tema
+     claro/escuro sem uma segunda paleta para manter. */
+  #ax {
+    --e1: 4px; --e2: 8px; --e3: 12px; --e4: 16px; --e5: 20px; --e6: 24px;
+    --pasta: color-mix(in srgb, var(--md-primary-container) 62%, var(--md-surface));
+    --pasta-tab: color-mix(in srgb, var(--md-primary-container) 82%, var(--md-surface));
+    --pasta-ink: var(--md-on-primary-container);
+  }
+#ax * { box-sizing: border-box; }
+#ax { margin: 0; background: var(--md-surface); color: var(--md-on-surface);
+         font: 400 14px/20px var(--md-font); letter-spacing: .25px; -webkit-font-smoothing: antialiased; }
+#ax .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 20px 60px; }
+#ax .eyebrow { font: 500 11px/16px var(--md-font); letter-spacing: 1.2px; text-transform: uppercase;
+             color: var(--md-on-surface-variant); margin: 0 0 4px; }
+#ax h1 { font: 400 30px/38px var(--md-font); margin: 0 0 6px; letter-spacing: 0; }
+#ax .sub { color: var(--md-on-surface-variant); margin: 0 0 22px; font: 400 15px/22px var(--md-font); max-width: 70ch; }
+/* ---------- a janela ---------- */
+#ax .jan { border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-lg);
+         background: var(--md-surface-container-low); overflow: hidden; box-shadow: var(--md-elev-1); }
+#ax .jan__topo { display: flex; align-items: center; gap: var(--e3); padding: var(--e3) var(--e4);
+               border-bottom: 1px solid var(--md-outline-variant); background: var(--md-surface-container); flex-wrap: wrap; }
+#ax .ib { width: 36px; height: 36px; border: 0; background: transparent; border-radius: var(--md-shape-full);
+        color: var(--md-on-surface-variant); display: grid; place-items: center; cursor: pointer;
+        transition: background 150ms var(--md-ease-standard); flex: none; }
+#ax .ib:hover { background: var(--md-action-hover); color: var(--md-on-surface); }
+#ax .ib:disabled { opacity: .35; cursor: default; }
+#ax .ib svg { width: 20px; height: 20px; }
+/* caminho */
+#ax .cam { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 180px; flex-wrap: wrap; }
+#ax .cam button { border: 0; background: transparent; cursor: pointer; color: var(--md-primary);
+                font: 500 14px/20px var(--md-font); padding: 6px 8px; border-radius: var(--md-shape-sm); }
+#ax .cam button:hover { background: var(--md-action-hover); }
+#ax .cam button:disabled { color: var(--md-on-surface); cursor: default; font-weight: 600; }
+#ax .cam svg { width: 16px; height: 16px; color: var(--md-on-surface-variant); flex: none; }
+#ax .busca { display: flex; align-items: center; gap: var(--e2); height: 36px; padding: 0 var(--e3);
+           border-radius: var(--md-shape-full); background: var(--md-surface-container-high); flex: 0 1 240px; }
+#ax .busca svg { width: 18px; height: 18px; color: var(--md-on-surface-variant); flex: none; }
+#ax .busca input { border: 0; background: transparent; outline: 0; color: var(--md-on-surface);
+                 font: 400 14px/20px var(--md-font); width: 100%; }
+#ax .vis { display: inline-flex; border: 1px solid var(--md-outline); border-radius: var(--md-shape-full); overflow: hidden; }
+#ax .vis button { border: 0; background: transparent; padding: 7px 10px; cursor: pointer;
+                color: var(--md-on-surface-variant); display: grid; place-items: center; }
+#ax .vis button + button { border-left: 1px solid var(--md-outline); }
+#ax .vis button[aria-pressed="true"] { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+#ax .vis svg { width: 18px; height: 18px; }
+/* ---------- corpo em três colunas ---------- */
+#ax .jan__corpo { display: grid; grid-template-columns: 218px minmax(0, 1fr); min-height: 520px; }
+#ax .jan__corpo.com-detalhe { grid-template-columns: 218px minmax(0, 1fr) 300px; }
+@media (max-width: 980px) {
+#ax .jan__corpo, #ax .jan__corpo.com-detalhe { grid-template-columns: 1fr; }
+#ax .lado { display: flex; gap: var(--e2); overflow-x: auto; border-right: 0;
+            border-bottom: 1px solid var(--md-outline-variant); }
+#ax .lado__g { display: flex; gap: var(--e2); }
+#ax .lado__t { display: none; }
+#ax .det { border-left: 0 !important; border-top: 1px solid var(--md-outline-variant); }
+  }
+/* atalhos */
+#ax .lado { border-right: 1px solid var(--md-outline-variant); padding: var(--e3); }
+#ax .lado__t { font: 500 11px/16px var(--md-font); letter-spacing: 1px; text-transform: uppercase;
+             color: var(--md-on-surface-variant); margin: var(--e3) var(--e2) var(--e2); }
+#ax .lado__g { display: grid; gap: 2px; }
+#ax .at { display: flex; align-items: center; gap: var(--e3); width: 100%; border: 0; cursor: pointer;
+        background: transparent; color: var(--md-on-surface); text-align: left;
+        padding: 9px var(--e3); border-radius: var(--md-shape-sm); font: 400 13.5px/18px var(--md-font);
+        transition: background 150ms var(--md-ease-standard); white-space: nowrap; }
+#ax .at:hover { background: var(--md-action-hover); }
+#ax .at[aria-current="true"] { background: var(--md-secondary-container); color: var(--md-on-secondary-container); font-weight: 600; }
+#ax .at svg { width: 18px; height: 18px; flex: none; color: var(--md-on-surface-variant); }
+#ax .at[aria-current="true"] svg { color: inherit; }
+#ax .at b { margin-left: auto; font: 600 12px/16px var(--md-font); font-variant-numeric: tabular-nums;
+          color: var(--md-on-surface-variant); }
+#ax .at[aria-current="true"] b { color: inherit; }
+#ax .at--alerta b { color: var(--md-st-warn); }
+/* ---------- área principal ---------- */
+  /* A JANELA ROLA POR DENTRO. Sem isto as 72 pastas esticavam a pagina para
+     2.949px e o cabecalho da janela (caminho, busca, modo) saia de vista — o
+     oposto de um explorador, onde a moldura fica parada e o conteudo rola. */
+#ax .area { padding: var(--e4); min-width: 0; max-height: 560px; overflow-y: auto;
+          overscroll-behavior: contain; }
+#ax .lado, #ax .det { max-height: 560px; overflow-y: auto; }
+@media (max-width: 980px) {
+/* No telefone a janela continua rolando por dentro — so' mais curta. Sem
+       teto, as 72 pastas empilhadas davam 12.696px de pagina. */
+#ax .area { max-height: 62vh; }
+#ax .lado { max-height: none; }
+#ax .det { max-height: none; }
+  }
+#ax .grade { display: grid; gap: var(--e3); grid-template-columns: repeat(auto-fill, minmax(min(158px, 100%), 1fr)); }
+#ax .lista { display: grid; gap: 2px; }
+/* PASTA — a forma é a metáfora: aba em cima, corpo embaixo. */
+#ax .pasta { position: relative; border: 0; background: transparent; cursor: pointer; padding: var(--e2);
+           border-radius: var(--md-shape-md); text-align: left; display: grid; gap: var(--e2);
+           transition: background 150ms var(--md-ease-standard); }
+#ax .pasta:hover { background: var(--md-action-hover); }
+#ax .pasta[aria-selected="true"] { background: var(--md-secondary-container); }
+#ax .pasta__fig { position: relative; height: 84px; border-radius: 4px 10px 10px 10px;
+                background: var(--pasta); display: grid; place-items: end start; padding: var(--e2); }
+#ax .pasta__fig::before { content: ""; position: absolute; left: 0; top: -9px; width: 46%; height: 12px;
+                        background: var(--pasta-tab); border-radius: 6px 8px 0 0; }
+#ax .pasta:hover .pasta__fig { filter: brightness(1.04); }
+#ax .pasta__n { font: 600 13px/18px var(--md-font); color: var(--pasta-ink); background: rgba(255,255,255,.55);
+              padding: 1px 7px; border-radius: var(--md-shape-full); }
+.dark #ax .pasta__n { background: rgba(0,0,0,.3); }
+#ax .pasta__alerta { position: absolute; top: var(--e2); right: var(--e2); width: 10px; height: 10px;
+                   border-radius: var(--md-shape-full); background: var(--md-st-warn); box-shadow: 0 0 0 2px var(--pasta); }
+#ax .pasta__t { font: 600 13.5px/18px var(--md-font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#ax .pasta__s { font: 400 12px/16px var(--md-font); color: var(--md-on-surface-variant);
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* linha da lista */
+#ax .li { display: grid; grid-template-columns: 28px minmax(0,1fr) 132px 92px; gap: var(--e3);
+        align-items: center; border: 0; background: transparent; cursor: pointer; text-align: left;
+        padding: 9px var(--e3); border-radius: var(--md-shape-sm); color: var(--md-on-surface); font: inherit; }
+#ax .li:hover { background: var(--md-action-hover); }
+#ax .li[aria-selected="true"] { background: var(--md-secondary-container); }
+#ax .li__ic { width: 28px; height: 28px; border-radius: var(--md-shape-xs); background: var(--pasta);
+            display: grid; place-items: center; color: var(--pasta-ink); }
+#ax .li__ic svg { width: 16px; height: 16px; }
+#ax .li__n { font: 500 13.5px/18px var(--md-font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#ax .li__n span { display: block; font: 400 12px/16px var(--md-font); color: var(--md-on-surface-variant); }
+#ax .li__m { font: 400 12.5px/17px var(--md-font); color: var(--md-on-surface-variant); }
+/* ARQUIVO dentro da pasta */
+#ax .arq { position: relative; border: 1px solid var(--md-outline-variant); background: var(--md-surface);
+         border-radius: var(--md-shape-md); padding: var(--e3); cursor: pointer; text-align: left;
+         display: grid; gap: var(--e2); transition: border-color 150ms var(--md-ease-standard), transform 250ms var(--md-ease-emphasized); }
+#ax .arq:hover { border-color: var(--md-primary); transform: translateY(-2px); }
+#ax .arq[aria-selected="true"] { border-color: var(--md-primary); box-shadow: 0 0 0 1px var(--md-primary); }
+#ax .arq__ic { height: 62px; border-radius: var(--md-shape-sm); background: var(--md-surface-container-high);
+             display: grid; place-items: center; font: 700 13px/18px var(--md-font);
+             letter-spacing: .5px; color: var(--md-on-surface-variant); }
+#ax .arq--falta { border-style: dashed; background: transparent; }
+#ax .arq--falta .arq__ic { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+#ax .arq--falta .arq__n { color: var(--md-on-surface-variant); }
+#ax .arq__n { font: 500 13px/17px var(--md-font); }
+#ax .arq__d { font: 400 11.5px/15px var(--md-font); color: var(--md-on-surface-variant); }
+#ax .selo { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: var(--md-shape-xs);
+          font: 500 11px/15px var(--md-font); }
+#ax .selo--ok { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+#ax .selo--warn { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+/* zona de soltar */
+#ax .solta { margin-top: var(--e4); border: 1.5px dashed var(--md-outline-variant); border-radius: var(--md-shape-md);
+           padding: var(--e5); text-align: center; color: var(--md-on-surface-variant);
+           font: 400 13px/18px var(--md-font); transition: border-color 150ms var(--md-ease-standard), background 150ms var(--md-ease-standard); }
+#ax .solta.ativa { border-color: var(--md-primary); background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+#ax .solta b { display: block; color: var(--md-on-surface); font: 600 13.5px/18px var(--md-font); margin-bottom: 2px; }
+/* ---------- painel de detalhe ---------- */
+#ax .det { border-left: 1px solid var(--md-outline-variant); padding: var(--e4); display: none; }
+#ax .com-detalhe .det { display: block; }
+#ax .det__pre { height: 150px; border-radius: var(--md-shape-md); background: var(--md-surface-container-high);
+              display: grid; place-items: center; margin-bottom: var(--e4);
+              font: 700 22px/26px var(--md-font); color: var(--md-on-surface-variant); letter-spacing: 1px; }
+#ax .det h3 { margin: 0 0 var(--e1); font: 500 15px/21px var(--md-font); }
+#ax .det__p { margin: 0 0 var(--e4); color: var(--md-on-surface-variant); font: 400 12.5px/18px var(--md-font); }
+#ax .det dl { margin: 0 0 var(--e4); display: grid; grid-template-columns: 84px minmax(0,1fr); gap: 6px var(--e3); }
+#ax .det dt { font: 500 11px/16px var(--md-font); letter-spacing: .6px; text-transform: uppercase;
+            color: var(--md-on-surface-variant); }
+#ax .det dd { margin: 0; font: 400 13px/18px var(--md-font); }
+#ax .bt { width: 100%; border: 0; cursor: pointer; height: 40px; border-radius: var(--md-shape-full);
+        font: 500 14px/20px var(--md-font); margin-bottom: var(--e2); }
+#ax .bt--p { background: var(--md-primary); color: var(--md-on-primary); }
+#ax .bt--s { background: transparent; color: var(--md-primary); border: 1px solid var(--md-outline); }
+#ax .bt:hover { filter: brightness(1.05); }
+#ax .vazio { padding: 60px var(--e4); text-align: center; color: var(--md-on-surface-variant); }
+#ax .vazio svg { width: 46px; height: 46px; opacity: .5; margin-bottom: var(--e3); }
+#ax .vazio p { margin: 0; font: 400 14px/20px var(--md-font); }
+#ax .notas { display: grid; gap: var(--e2); margin-top: var(--e5); }
+#ax .nota { background: var(--md-surface-container-low); border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-md);
+          padding: 13px var(--e4); font: 400 13.5px/20px var(--md-font); color: var(--md-on-surface-variant); }
+#ax .nota b { color: var(--md-on-surface); }
+@media (prefers-reduced-motion: reduce) {
+#ax * { transition-duration: 1ms !important; }
+  }
+/* ---------- seletor de dimensão: por equipamento, pessoa, evento, tipo ---------- */
+#ax .dim { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: var(--e3); }
+#ax .dim button {
+    border: 1px solid var(--md-outline-variant); background: transparent; cursor: pointer;
+    border-radius: var(--md-shape-sm); padding: 8px 6px; color: var(--md-on-surface);
+    font: 500 12px/16px var(--md-font); display: grid; justify-items: center; gap: 3px;
+    transition: background 150ms var(--md-ease-standard), border-color 150ms var(--md-ease-standard);
+  }
+#ax .dim button svg { width: 17px; height: 17px; color: var(--md-on-surface-variant); }
+#ax .dim button:hover { background: var(--md-action-hover); }
+#ax .dim button[aria-pressed="true"] {
+    background: var(--md-secondary-container); color: var(--md-on-secondary-container);
+    border-color: transparent; font-weight: 600;
+  }
+#ax .dim button[aria-pressed="true"] svg { color: inherit; }
+/* ---------- dossiê ---------- */
+#ax .dossie { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px;
+            border-radius: var(--md-shape-full); font: 600 11px/15px var(--md-font);
+            font-variant-numeric: tabular-nums; }
+#ax .dossie--vazio { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+#ax .dossie--parcial { background: var(--md-tertiary-container); color: var(--md-on-tertiary-container); }
+#ax .dossie--cheio { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+/* O DOSSIE NA PASTA. O anel de progresso nao servia: com 0 de 2 ele fica
+     vazio, e uma parede de aneis vazios nao diz nada. Duas coisas dizem:
+     uma fatia por documento exigido (forma) e o numero (confirmacao). */
+#ax .pasta__slots { position: absolute; left: var(--e2); right: var(--e2); bottom: var(--e2);
+                  display: flex; gap: 3px; }
+#ax .pasta__slots i { flex: 1 1 0; height: 5px; border-radius: 3px; background: rgba(0,0,0,.14); }
+#ax .pasta__slots i.ok { background: var(--md-primary); }
+#ax .pasta__cont { position: absolute; right: 6px; top: 6px; height: 19px; padding: 0 7px;
+                 border-radius: var(--md-shape-full); font: 600 11px/19px var(--md-font);
+                 font-variant-numeric: tabular-nums; letter-spacing: .2px; }
+#ax .pasta__cont--vazio { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+#ax .pasta__cont--parcial { background: var(--md-tertiary-container); color: var(--md-on-secondary-container); }
+#ax .pasta__cont--cheio { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+/* Aqui quem manda e' `.dark` no <html>, posto pelo admin — nao
+   prefers-color-scheme. O bloco de media query que existia junto vinha do
+   protótipo e nasceu INVALIDO na conversao (recebeu o escopo `#ax @media`, que
+   o navegador descarta calado): era codigo morto e saiu. */
+.dark #ax .pasta__slots i { background: rgba(255,255,255,.20); }
+.dark #ax .pasta__slots i.ok { background: var(--md-primary); }
+.dark #ax .pasta__cont--parcial { color: #eaf5c0; }
+/* cabeçalho do dossiê dentro da pasta */
+#ax .cab-dossie {
+    display: flex; align-items: center; gap: var(--e3); flex-wrap: wrap;
+    padding: var(--e3) var(--e4); margin-bottom: var(--e4);
+    background: var(--md-surface-container); border-radius: var(--md-shape-md);
+  }
+#ax .cab-dossie h3 { margin: 0; font: 500 14px/20px var(--md-font); }
+#ax .cab-dossie p { margin: 0; color: var(--md-on-surface-variant); font: 400 12.5px/17px var(--md-font);
+                  flex: 1; min-width: 160px; }
+#ax .barrinha { height: 6px; border-radius: 3px; background: var(--md-surface-variant);
+              overflow: hidden; flex: 1 0 120px; max-width: 200px; }
+#ax .barrinha i { display: block; height: 100%; background: var(--md-st-warn); border-radius: 3px; }
+#ax .barrinha.cheio i { background: var(--md-st-ok); }
+/* o line-height apertado de .pasta__t cortava cedilha e seta nos titulos
+     longos ("Bonsucesso -> Bonsucesso"); overflow:hidden nao perdoa */
+#ax .pasta__t { line-height: 20px; }
+#ax .pasta__s { line-height: 17px; }
+/* FAIXA DO TOPO. Tres numeros, nao um. O "2 arquivados" isolado nao diz o
+     que fazer; "230 a arquivar" e "10 termos aguardando assinatura" dizem. */
+#ax .faixa { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+           gap: var(--e4) var(--e5); background: var(--md-surface-container-low);
+           border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-lg);
+           padding: var(--e4) var(--e5); margin-bottom: var(--e3); }
+#ax .faixa__st { display: grid; gap: 2px; min-width: 0; }
+#ax .faixa__st b { font: 400 30px/34px var(--md-font); font-variant-numeric: tabular-nums;
+                 letter-spacing: -.5px; }
+#ax .faixa__st b i { font: 500 14px/20px var(--md-font); font-style: normal;
+                   color: var(--md-on-surface-variant); }
+#ax .faixa__st span { font: 500 12.5px/17px var(--md-font); color: var(--md-on-surface-variant); }
+#ax .faixa__st--warn b { color: var(--md-st-warn); }
+#ax .faixa__bar { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--e3); }
+#ax .faixa__bar span { font: 400 12px/17px var(--md-font); color: var(--md-on-surface-variant);
+                     white-space: nowrap; }
+#ax .barrinha i, #ax #f-b { min-width: 3px; }
+#ax .det__pre--falta { border: 1.5px dashed var(--md-outline); background: transparent;
+                     color: var(--md-on-surface-variant); font: 500 12px/17px var(--md-font);
+                     text-align: center; display: grid; place-items: center; }
+@media (max-width: 980px) {
+/* No telefone a lateral vira coluna: o seletor de dimensao e' o controle
+       principal e nao pode ficar cortado dentro de um rolador horizontal.
+       Quem rola de lado agora sao as listas de atalho, nao o seletor. */
+#ax .lado { display: grid; grid-template-columns: 1fr; gap: var(--e2); overflow-x: visible; }
+#ax .lado__g { display: flex; gap: var(--e2); overflow-x: auto; padding-bottom: 2px;
+               overscroll-behavior-x: contain; }
+/* .at nasce com width:100%: dentro do rolador horizontal isso deixava UM
+       atalho por tela e as outras duas filas escondidas sem pista nenhuma. */
+#ax .lado__g .at { flex: none; width: auto; }
+#ax .lado__t { display: block; margin: var(--e2) var(--e1) 0; }
+#ax .dim { grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 0; }
+#ax .dim button { padding: 8px 2px; font-size: 11px; }
+#ax .faixa { grid-template-columns: 1fr 1fr; gap: var(--e3) var(--e4); }
+/* o rodape da faixa e' uma frase longa: no telefone ela quebra em vez de
+       empurrar a pagina para 432px de largura */
+#ax .faixa__bar { flex-wrap: wrap; }
+#ax .faixa__bar span { white-space: normal; }
+#ax .faixa__bar .barrinha { flex: 1 0 100%; }
+#ax .faixa__st b { font-size: 24px; line-height: 28px; }
+#ax .faixa__st span { font-size: 12px; }
+#ax .cab-dossie { padding: var(--e3); }
+#ax .cab-dossie p { min-width: 100%; order: 3; }
+  }
+
+  /* Aviso de upload: a tela recarrega no sucesso, entao o aviso so precisa
+     durar o suficiente para explicar uma FALHA. */
+  #ax .aviso { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+               z-index: 60; max-width: min(520px, calc(100vw - 32px));
+               background: var(--md-inverse-surface); color: var(--md-inverse-on-surface);
+               padding: 12px 18px; border-radius: var(--md-shape-sm);
+               font: 500 13.5px/19px var(--md-font); box-shadow: var(--md-elev-2); }
+  #ax .aviso--ruim { background: var(--md-st-crit-cont); color: var(--md-st-crit);
+                     border: 1px solid var(--md-st-crit); }
+  /* .bt tambem e' usado em <a> (abrir arquivo, emitir): sem isto o link fica
+     sublinhado e com a cor de link do admin. */
+  #ax a.bt { text-decoration: none; display: grid; place-items: center; }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="ax">
+<div class="wrap">
+  <p class="eyebrow">Patrimap · arquivo central</p>
+  <h1>Arquivo do patrimônio</h1>
+  <p class="sub">Todo documento do sistema em um lugar, com quatro maneiras de chegar nele:
+    por equipamento, por pessoa, por evento ou por tipo. O que <em>deveria</em> existir e não
+    existe aparece como item faltando — e é isso que transforma a pasta em fila de trabalho.</p>
+
+  <div class="faixa">
+    <div class="faixa__st faixa__st--warn"><b>{{ faltam }}</b><span>documentos a arquivar</span></div>
+    <div class="faixa__st"><b>{{ resumo.aguardando }}</b><span>termos aguardando assinatura</span></div>
+    <div class="faixa__st"><b>{{ resumo.cumpridos }}<i>/{{ resumo.exigidos }}</i></b><span>já arquivados no sistema</span></div>
+    <div class="faixa__bar">
+      <span class="barrinha" style="max-width:none;flex:1"><i id="f-b"></i></span>
+      <span>{{ pc_montado }}% do arquivo montado · {{ resumo.equipamentos }} equipamentos,
+        {{ resumo.notebooks }} notebooks e {{ resumo.computadores }} computadores</span>
+    </div>
+  </div>
+
+  <div class="jan">
+    <div class="jan__topo">
+      <button type="button" class="ib" id="voltar" disabled aria-label="Voltar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <nav class="cam" id="cam" aria-label="Caminho"></nav>
+      <div class="busca">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="Buscar patrimônio, pessoa, loja…" aria-label="Buscar no arquivo">
+      </div>
+      <div class="vis" role="group" aria-label="Modo de exibição">
+        <button type="button" id="v-grade" aria-pressed="true" aria-label="Grade">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        </button>
+        <button type="button" id="v-lista" aria-pressed="false" aria-label="Lista">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="jan__corpo" id="corpo">
+      <aside class="lado">
+        <div class="dim" id="dim"></div>
+        <div class="lado__g" id="at-lista"></div>
+        <p class="lado__t">Pendências</p>
+        <div class="lado__g" id="at-filas"></div>
+      </aside>
+      <main class="area" id="area"></main>
+      <aside class="det" id="det"></aside>
+    </div>
+  </div>
+
+  <div class="notas">
+    <p class="nota"><b>O dossiê não é lista fixa.</b> O que cada pasta deve conter sai do que
+      aconteceu com aquele equipamento: comprou → nota fiscal; foi entregue → termo assinado;
+      voltou → termo de devolução; foi para a autorizada → laudo e nota de serviço; foi
+      transferido → um protocolo por transferência. Transferir uma máquina amanhã aumenta o
+      denominador dela sozinho.</p>
+    <p class="nota"><b>O sistema já emite esses papéis.</b> Protocolo de transferência, termo,
+      orçamento e protocolo de envio saem daqui desde sempre — e sumiam depois de impressos.
+      No item que falta, <b>Emitir pelo sistema</b> abre o documento para impressão e
+      <b>Anexar arquivo</b> guarda a via assinada de volta na pasta.</p>
+  </div>
+
+</div>
+</div>
+
+{{ dados_js|json_script:"ax-dados" }}
+
+<script>
+(function () {
+  "use strict";
+  var D = JSON.parse(document.getElementById("ax-dados").textContent);
+  var RAIZ = document.getElementById("ax");
+  var URL_ANEXAR = "{% url 'parque_arquivo_anexar' %}";
+  var URL_VALIDAR = "{% url 'parque_arquivo_validar' %}";
+  var CSRF = "{{ csrf_token }}";
+
+  var est = { dim: "equip", local: "todos", aberto: null, sel: null,
+              modo: "grade", busca: "" };
+
+  var corpo = document.getElementById("corpo"), area = document.getElementById("area"),
+      det = document.getElementById("det"), cam = document.getElementById("cam"),
+      btVoltar = document.getElementById("voltar");
+
+  document.getElementById("f-b").style.width = {{ pc_montado }} + "%";
+
+  function esc(t) {
+    return String(t == null ? "" : t).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function ico(d) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+      'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"/></svg>';
+  }
+  var I = {
+    pasta: "M3 7a2 2 0 0 1 2-2h3.6a2 2 0 0 1 1.5.7L11.6 7H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
+    nb: "M3 5.5h18v10H3zM1.5 19h21",
+    pc: "M4 4h16v11H4zM9 19h6M12 15v4",
+    doc: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5",
+    pessoa: "M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M10 7a4 4 0 1 0 0 .01",
+    evento: "M4 5h16v16H4zM4 10h16M9 3v4M15 3v4",
+    tipo: "M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2a2 2 0 0 1-.6-1.4V4a1 1 0 0 1 1-1h8a2 2 0 0 1 1.4.6l7.4 7.4a2 2 0 0 1 0 2.4zM7.5 7.5h.01",
+    assina: "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z",
+    alerta: "m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3zM12 9v4M12 17h.01"
+  };
+
+  var DIMS = [
+    { id: "equip", nome: "Equipamento", ic: I.pasta },
+    { id: "pessoa", nome: "Pessoa", ic: I.pessoa },
+    { id: "evento", nome: "Evento", ic: I.evento },
+    { id: "tipo", nome: "Tipo", ic: I.tipo }
+  ];
+
+  // ---- cada dimensão devolve o MESMO formato, para a área não saber a diferença
+  function itens() {
+    if (est.dim === "equip") {
+      var f = D.pastas.filter(function (p) {
+        if (est.local === "Notebook" || est.local === "Computador") return p.tipo === est.local;
+        if (est.local.indexOf("sem_") === 0) {
+          var t = est.local.slice(4);
+          return p.exigidos.some(function (e) { return e.tipo === t && !e.ok; });
+        }
+        return true;
+      });
+      return f.map(function (p) {
+        return { id: p.id, t: p.cod, s: p.pessoa || p.modelo, ok: p.ok, de: p.de,
+                 busca: p.cod + " " + p.modelo + " " + p.pessoa + " " + p.serial, ref: p };
+      });
+    }
+    if (est.dim === "pessoa") {
+      return D.pessoas.map(function (p) {
+        return { id: p.id, t: p.nome,
+                 s: p.equip.length ? p.equip.join(", ") : "sem equipamento hoje",
+                 ok: p.ok, de: p.de, busca: p.nome + " " + p.equip.join(" "), ref: p };
+      });
+    }
+    if (est.dim === "evento") {
+      return D.eventos.map(function (e) {
+        return { id: e.id, t: e.titulo, s: e.sub + (e.data ? " · " + e.data : ""),
+                 ok: e.ok, de: e.de, busca: e.titulo + " " + e.sub, ref: e };
+      });
+    }
+    return D.tipos.map(function (t) {
+      return { id: t.id, t: t.nome,
+               s: t.tem + (t.tem === 1 ? " arquivado" : " arquivados") + " · " +
+                  t.falta + " faltando",
+               ok: t.ok, de: t.de, busca: t.nome, ref: t };
+    });
+  }
+
+  // ---- o conteúdo de uma pasta aberta: o que existe + o que falta
+  function conteudo() {
+    var r = est.aberto;
+    if (!r) return [];
+    if (est.dim === "equip" || est.dim === "evento") {
+      return r.arquivos.concat(r.exigidos.filter(function (e) { return !e.ok; })
+        .map(function (e) {
+          return { nome: e.nome, arq: "", url: "", kind: "falta", data: "",
+                   estado: "não anexado", porque: e.porque, alvo: e.alvo,
+                   doc_tipo: e.doc_tipo, emitir: e.emitir };
+        }));
+    }
+    if (est.dim === "pessoa") return r.itens;
+    return r.itens;  // por tipo: a estante já vem montada do servidor
+  }
+
+  var LOCAIS = {
+    equip: [
+      { id: "todos", nome: "Todos", ic: I.pasta, n: D.pastas.length },
+      { id: "Notebook", nome: "Notebooks", ic: I.nb, n: D.resumo.notebooks },
+      { id: "Computador", nome: "Computadores", ic: I.pc, n: D.resumo.computadores }
+    ],
+    pessoa: [{ id: "todos", nome: "Pessoas", ic: I.pessoa, n: D.pessoas.length }],
+    evento: [{ id: "todos", nome: "Todos os eventos", ic: I.evento, n: D.eventos.length }],
+    tipo: [{ id: "todos", nome: "Todos os tipos", ic: I.tipo, n: D.tipos.length }]
+  };
+
+  function contaFalta(tipo) {
+    return D.pastas.filter(function (p) {
+      return p.exigidos.some(function (e) { return e.tipo === tipo && !e.ok; });
+    }).length;
+  }
+  var FILAS = [
+    { id: "sem_nota", tipo: "nota", nome: "Sem nota fiscal", ic: I.doc },
+    { id: "sem_termo", tipo: "termo", nome: "Termo pendente", ic: I.assina },
+    { id: "sem_protocolo", tipo: "protocolo", nome: "Sem protocolo", ic: I.alerta }
+  ];
+
+  function pintarLado() {
+    document.getElementById("dim").innerHTML = DIMS.map(function (d) {
+      return '<button type="button" data-dim="' + d.id + '" aria-pressed="' +
+        (est.dim === d.id) + '">' + ico(d.ic) + "<span>" + d.nome + "</span></button>";
+    }).join("");
+    document.getElementById("at-lista").innerHTML = (LOCAIS[est.dim] || []).map(function (a) {
+      return '<button type="button" class="at" data-local="' + a.id + '"' +
+        (est.local === a.id ? ' aria-current="true"' : "") + ">" + ico(a.ic) +
+        "<span>" + a.nome + "</span><b>" + a.n + "</b></button>";
+    }).join("");
+    document.getElementById("at-filas").innerHTML = FILAS.map(function (f) {
+      return '<button type="button" class="at at--alerta" data-fila="' + f.id + '"' +
+        (est.local === f.id ? ' aria-current="true"' : "") + ">" + ico(f.ic) +
+        "<span>" + f.nome + "</span><b>" + contaFalta(f.tipo) + "</b></button>";
+    }).join("");
+
+    RAIZ.querySelectorAll("[data-dim]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        est.dim = b.getAttribute("data-dim");
+        est.local = "todos"; est.aberto = null; est.sel = null; pintar();
+      });
+    });
+    RAIZ.querySelectorAll("[data-local], [data-fila]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var f = b.getAttribute("data-fila");
+        if (f) { est.dim = "equip"; est.local = f; }
+        else { est.local = b.getAttribute("data-local"); }
+        est.aberto = null; est.sel = null; pintar();
+      });
+    });
+  }
+
+  // ---- o dossiê na pasta: uma fatia por documento exigido + o número
+  function grau(ok, de) { return !ok ? "vazio" : (ok >= de ? "cheio" : "parcial"); }
+  function plural(n, um, muitos) { return n + " " + (n === 1 ? um : muitos); }
+  function fatias(ok, de) {
+    var n = Math.min(de, 6), s = "";
+    for (var i = 0; i < n; i++) s += "<i" + (i < ok ? ' class="ok"' : "") + "></i>";
+    return '<span class="pasta__slots" aria-hidden="true">' + s + "</span>" +
+      '<span class="pasta__cont pasta__cont--' + grau(ok, de) + '">' + ok + "/" + de + "</span>";
+  }
+  function chip(ok, de) {
+    return '<span class="dossie dossie--' + grau(ok, de) + '">' + ok + "/" + de + "</span>";
+  }
+  function selo(estado) {
+    var bom = estado === "assinado" || estado === "arquivado" || estado === "validado";
+    return '<span class="selo selo--' + (bom ? "ok" : "warn") + '">' + esc(estado) + "</span>";
+  }
+
+  // Um item da pasta aberta, em ficha (grade) ou em linha (lista). Por TIPO a
+  // linha é obrigatória: 163 fichas com o mesmo título não são leitura — o que
+  // muda de uma para a outra é o equipamento, e é ele que vai no título.
+  function faltando(it) {
+    return it.kind === "falta" || it.estado === "aguardando assinatura" ||
+           it.estado === "não anexado";
+  }
+  function ficha(it, i) {
+    var falta = faltando(it);
+    return '<button type="button" class="arq' + (falta ? " arq--falta" : "") +
+      '" data-item="' + i + '"><span class="arq__ic">' +
+      (it.kind === "falta" ? "!" : esc(it.kind)) + '</span><span class="arq__n">' +
+      esc(it.onde || it.nome) + '</span><span class="arq__d">' +
+      esc(it.onde ? it.nome : (it.data || it.porque || "—")) + "</span>" +
+      selo(it.estado) + "</button>";
+  }
+  function linha(it, i) {
+    return '<button type="button" class="li" data-item="' + i +
+      '"><span class="li__ic">' + ico(I.doc) + '</span><span class="li__n">' +
+      esc(it.onde || it.nome) + "<span>" + esc(it.onde ? it.nome : (it.porque || "")) +
+      '</span></span><span class="li__m">' + selo(it.estado) +
+      '</span><span class="li__m">' + esc(it.data || "—") + "</span></button>";
+  }
+  function montar(lista) {
+    var emLinha = est.modo === "lista" || est.dim === "tipo";
+    return '<div class="' + (emLinha ? "lista" : "grade") + '">' +
+      lista.map(emLinha ? linha : ficha).join("") + "</div>";
+  }
+
+  function pintarArea() {
+    if (est.aberto) {
+      var lista = conteudo(), ok = est.aberto.ok, de = est.aberto.de;
+      var frac = de ? Math.round(ok / de * 100) : 0;
+      area.innerHTML =
+        '<div class="cab-dossie"><h3>Dossiê ' + ok + " de " + de + "</h3><p>" +
+        (de === 0 ? "nada exigido aqui"
+                  : (ok >= de ? "dossiê completo"
+                              : plural(de - ok, "documento faltando", "documentos faltando"))) +
+        '</p><span class="barrinha' + (ok >= de ? " cheio" : "") +
+        '"><i style="width:' + frac + '%"></i></span></div>' +
+        (lista.length
+          ? montar(lista) +
+            (est.aberto.cortou ? '<p class="nota">Mostrando os 80 primeiros de ' +
+              (80 + est.aberto.cortou) + " — use a busca ou abra pela pasta do equipamento.</p>" : "")
+          : '<div class="vazio">' + ico(I.pasta) + "<p>Nada aqui ainda.</p></div>") +
+        (D.pode_anexar && est.aberto.alvo
+          ? '<div class="solta" id="solta"><b>Arraste o arquivo aqui</b>' +
+            "PDF, imagem ou DOCX — nota fiscal, termo assinado, laudo ou protocolo</div>"
+          : "");
+
+      area.querySelectorAll(".arq").forEach(function (b) {
+        b.addEventListener("click", function () {
+          est.sel = parseInt(b.getAttribute("data-item"), 10); pintar();
+        });
+      });
+      ligarSolta(document.getElementById("solta"), est.aberto.alvo, "outro");
+      return;
+    }
+
+    var q = est.busca.trim().toLowerCase();
+    var lista = itens().filter(function (x) {
+      return !q || x.busca.toLowerCase().indexOf(q) >= 0;
+    });
+    if (!lista.length) {
+      area.innerHTML = '<div class="vazio">' + ico(I.pasta) +
+        "<p>Nada com esse filtro.</p></div>";
+      return;
+    }
+    area.innerHTML = est.modo === "grade"
+      ? '<div class="grade">' + lista.map(function (x) {
+          return '<button type="button" class="pasta" data-id="' + x.id +
+            '"><span class="pasta__fig">' + fatias(x.ok, x.de) + '</span><span class="pasta__t">' +
+            esc(x.t) + '</span><span class="pasta__s">' + esc(x.s) + "</span></button>";
+        }).join("") + "</div>"
+      : '<div class="lista">' + lista.map(function (x) {
+          return '<button type="button" class="li" data-id="' + x.id +
+            '"><span class="li__ic">' + ico(I.pasta) + '</span><span class="li__n">' +
+            esc(x.t) + "<span>" + esc(x.s) + '</span></span><span class="li__m">' +
+            chip(x.ok, x.de) + '</span><span class="li__m">' +
+            (x.ok >= x.de ? "completo" : (x.de - x.ok) + " faltando") + "</span></button>";
+        }).join("") + "</div>";
+
+    area.querySelectorAll("[data-id]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var achou = itens().filter(function (x) {
+          return x.id === b.getAttribute("data-id");
+        })[0];
+        if (!achou) return;
+        est.aberto = achou.ref;
+        est.aberto.__t = achou.t;
+        est.aberto.ok = achou.ok; est.aberto.de = achou.de;
+        est.sel = null; pintar();
+      });
+    });
+  }
+
+  function pintarCaminho() {
+    var nome = DIMS.filter(function (d) { return d.id === est.dim; })[0].nome.toLowerCase();
+    var p = ['<button type="button" data-ir="raiz"' + (est.aberto ? "" : " disabled") +
+             ">Arquivo</button>", ico("M9 6l6 6-6 6"),
+             '<button type="button" data-ir="dim"' + (est.aberto ? "" : " disabled") +
+             ">Por " + nome + "</button>"];
+    if (est.aberto) {
+      p.push(ico("M9 6l6 6-6 6"));
+      p.push("<button type=\"button\" disabled>" + esc(est.aberto.__t || "") + "</button>");
+    }
+    cam.innerHTML = p.join("");
+    cam.querySelectorAll("button[data-ir]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        est.aberto = null; est.sel = null; pintar();
+      });
+    });
+    btVoltar.disabled = !est.aberto;
+  }
+
+  function pintarDetalhe() {
+    var lista = est.aberto ? conteudo() : [];
+    var it = (est.sel !== null && lista[est.sel]) ? lista[est.sel] : null;
+    corpo.classList.toggle("com-detalhe", !!it);
+    if (!it) { det.innerHTML = ""; return; }
+
+    var falta = it.kind === "falta" || !it.url;
+    var linhas = [["Situação", it.estado], ["Arquivo", it.arq || "—"],
+                  ["Data", it.data || "—"], ["Validado", it.por || "—"]];
+    det.innerHTML =
+      '<div class="det__pre' + (falta ? " det__pre--falta" : "") + '">' +
+      (falta ? "<span>ainda não<br>anexado</span>" : esc(it.kind)) + "</div><h3>" +
+      esc(it.nome) + '</h3><p class="det__p">' + esc(it.porque || "documento do dossiê") +
+      "</p><dl>" + linhas.map(function (l) {
+        return "<dt>" + l[0] + "</dt><dd>" + esc(l[1]) + "</dd>";
+      }).join("") + "</dl>" +
+      (falta
+        ? (D.pode_anexar && it.alvo
+             ? '<button type="button" class="bt bt--p" id="bt-anexar">Anexar arquivo</button>' : "") +
+          (it.emitir ? '<a class="bt bt--s" href="' + it.emitir +
+             '" target="_blank" rel="noopener">Emitir pelo sistema</a>' : "")
+        : (D.pode_validar && it.id && String(it.id).indexOf("t") !== 0 && !it.por
+             ? '<button type="button" class="bt bt--p" id="bt-validar">Validar documento</button>' : "") +
+          (it.url ? '<a class="bt bt--s" href="' + it.url +
+             '" target="_blank" rel="noopener">Abrir arquivo</a>' : ""));
+
+    var bA = document.getElementById("bt-anexar");
+    if (bA) bA.addEventListener("click", function () { escolher(it.alvo, it.doc_tipo); });
+    var bV = document.getElementById("bt-validar");
+    if (bV) bV.addEventListener("click", function () { validar(it.id, bV); });
+  }
+
+  // ------------------------------------------------------------ o que ALTERA
+  var entrada = document.createElement("input");
+  entrada.type = "file";
+  entrada.accept = ".pdf,.png,.jpg,.jpeg,.docx";
+  entrada.style.display = "none";
+  RAIZ.appendChild(entrada);
+  var destino = null;
+
+  function escolher(alvo, tipo) {
+    destino = { alvo: alvo, tipo: tipo || "outro" };
+    entrada.value = "";
+    entrada.click();
+  }
+  entrada.addEventListener("change", function () {
+    if (entrada.files && entrada.files[0] && destino) {
+      subir(entrada.files[0], destino.alvo, destino.tipo);
+    }
+  });
+
+  function aviso(texto, ruim) {
+    var d = document.createElement("div");
+    d.className = "aviso" + (ruim ? " aviso--ruim" : "");
+    d.textContent = texto;
+    RAIZ.appendChild(d);
+    setTimeout(function () { d.remove(); }, ruim ? 6000 : 2500);
+  }
+
+  function subir(arquivo, alvo, tipo) {
+    if (!alvo) return;
+    var fd = new FormData();
+    fd.append("arquivo", arquivo);
+    fd.append("alvo", alvo);
+    fd.append("tipo", tipo || "outro");
+    fd.append("csrfmiddlewaretoken", CSRF);
+    aviso("Enviando " + arquivo.name + "…");
+    fetch(URL_ANEXAR, { method: "POST", body: fd, credentials: "same-origin" })
+      .then(function (r) { return r.json().catch(function () { return { ok: false, erro: "Resposta inesperada do servidor." }; }); })
+      .then(function (j) {
+        if (j.ok) { location.reload(); }
+        else { aviso(j.erro || "Não foi possível anexar.", true); }
+      })
+      .catch(function () { aviso("Falha de rede ao anexar.", true); });
+  }
+
+  function validar(id, botao) {
+    var fd = new FormData();
+    fd.append("doc", id);
+    fd.append("csrfmiddlewaretoken", CSRF);
+    if (botao) { botao.disabled = true; botao.textContent = "Validando…"; }
+    fetch(URL_VALIDAR, { method: "POST", body: fd, credentials: "same-origin" })
+      .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
+      .then(function (j) {
+        if (j.ok) { location.reload(); }
+        else {
+          aviso(j.erro || "Não foi possível validar.", true);
+          if (botao) { botao.disabled = false; botao.textContent = "Validar documento"; }
+        }
+      })
+      .catch(function () {
+        aviso("Falha de rede ao validar.", true);
+        if (botao) { botao.disabled = false; botao.textContent = "Validar documento"; }
+      });
+  }
+
+  function ligarSolta(zona, alvo, tipo) {
+    if (!zona) return;
+    ["dragenter", "dragover"].forEach(function (ev) {
+      zona.addEventListener(ev, function (e) {
+        e.preventDefault(); zona.classList.add("ativa");
+      });
+    });
+    ["dragleave", "dragend"].forEach(function (ev) {
+      zona.addEventListener(ev, function () { zona.classList.remove("ativa"); });
+    });
+    zona.addEventListener("drop", function (e) {
+      e.preventDefault();
+      zona.classList.remove("ativa");
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+        subir(e.dataTransfer.files[0], alvo, tipo);
+      }
+    });
+    zona.addEventListener("click", function () { escolher(alvo, tipo); });
+  }
+
+  function pintar() { pintarLado(); pintarCaminho(); pintarArea(); pintarDetalhe(); }
+
+  btVoltar.addEventListener("click", function () {
+    est.aberto = null; est.sel = null; pintar();
+  });
+  document.getElementById("q").addEventListener("input", function (e) {
+    est.busca = e.target.value; est.aberto = null; est.sel = null; pintar();
+  });
+  document.getElementById("v-grade").addEventListener("click", function () {
+    est.modo = "grade"; this.setAttribute("aria-pressed", "true");
+    document.getElementById("v-lista").setAttribute("aria-pressed", "false"); pintar();
+  });
+  document.getElementById("v-lista").addEventListener("click", function () {
+    est.modo = "lista"; this.setAttribute("aria-pressed", "true");
+    document.getElementById("v-grade").setAttribute("aria-pressed", "false"); pintar();
+  });
+  RAIZ.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    if (est.sel !== null) { est.sel = null; } else if (est.aberto) { est.aberto = null; }
+    pintar();
+  });
+
+  pintar();
+})();
+</script>
+{% endblock %}

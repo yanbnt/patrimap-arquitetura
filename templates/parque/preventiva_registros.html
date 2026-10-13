@@ -1,0 +1,442 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% comment %}
+REGISTROS — calendário do que já foi feito.
+
+Pedido do dono: "a tela de preventiva tem que ter essa visão aqui, aparecendo os
+registros das preventivas e movimentações que foram realizadas. Vai basicamente
+ser uma tela especial pro RH verificar."
+
+Ele mandou como referência um calendário SEMANAL com grade de horas. Aqui é MÊS,
+e a razão está no dado: preventiva concluída guarda `concluido_em` como DATA,
+sem hora (Reparo.concluido_em é DateField). Uma grade de horas ficaria quase toda
+vazia e daria a impressão de uma precisão que o registro não tem. O mês mostra o
+que existe — quantos e quais em cada dia — e a agenda à esquerda traz a lista em
+ordem, que é o que quem CONFERE precisa ler.
+
+Tela de LEITURA: nada aqui altera dado. Quem confere não decide.
+
+Acesso: superusuário ou grupo RH / Gerente / Supervisor (views.py:GRUPOS_REGISTROS).
+O grupo "RH" ainda não existe no banco — criá-lo no admin já libera a tela.
+{% endcomment %}
+
+{% block extrastyle %}{{ block.super }}
+<style>
+  /* Prefixo .rgx-. Cor SÓ por papel --md-*, forma na escala do contrato. */
+
+  .rgx { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 1100px) { .rgx { grid-template-columns: 1fr; } }
+
+  /* ---------- cartão base, o mesmo do topo do mapa ---------- */
+  .rgx-card {
+    background: var(--md-surface);
+    border: 1px solid var(--md-outline-variant);
+    border-radius: var(--md-shape-lg);
+    padding: 14px 16px;
+  }
+
+  /* ---------- agenda lateral ---------- */
+  .rgx-side { display: grid; gap: 12px; }
+  .rgx-cap {
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; text-transform: uppercase;
+    color: var(--md-on-surface-variant); margin: 0 0 10px;
+  }
+  .rgx-tot { display: flex; flex-wrap: wrap; gap: 8px; }
+  .rgx-tot__i {
+    display: grid; gap: 1px; flex: 1 1 76px;
+    padding: 8px 10px; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-low);
+  }
+  .rgx-tot__n { font: 600 19px/24px var(--md-font); font-variant-numeric: tabular-nums; }
+  .rgx-tot__l { font: 500 10.5px/14px var(--md-font); letter-spacing: .3px; color: var(--md-on-surface-variant); }
+
+  .rgx-agenda { display: grid; gap: 2px; max-height: 560px; overflow: auto; }
+  .rgx-dia { margin-top: 10px; }
+  .rgx-dia:first-child { margin-top: 0; }
+  .rgx-dia__lbl {
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; text-transform: uppercase;
+    color: var(--md-on-surface-variant); padding: 6px 0 4px;
+  }
+  .rgx-item {
+    display: grid; grid-template-columns: 8px 1fr; gap: 10px; align-items: start;
+    padding: 8px 10px; border-radius: var(--md-shape-sm);
+    color: inherit; text-decoration: none;
+  }
+  .rgx-item:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+  .rgx-item__pt {
+    width: 8px; height: 8px; margin-top: 6px; border-radius: var(--md-shape-full);
+    background: var(--rgx-c, var(--md-outline));
+  }
+  .rgx-item__t { font: 500 13px/18px var(--md-font); }
+  .rgx-item__s { font: 400 11.5px/16px var(--md-font); color: var(--md-on-surface-variant); }
+  .rgx-vazio {
+    padding: 20px 4px; text-align: center;
+    font: 400 13px/20px var(--md-font); color: var(--md-on-surface-variant);
+  }
+
+  /* ---------- barra do mês ---------- */
+  .rgx-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .rgx-mes { font: 600 19px/28px var(--md-font); letter-spacing: -.2px; margin: 0; text-transform: capitalize; }
+  .rgx-mes span { color: var(--md-on-surface-variant); font-weight: 400; }
+  .rgx-nav { display: flex; gap: 2px; }
+  .rgx-nav a, .rgx-hoje {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    min-width: 36px; height: 36px; padding: 0 10px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-on-surface-variant);
+    font: 500 13px/1 var(--md-font); text-decoration: none;
+  }
+  .rgx-nav a:hover, .rgx-hoje:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+  .rgx-hoje { border: 1px solid var(--md-outline); color: var(--md-on-surface); }
+  /* Filtro: A MESMA barra de toda tela de lista. Eram dois `<select>` com
+     `onchange=submit` (aplicava sozinho, sem "Aplicar", e não mostrava o que
+     estava valendo). Agora o `.rgx-filtros` é só o HOST do popup — o
+     `initFiltrarPopup` monta o botão "Filtrar" no pai da `.flt-bar`. */
+  .rgx-filtros {
+    display: flex; align-items: center; justify-content: flex-end;
+    gap: 8px; flex-wrap: wrap;
+    /* ENCOLHE no tamanho do botão.
+       Com `flex: 1 1 220px` fixo, o host esticava 220px mesmo vazio e sobrava
+       uma caixa larga com o "Filtrar" solto na ponta — foi o que o dono viu
+       ("tá estranho esse elemento"). Aqui ele passa a ter o tamanho do
+       conteúdo… */
+    flex: 0 0 auto; min-width: 0;
+  }
+  /* …e só cresce quando existe filtro aplicado, porque aí os chips precisam de
+     uma linha própria dentro dele. `:has()` resolve na estrutura o que antes
+     era um tamanho fixo chutado. */
+  .rgx-filtros:has(.fltx-active) { flex: 1 1 220px; }
+
+  /* O host não é cartão: quem tem moldura é o botão, não a área em volta. */
+  .rgx-filtros,
+  .rgx-filtros > .flt-bar {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+  }
+  /* Os chips do que está aplicado tomam uma linha própria DENTRO do host (por
+     isso o `flex: 1 1 220px` acima: sem poder crescer, o host fica do tamanho
+     do botão e os chips não caberiam). Assim eles aparecem e desaparecem sem
+     empurrar o nome do mês nem o "Hoje". */
+  .rgx-filtros .fltx-active {
+    flex: 1 0 100%; order: 99; justify-content: flex-end;
+    margin: 4px 0 0 !important;
+  }
+
+  /* ---------- grade do mês ---------- */
+  /* ---------------------------------------------- calendário da lateral
+     Substituiu os três contadores. É o mesmo mês da grade grande, em
+     miniatura: ponto embaixo do número quando o dia tem registro, e o
+     clique salta para aquele dia na agenda logo abaixo. */
+  .rgx-cal__cab { display: flex; align-items: center; gap: 4px; margin: 0 0 10px; }
+  .rgx-cal__mes {
+    margin: 0; flex: 1 1 auto; min-width: 0;
+    font: 600 14px/20px var(--md-font); letter-spacing: .1px; text-transform: capitalize;
+  }
+  .rgx-cal__mes span { color: var(--md-on-surface-variant); font-weight: 400; }
+  .rgx-cal__nav {
+    flex: 0 0 auto; width: 28px; height: 28px; display: grid; place-items: center;
+    border-radius: var(--md-shape-full); color: var(--md-on-surface-variant);
+    text-decoration: none;
+  }
+  .rgx-cal__nav:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+  .rgx-cal__nav svg { width: 16px; height: 16px; }
+  .rgx-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .rgx-cal__wd {
+    display: grid; place-items: center; height: 22px;
+    font: 500 10px/1 var(--md-font); letter-spacing: .06em;
+    color: var(--md-on-surface-variant);
+  }
+  .rgx-cal__d {
+    position: relative; display: grid; place-items: center;
+    height: 30px; padding: 0; border: 0; cursor: pointer;
+    border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-on-surface);
+    font: 400 12.5px/1 var(--md-font); font-variant-numeric: tabular-nums;
+  }
+  .rgx-cal__d[disabled] { cursor: default; color: var(--md-on-surface-variant); }
+  .rgx-cal__d:not([disabled]):hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+  .rgx-cal__d--fora { color: var(--md-on-surface-variant); opacity: .45; font: 400 12.5px/1 var(--md-font); display: grid; place-items: center; height: 30px; }
+  .rgx-cal__d--hoje { box-shadow: inset 0 0 0 1.5px var(--md-primary); font-weight: 600; }
+  .rgx-cal__d--tem::after {
+    content: ""; position: absolute; bottom: 3px;
+    width: 4px; height: 4px; border-radius: var(--md-shape-full);
+    background: var(--md-primary);
+  }
+  .rgx-cal__d--sel {
+    background: var(--md-secondary-container) !important;
+    color: var(--md-on-secondary-container); font-weight: 600;
+  }
+  .rgx-cal__d--sel::after { background: var(--md-on-secondary-container); }
+  .rgx-cal__res {
+    margin: 12px 0 0; padding-top: 10px;
+    border-top: 1px solid var(--md-outline-variant);
+    font: 400 12.5px/18px var(--md-font); color: var(--md-on-surface-variant);
+  }
+  .rgx-cal__res b { color: var(--md-on-surface); font-weight: 600; }
+  .rgx-cal__hoje {
+    display: inline-block; margin-top: 8px;
+    font: 500 12.5px/1 var(--md-font); color: var(--md-primary); text-decoration: none;
+  }
+  .rgx-cal__hoje:hover { text-decoration: underline; }
+  /* Dia apontado pelo calendário: realce curto, para o olho achar onde caiu. */
+  .rgx-dia.is-alvo { background: color-mix(in srgb, var(--md-primary) 7%, transparent);
+    border-radius: var(--md-shape-sm); }
+
+  /* Busca da barra: pílula preenchida, com a lupa como ITEM do flex — nunca
+     camada por cima do campo (armadilha da §14.7 e da §36). */
+  .rgx-busca {
+    flex: 1 1 260px; min-width: 0;
+    display: flex; align-items: center; gap: 8px;
+    height: 40px; padding: 0 14px;
+    background: var(--md-surface-container);
+    border-radius: var(--md-shape-full);
+  }
+  .rgx-busca > svg { flex: 0 0 auto; width: 18px; height: 18px; color: var(--md-on-surface-variant); }
+  .rgx-busca input[type="search"] {
+    flex: 1 1 auto; min-width: 0;
+    height: 40px !important; min-height: 40px !important;
+    padding: 0 !important; border: 0 !important; background: transparent !important;
+    box-shadow: none !important; outline: none;
+    font: 400 14px/20px var(--md-font) !important; color: var(--md-on-surface) !important;
+  }
+  .rgx-busca:focus-within { box-shadow: inset 0 0 0 2px var(--md-primary); }
+  .rgx-busca__x {
+    flex: 0 0 auto; width: 26px; height: 26px; display: grid; place-items: center;
+    border-radius: var(--md-shape-full); color: var(--md-on-surface-variant);
+    text-decoration: none; font-size: 16px;
+  }
+  .rgx-busca__x:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+
+  .rgx-grade { border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-lg); overflow: hidden; }
+  .rgx-linha { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .rgx-linha--cab {
+    background: var(--md-surface-container-low);
+    border-bottom: 1px solid var(--md-outline-variant);
+  }
+  .rgx-wd {
+    padding: 8px 10px; text-align: left;
+    font: 500 10.5px/14px var(--md-font); letter-spacing: .5px; text-transform: uppercase;
+    color: var(--md-on-surface-variant);
+  }
+  .rgx-cel {
+    min-height: 104px; padding: 6px 8px 8px;
+    border-right: 1px solid var(--md-outline-variant);
+    border-bottom: 1px solid var(--md-outline-variant);
+    background: var(--md-surface);
+  }
+  .rgx-linha .rgx-cel:last-child { border-right: 0; }
+  .rgx-linha:last-child .rgx-cel { border-bottom: 0; }
+  .rgx-cel--fora { background: var(--md-surface-container-lowest); }
+  .rgx-cel--fora .rgx-num { color: var(--md-outline); }
+  .rgx-num {
+    display: inline-grid; place-items: center; min-width: 24px; height: 24px;
+    border-radius: var(--md-shape-full);
+    font: 500 12.5px/1 var(--md-font); font-variant-numeric: tabular-nums;
+    color: var(--md-on-surface-variant); margin-bottom: 4px;
+  }
+  .rgx-cel--hoje .rgx-num {
+    background: var(--md-primary-container); color: var(--md-on-primary-container); font-weight: 700;
+  }
+  .rgx-ev {
+    display: block; margin: 2px 0; padding: 3px 7px;
+    border-radius: var(--md-shape-xs);
+    border-left: 3px solid var(--rgx-c, var(--md-outline));
+    background: var(--rgx-bg, var(--md-surface-container-low));
+    font: 500 11px/15px var(--md-font);
+    color: var(--md-on-surface);
+    text-decoration: none;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .rgx-ev:hover { filter: brightness(.97); }
+  .rgx-mais { font: 500 10.5px/14px var(--md-font); color: var(--md-on-surface-variant); padding: 2px 7px; }
+
+  /* Cores por tipo — tom claro, nunca cor cheia (contrato §19.18). */
+  .rgx-t-preventiva { --rgx-c: var(--md-st-ok); --rgx-bg: color-mix(in srgb, var(--md-st-ok-cont) 40%, var(--md-surface)); }
+  .rgx-t-transferencia { --rgx-c: var(--md-primary); --rgx-bg: color-mix(in srgb, var(--md-primary-container) 40%, var(--md-surface)); }
+  .rgx-t-movimentacao { --rgx-c: var(--md-st-warn); --rgx-bg: color-mix(in srgb, var(--md-st-warn-cont) 38%, var(--md-surface)); }
+</style>
+
+<script>
+// Calendário da lateral: clicar no dia leva à agenda daquele dia.
+//
+// Sem recarregar a página — os registros do mês já estão todos aqui. O dia
+// vira âncora (`#rgd-AAAA-MM-DD`), o bloco recebe um realce curto e o
+// calendário marca qual dia está selecionado.
+(function () {
+  var cal = document.querySelector(".rgx-cal");
+  if (!cal) return;
+  var ultimo = null;
+  cal.addEventListener("click", function (e) {
+    var b = e.target.closest(".rgx-cal__d[data-dia]");
+    if (!b || b.disabled) return;
+    var alvo = document.getElementById("rgd-" + b.dataset.dia);
+    if (!alvo) return;
+    cal.querySelectorAll(".rgx-cal__d--sel").forEach(function (d) {
+      d.classList.remove("rgx-cal__d--sel");
+    });
+    b.classList.add("rgx-cal__d--sel");
+    if (ultimo) ultimo.classList.remove("is-alvo");
+    alvo.classList.add("is-alvo");
+    ultimo = alvo;
+    alvo.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+})();
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="mapa mpa-skin">
+
+  <header class="mkpro-head mpa-head">
+    <span class="mpa-head__ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>
+    </span>
+    <div class="mpa-head__id">
+      <h1 class="mkpro-head__title mpa-title">
+        Registros
+        {% if total %}<span class="mpa-count mkpro-tabular">{{ total }}</span>{% endif %}
+      </h1>
+      <p class="mkpro-head__sub mpa-lede">Preventivas concluídas e movimentações aplicadas, dia por dia — para conferência.</p>
+    </div>
+    <div class="mkpro-head__actions">
+      <a data-mk-voltar class="mapa__voltar" href="{{ voltar_url }}">← {{ voltar_nome }}</a>
+    </div>
+  </header>
+
+  <div class="rgx">
+
+    {% comment %}Coluna da esquerda: totais do mês e a agenda em ordem.{% endcomment %}
+    <aside class="rgx-side">
+      <div class="rgx-card">
+        <div class="rgx-cal__cab">
+          <p class="rgx-cal__mes">{{ mes_nome }} <span>{{ ano }}</span></p>
+          <a class="rgx-cal__nav" href="{{ url_ant }}" title="Mês anterior" aria-label="Mês anterior">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+          </a>
+          <a class="rgx-cal__nav" href="{{ url_seg }}" title="Mês seguinte" aria-label="Mês seguinte">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </a>
+        </div>
+
+        <div class="rgx-cal">
+          <span class="rgx-cal__wd">D</span><span class="rgx-cal__wd">S</span><span class="rgx-cal__wd">T</span>
+          <span class="rgx-cal__wd">Q</span><span class="rgx-cal__wd">Q</span><span class="rgx-cal__wd">S</span>
+          <span class="rgx-cal__wd">S</span>
+          {% for semana in semanas %}{% for c in semana %}
+            {% if c.fora %}
+              <span class="rgx-cal__d rgx-cal__d--fora">{{ c.data.day }}</span>
+            {% else %}
+              <button type="button" class="rgx-cal__d{% if c.hoje %} rgx-cal__d--hoje{% endif %}{% if c.eventos %} rgx-cal__d--tem{% endif %}"
+                      data-dia="{{ c.data|date:'Y-m-d' }}"
+                      {% if c.eventos %}title="{{ c.eventos|length }} registro(s) em {{ c.data|date:'d/m' }}"{% else %}title="Sem registro em {{ c.data|date:'d/m' }}" disabled{% endif %}>{{ c.data.day }}</button>
+            {% endif %}
+          {% endfor %}{% endfor %}
+        </div>
+
+        <p class="rgx-cal__res">
+          <b>{{ total }}</b> registro{{ total|pluralize }} no mês ·
+          {{ contagem.preventiva }} preventiva{{ contagem.preventiva|pluralize }},
+          {{ contagem.transferencia }} transferência{{ contagem.transferencia|pluralize:"s" }},
+          {{ contagem.movimentacao }} movimentação{{ contagem.movimentacao|pluralize:"ões" }}
+        </p>
+        <a class="rgx-cal__hoje" href="{{ url_hoje }}">Ir para hoje</a>
+      </div>
+
+      <div class="rgx-card">
+        <p class="rgx-cap">Agenda do mês</p>
+        <div class="rgx-agenda">
+          {% regroup eventos by dia as por_dia %}
+          {% for grupo in por_dia %}
+            <div class="rgx-dia" id="rgd-{{ grupo.grouper|date:'Y-m-d' }}" data-dia="{{ grupo.grouper|date:'Y-m-d' }}">
+              <p class="rgx-dia__lbl">{{ grupo.grouper|date:"D, d \d\e F" }}</p>
+              {% for e in grupo.list %}
+                {% if e.url %}<a class="rgx-item rgx-t-{{ e.tipo }}" href="{{ e.url }}">{% else %}<span class="rgx-item rgx-t-{{ e.tipo }}">{% endif %}
+                  <i class="rgx-item__pt" aria-hidden="true"></i>
+                  <span>
+                    <span class="rgx-item__t">{{ e.titulo }}</span>
+                    <span class="rgx-item__s">
+                      {{ e.rotulo }}{% if e.onde %} · {{ e.onde }}{% endif %}{% if e.alvo %} · {{ e.alvo }}{% endif %}{% if e.quem %} · {{ e.quem }}{% endif %}
+                    </span>
+                  </span>
+                {% if e.url %}</a>{% else %}</span>{% endif %}
+              {% endfor %}
+            </div>
+          {% empty %}
+            <p class="rgx-vazio">Nenhum registro neste mês.<br>Troque o mês acima ou tire o filtro.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </aside>
+
+    {% comment %}Coluna da direita: a grade do mês.{% endcomment %}
+    <section>
+      <div class="rgx-bar">
+        <div class="rgx-nav">
+          <a href="{{ url_ant }}" title="Mês anterior" aria-label="Mês anterior">‹</a>
+          <a href="{{ url_seg }}" title="Mês seguinte" aria-label="Mês seguinte">›</a>
+        </div>
+        <h2 class="rgx-mes">{{ mes_nome }} <span>{{ ano }}</span></h2>
+        <a class="rgx-hoje" href="{{ url_hoje }}">Hoje</a>
+
+        {% comment %}
+        BUSCA no lugar do vazio.
+
+        Aqui havia um retângulo vazio ocupando metade da barra (o host do popup
+        de filtro) com o "Filtrar" solto na ponta. O dono apontou: "a parte de
+        cima ali pode virar um campo de pesquisa". Agora a busca ocupa esse
+        espaço e o "Filtrar" fica ao lado.
+
+        O `ano` e o `mes` viajam escondidos: sem eles, buscar jogaria a pessoa
+        de volta para o mês atual — e ela está conferindo julho.
+        {% endcomment %}
+        <form class="rgx-busca" method="get" role="search">
+          <input type="hidden" name="ano" value="{{ ano }}">
+          <input type="hidden" name="mes" value="{{ mes }}">
+          {% if uni_sel %}<input type="hidden" name="unidade" value="{{ uni_sel }}">{% endif %}
+          {% if tipo_sel %}<input type="hidden" name="tipo" value="{{ tipo_sel }}">{% endif %}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="search" name="q" value="{{ busca }}" autocomplete="off"
+                 placeholder="Buscar no mês por máquina, pessoa, loja ou tipo…"
+                 aria-label="Buscar nos registros deste mês">
+          {% if busca %}
+            <a class="rgx-busca__x" href="?ano={{ ano }}&amp;mes={{ mes }}" aria-label="Limpar busca">×</a>
+          {% endif %}
+        </form>
+
+        {% comment %}Host do popup unificado. DIV e não <form>: o parcial traz
+        dentro dele o formulário que o "Aplicar" envia, e form dentro de form o
+        parser do HTML descarta.{% endcomment %}
+        <div class="rgx-filtros">
+          {% include "parque/_filtros.html" %}
+        </div>
+      </div>
+
+      <div class="rgx-grade">
+        <div class="rgx-linha rgx-linha--cab">
+          <span class="rgx-wd">Dom</span><span class="rgx-wd">Seg</span><span class="rgx-wd">Ter</span>
+          <span class="rgx-wd">Qua</span><span class="rgx-wd">Qui</span><span class="rgx-wd">Sex</span>
+          <span class="rgx-wd">Sáb</span>
+        </div>
+        {% for semana in semanas %}
+          <div class="rgx-linha">
+            {% for c in semana %}
+              <div class="rgx-cel {% if c.fora %}rgx-cel--fora{% endif %} {% if c.hoje %}rgx-cel--hoje{% endif %}">
+                <span class="rgx-num">{{ c.data.day }}</span>
+                {% for e in c.primeiros %}
+                  {% if e.url %}<a class="rgx-ev rgx-t-{{ e.tipo }}" href="{{ e.url }}" title="{{ e.rotulo }}: {{ e.titulo }}">{% else %}<span class="rgx-ev rgx-t-{{ e.tipo }}" title="{{ e.rotulo }}: {{ e.titulo }}">{% endif %}
+                    {{ e.titulo }}
+                  {% if e.url %}</a>{% else %}</span>{% endif %}
+                {% endfor %}
+                {% if c.extra %}<span class="rgx-mais">+{{ c.extra }}</span>{% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

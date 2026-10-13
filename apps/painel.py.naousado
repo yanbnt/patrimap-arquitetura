@@ -1,0 +1,95 @@
+"""
+PAINEL — a tela inicial nova, em `/painel/`.
+
+Por que ela é um arquivo separado, e não uma alteração da tela de início:
+decisão do dono, depois de eu quebrar formatação duas vezes tentando editar a
+tela existente. Nas palavras dele: "crie telas novas, não altere essa que já
+tem. Você vai sempre quebrar alguma coisa de formatação. Depois a gente migra os
+dados pra tela nova e descarta a velha."
+
+Consequência prática, e é ela que torna isto seguro: o template desta tela é um
+documento HTML COMPLETO e autossuficiente. Não estende o layout do unfold, não
+carrega `make-admin.css` (5,3 mil linhas com `!important` em tudo) nem o
+`make-m3.css`. Todo o estilo mora no próprio arquivo. Então nada aqui pode
+quebrar uma tela que já funciona, e nenhuma regra histórica pode desmontar esta.
+
+Os DADOS são os mesmos da tela antiga: reaproveita `_quadro_inicio()` do
+`apps/dashboard.py`, que já monta as três colunas a partir do banco real.
+"""
+
+from django.contrib.admin.views.decorators import staff_member_required
+from django.db.models import Count
+from django.shortcuts import render
+from django.urls import reverse
+
+from apps.orgs.models import Location
+from apps.parque.models import Baia, Computador
+
+from apps.dashboard import _quadro_inicio
+
+# Cor do ponto de cada unidade no menu. Vem do índice, não do banco: é só para
+# distinguir uma loja da outra, e um campo de cor no cadastro seria manutenção
+# eterna para um enfeite.
+_CORES = ["#00713a", "#8a5a00", "#00629d", "#b3261e", "#6b5e00"]
+
+
+def _iniciais(nome):
+    partes = [p for p in (nome or "").split() if p]
+    if not partes:
+        return "?"
+    return (partes[0][0] + (partes[-1][0] if len(partes) > 1 else "")).upper()
+
+
+@staff_member_required
+def painel(request):
+    pessoa = getattr(request.user, "colaborador", None)
+
+    # Cargo · unidade na barra do topo. Sem colaborador vinculado, cai para o
+    # grupo e, por último, para o e-mail — a linha nunca fica vazia.
+    papel = ""
+    if pessoa is not None:
+        partes = [pessoa.job_title, pessoa.location.name if pessoa.location_id else ""]
+        papel = " · ".join(p for p in partes if p)
+    if not papel:
+        g = request.user.groups.first()
+        papel = g.name if g else (request.user.email or "")
+
+    nome = request.user.get_full_name() or request.user.get_username()
+
+    unidades = []
+    qs = (Location.objects
+          .filter(setores__isnull=False)
+          .annotate(n=Count("setores__baias", distinct=True))
+          .order_by("name").distinct())
+    for i, loc in enumerate(qs):
+        try:
+            url = reverse("parque_mapa", args=[loc.pk])
+        except Exception:
+            url = "/parque/mapa-completo/"
+        unidades.append({
+            "nome": loc.name, "baias": loc.n,
+            "cor": _CORES[i % len(_CORES)], "url": url,
+        })
+
+    # A pilha de avatares do cabeçalho: quem tem máquina hoje.
+    pilha = []
+    for b in (Baia.objects.filter(colaborador__isnull=False)
+              .select_related("colaborador")[:4]):
+        pilha.append({"ini": _iniciais(b.colaborador.full_name),
+                      "nome": b.colaborador.full_name})
+    resto = max(0, Baia.objects.filter(colaborador__isnull=False).count() - len(pilha))
+
+    ctx = {
+        "quadro": _quadro_inicio(request),
+        "usuario_nome": nome,
+        "usuario_papel": papel,
+        "usuario_ini": _iniciais(nome),
+        "usuario_foto": pessoa.foto.url if (pessoa is not None and getattr(pessoa, "foto", None)) else "",
+        "unidades": unidades,
+        "pilha": pilha,
+        "pilha_resto": resto,
+        "total_maquinas": Computador.objects.count(),
+        "uni_sel": (request.GET.get("unidade") or "").strip(),
+        "periodo": (request.GET.get("periodo") or "hoje").strip(),
+    }
+    return render(request, "painel.html", ctx)

@@ -1,0 +1,97 @@
+{% comment %}
+Navegação do Parque em dois níveis, montada acima da lista do admin:
+  1) Unidades (Bonsucesso, Vilar...) — sempre visível
+  2) Setores da unidade selecionada — submenu, só aparece ao escolher a unidade
+Mais a faixa de ações (transferência entre lojas), quando disponível.
+
+Redesenho: as pílulas de vidro viraram FILTER CHIPS do Material 3 (§4) — barra
+horizontal, sem card, e o item ativo é o chip selecionado (secondary-container +
+check). É o MESMO chip da barra de filtro do resto do sistema, para não haver
+dois vocabulários.
+{% endcomment %}
+<style>
+  /* setor_buttons.html — prefixo .stb-  ·  Material Design 3
+     Filter chips do M3: 32px, raio 8px, borda outline-variant, sem preenchimento;
+     o item ATIVO é o chip selecionado (secondary-container + check). A única ação
+     preenchida é o CTA de transferência (filled button). Saíram: a barra vertical
+     do submenu (borda decorativa), o peso 700 e o verde em rgba solta. */
+  .setor-botoes {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    margin: 0 0 16px !important;
+  }
+  .setor-botoes__label {
+    font: 500 11px/16px var(--md-font) !important; letter-spacing: .5px !important;
+    text-transform: uppercase; color: var(--md-on-surface-variant) !important; margin-right: 4px !important;
+  }
+  .setor-btn {
+    display: inline-flex; align-items: center; height: 32px; padding: 0 12px;
+    border-radius: var(--md-shape-sm) !important; border: 1px solid var(--md-outline-variant) !important;
+    background: transparent !important; color: var(--md-on-surface) !important;
+    font: 500 14px/20px var(--md-font) !important; letter-spacing: .1px;
+    text-decoration: none; white-space: nowrap;
+    box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .setor-btn:hover {
+    transform: none !important; box-shadow: none !important;
+    border-color: var(--md-outline-variant) !important;
+    background: color-mix(in srgb, var(--md-on-surface) 8%, transparent) !important;
+    color: var(--md-on-surface) !important;
+  }
+  .setor-btn:active { background: color-mix(in srgb, var(--md-on-surface) 12%, transparent) !important; }
+  /* Selecionado no M3: secondary-container preenchido + check à esquerda. */
+  .setor-btn--ativo {
+    background: var(--md-secondary-container) !important; color: var(--md-on-secondary-container) !important;
+    border-color: transparent !important; box-shadow: none !important;
+  }
+  .setor-btn--ativo::before { content: "✓"; margin-right: 8px; font-size: 14px; line-height: 1; }
+  .setor-btn--ativo:hover {
+    background: color-mix(in srgb, var(--md-on-secondary-container) 8%, var(--md-secondary-container)) !important;
+    color: var(--md-on-secondary-container) !important;
+  }
+  /* Ação principal: filled button do M3 (primary + on-primary), 40px, pílula. */
+  .setor-botoes--acao { margin-bottom: 12px !important; }
+  .setor-btn--cta {
+    min-height: 40px; height: auto; padding: 0 24px;
+    border-radius: var(--md-shape-full) !important;
+    background: var(--md-primary) !important; color: var(--md-on-primary) !important;
+    border-color: transparent !important;
+  }
+  .setor-btn--cta:hover { background: var(--md-action) !important; color: var(--md-on-action) !important; }
+  /* Submenu: recuo, sem barra vertical. */
+  .setor-botoes--submenu {
+    margin-top: 0 !important; margin-bottom: 20px !important;
+    padding-left: 16px !important; border: 0 !important;
+  }
+  .setor-btn--sub { height: 32px; padding: 0 12px; font-size: 14px; }
+  .stb-btn { display: inline-flex; align-items: center; gap: 8px; }
+  .stb-btn svg { width: 18px; height: 18px; flex: none; }
+</style>
+{% if transfer_lojas_url %}
+<div class="setor-botoes setor-botoes--acao">
+  <a href="{{ transfer_lojas_url }}" class="setor-btn setor-btn--cta stb-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h3"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg> Transferência entre lojas</a>
+  {% if todas_transferencias_url %}
+    <a href="{{ todas_transferencias_url }}" class="setor-btn stb-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg> Todas (notebook + peças + PC)</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if unidade_botoes %}
+<div class="setor-botoes">
+  <span class="setor-botoes__label">Unidade</span>
+  {% for b in unidade_botoes %}
+    <a href="{{ b.url }}"
+       class="setor-btn{% if b.ativo %} setor-btn--ativo{% endif %}">{{ b.nome }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if setor_botoes %}
+<div class="setor-botoes setor-botoes--submenu">
+  <span class="setor-botoes__label">Setor</span>
+  {% for b in setor_botoes %}
+    <a href="{{ b.url }}"
+       class="setor-btn setor-btn--sub{% if b.ativo %} setor-btn--ativo{% endif %}">{{ b.nome }}</a>
+  {% endfor %}
+</div>
+{% endif %}

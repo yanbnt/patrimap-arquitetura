@@ -1,0 +1,244 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  /* =========================================================================
+     preventiva_ranking — mesmo SEGMENTED BUTTON do Material Design 3 da
+     família. O PÓDIO e a regra de pontos (antecipada +3 · no prazo +2 ·
+     vencida +1) são REGRA DE NEGÓCIO e continuam idênticos — inclusive o
+     mapeamento ouro/prata/bronze das posições.
+
+     O que SAIU (DESIGN-SYSTEM.md §5): a caixa de abas em pílula com sombra, a
+     borda e a sombra da faixa de regras, do pódio e das duas colunas, a borda
+     dos chips de regra, a borda do cartão e da medalha de cada pódio, a
+     bolinha decorativa dos títulos, o peso 800 nos pontos e nas posições e a
+     borda tracejada do estado vazio.
+     O que ENTROU (§4): superfícies tonais aninhadas (container-low no painel,
+     container no cartão do pódio), medalha e pedestal no PAR tonal do nível
+     (cor + on-cor) e pontos em headline-medium/display-small PESO 400.
+     Escopado em .rkx; cor por var(--md-*).
+     ====================================================================== */
+  .rkx { display: flex; flex-direction: column; gap: 16px; }
+  .rkx *, .rkx *::before, .rkx *::after { box-sizing: border-box; }
+  .rkx svg { display: block; }
+  .rkx .num { font-variant-numeric: tabular-nums; }
+
+  /* --- botões: base de layout do sistema M3 + o text button -------------- */
+  .rkx .pvx-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  .rkx .pvx-btn svg { width: 18px; height: 18px; flex: none; }
+  /* `#main` na frente vence o `!important` do CSS histórico (§9.2). */
+  #main .rkx-txt {
+    background: transparent !important; color: var(--md-primary) !important;
+    padding: 0 12px !important;
+  }
+
+  /* --- segmented button -------------------------------------------------- */
+  .rkx-topnav { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .rkx-seg {
+    display: flex; max-width: 100%; overflow-x: auto;
+    border: 1px solid var(--md-outline); border-radius: var(--md-shape-full);
+    background: transparent;
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  .rkx-seg::-webkit-scrollbar { display: none; }
+  .rkx-seg__i {
+    position: relative; overflow: hidden; flex: 0 0 auto;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 40px; padding: 0 16px;
+    border: 0; border-left: 1px solid var(--md-outline);
+    background: transparent; color: var(--md-on-surface); text-decoration: none;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; white-space: nowrap;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .rkx-seg__i:first-child { border-left: 0; }
+  .rkx-seg__i::before {
+    content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0;
+    pointer-events: none; transition: opacity var(--md-dur-short) var(--md-ease-standard);
+  }
+  .rkx-seg__i:hover::before { opacity: .08; }
+  .rkx-seg__i:active::before { opacity: .12; }
+  .rkx-seg__i.is-active { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+  .rkx-seg__i svg { width: 18px; height: 18px; flex: none; }
+  .rkx-seg__i .rkx-seg__ck { display: none; }
+  .rkx-seg__i.is-active .rkx-seg__ck { display: block; }
+  .rkx-seg__i.is-active .rkx-seg__ic { display: none; }
+
+  /* --- regra de pontos (regra de negócio, exibida como está) -------------- */
+  .rkx-regras {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    background: var(--md-surface-container-low);
+    border: 0; border-radius: var(--md-shape-lg); box-shadow: none;
+    padding: 16px;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant);
+  }
+  .rkx-rchip {
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: 32px; padding: 0 12px; border: 0; border-radius: var(--md-shape-sm);
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+  }
+  .rkx-rchip--3 { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+  .rkx-rchip--2 { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+  .rkx-rchip--1 { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+
+  /* --- pódio -------------------------------------------------------------- */
+  .rkx-tit {
+    display: flex; align-items: center; gap: 12px; margin: 4px 0 0;
+    font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface);
+  }
+  .rkx-tit svg { width: 20px; height: 20px; color: var(--md-on-surface-variant); }
+
+  .rkx-podio {
+    display: grid; grid-template-columns: 1fr 1.12fr 1fr; align-items: end; gap: 16px;
+    background: var(--md-surface-container-low);
+    border: 0; border-radius: var(--md-shape-lg); box-shadow: none; padding: 24px 16px 0;
+  }
+  @media (max-width: 720px) { .rkx-podio { grid-template-columns: 1fr; } }
+  /* Medalha por posição: par tonal (cor + on-cor). A REGRA é a mesma. */
+  .rkx-ped {
+    --tier: var(--md-on-surface-variant);
+    --tier-cont: var(--md-surface-container-highest);
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .rkx-ped--1 { order: 2; --tier: var(--md-st-attn); --tier-cont: var(--md-st-attn-cont); }
+  .rkx-ped--2 { order: 1; --tier: var(--md-on-surface-variant); --tier-cont: var(--md-surface-container-highest); }
+  .rkx-ped--3 { order: 3; --tier: var(--md-st-warn); --tier-cont: var(--md-st-warn-cont); }
+  .rkx-ped__card {
+    width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px;
+    background: var(--md-surface-container);
+    border: 0; border-radius: var(--md-shape-md); padding: 16px;
+  }
+  .rkx-ped__medal {
+    width: 40px; height: 40px; border: 0; border-radius: var(--md-shape-full);
+    display: grid; place-items: center;
+    background: var(--tier-cont); color: var(--tier);
+  }
+  .rkx-ped__medal svg { width: 20px; height: 20px; }
+  .rkx-ped--1 .rkx-ped__medal { width: 48px; height: 48px; }
+  .rkx-ped--1 .rkx-ped__medal svg { width: 24px; height: 24px; }
+  .rkx-ped__nome { font: 500 14px/20px var(--md-font); letter-spacing: .1px; text-align: center; color: var(--md-on-surface); }
+  .rkx-ped--1 .rkx-ped__nome { font: 500 16px/24px var(--md-font); letter-spacing: .15px; }
+  .rkx-ped__uni { font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); }
+  /* Número grande em headline-medium (display-small no 1º), PESO 400 (§3). */
+  .rkx-ped__pts { font: 400 28px/36px var(--md-font); letter-spacing: 0; color: var(--md-on-surface); }
+  .rkx-ped--1 .rkx-ped__pts { font: 400 36px/44px var(--md-font); letter-spacing: 0; }
+  .rkx-ped__n { font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); }
+  .rkx-ped__base {
+    width: 100%; margin-top: 12px; border-radius: var(--md-shape-sm) var(--md-shape-sm) 0 0;
+    background: var(--tier-cont); color: var(--tier);
+    font: 400 28px/36px var(--md-font); letter-spacing: 0; display: grid; place-items: center;
+  }
+  .rkx-ped--1 .rkx-ped__base { height: 78px; }
+  .rkx-ped--2 .rkx-ped__base { height: 56px; }
+  .rkx-ped--3 .rkx-ped__base { height: 42px; }
+
+  /* --- as duas listas ------------------------------------------------------ */
+  .rkx-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 860px) { .rkx-cols { grid-template-columns: 1fr; } }
+  .rkx-col {
+    background: var(--md-surface-container-low);
+    border: 0; border-radius: var(--md-shape-lg); box-shadow: none; padding: 16px;
+  }
+  .rkx-col__tit {
+    margin: 0 0 12px;
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: uppercase; color: var(--md-on-surface-variant);
+  }
+
+  /* --- linhas (markup em _ranking_tabela.html) ---------------------------- */
+  .rkx-rows { display: flex; flex-direction: column; }
+  .rkx-row {
+    --tier: var(--md-on-surface-variant);
+    --tier-cont: var(--md-surface-container-high);
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 0; border-bottom: 1px solid var(--md-outline-variant);
+  }
+  .rkx-row:last-child { border-bottom: 0; padding-bottom: 0; }
+  .rkx-row--1 { --tier: var(--md-st-attn); --tier-cont: var(--md-st-attn-cont); }
+  .rkx-row--2 { --tier: var(--md-on-surface-variant); --tier-cont: var(--md-surface-container-highest); }
+  .rkx-row--3 { --tier: var(--md-st-warn); --tier-cont: var(--md-st-warn-cont); }
+  .rkx-row__pos {
+    width: 28px; height: 28px; flex: none; border: 0; border-radius: var(--md-shape-full);
+    display: grid; place-items: center;
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px;
+    background: var(--tier-cont); color: var(--tier);
+  }
+  .rkx-row__id { flex: 1; min-width: 0; }
+  .rkx-row__n {
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .rkx-row__u { font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); }
+  .rkx-row__pts { flex: none; font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-primary); }
+  .rkx-row__nn { flex: none; width: 74px; text-align: right; font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); }
+</style>
+
+<div class="rkx">
+
+  {# --- cabeçalho da família: text button de voltar + segmented button --- #}
+  <div class="rkx-topnav">
+    <a data-mk-voltar class="pvx-btn rkx-txt" href="{{ voltar_url }}"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg> {{ voltar_nome }}</a>
+    <div class="rkx-seg" role="tablist" aria-label="Vistas da preventiva">
+      <a class="rkx-seg__i" role="tab" aria-selected="false" href="?vista=tarefas"><svg class="rkx-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="rkx-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Tarefas</a>
+      <a class="rkx-seg__i" role="tab" aria-selected="false" href="?vista=calendario"><svg class="rkx-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="rkx-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/></svg> Calendário</a>
+      <a class="rkx-seg__i" role="tab" aria-selected="false" href="?vista=tabela"><svg class="rkx-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="rkx-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg> Tabela</a>
+      <a class="rkx-seg__i" role="tab" aria-selected="false" href="?vista=grupos"><svg class="rkx-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="rkx-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="8" r="3"/><circle cx="17" cy="8" r="3"/><path d="M2 20a5 5 0 0 1 10 0M12 20a5 5 0 0 1 10 0"/></svg> Grupos</a>
+      <a class="rkx-seg__i is-active" role="tab" aria-selected="true" href="?vista=ranking"><svg class="rkx-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="rkx-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg> Ranking</a>
+    </div>
+  </div>
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · Preventiva</p>
+    <h1 class="mkpro-head__title">Ranking da preventiva</h1>
+    <p class="mkpro-head__sub">Pontuação por preventiva concluída — o mês corrente e o acumulado de todos os técnicos.</p>
+  </header>
+
+  <div class="rkx-regras">
+    Pontos por preventiva concluída:
+    <span class="rkx-rchip rkx-rchip--3">Antecipada +3</span>
+    <span class="rkx-rchip rkx-rchip--2">No prazo +2</span>
+    <span class="rkx-rchip rkx-rchip--1">Vencida +1</span>
+    <span>Faça a manutenção em dia e suba no ranking!</span>
+  </div>
+
+  <h2 class="rkx-tit"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="6"/><path d="M9 14l-2 7 5-3 5 3-2-7"/></svg> Campeões de {{ mes_nome }}/{{ ano }}</h2>
+
+  {% if podio %}
+  <div class="rkx-podio">
+    {% for p in podio %}
+    <div class="rkx-ped rkx-ped--{{ p.pos }}">
+      <div class="rkx-ped__card">
+        <span class="rkx-ped__medal"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="6"/><path d="M9 14l-2 7 5-3 5 3-2-7"/></svg></span>
+        <div class="rkx-ped__nome">{{ p.nome }}</div>
+        {% if p.unidade %}<div class="rkx-ped__uni">{{ p.unidade }}</div>{% endif %}
+        <div class="rkx-ped__pts num">{{ p.pts }}</div>
+        <div class="rkx-ped__n">{{ p.n }} preventiva{{ p.n|pluralize }}</div>
+      </div>
+      <div class="rkx-ped__base num">{{ p.pos }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="mkpro-empty">
+    <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg></span>
+    <p class="mkpro-empty__title">Nenhuma preventiva concluída em {{ mes_nome }}</p>
+    <p class="mkpro-empty__hint">Conclua a primeira preventiva do mês e você abre o pódio.</p>
+  </div>
+  {% endif %}
+
+  <div class="rkx-cols">
+    <div class="rkx-col">
+      <h3 class="rkx-col__tit">Este mês</h3>
+      {% include "parque/_ranking_tabela.html" with linhas=mensal %}
+    </div>
+    <div class="rkx-col">
+      <h3 class="rkx-col__tit">Total acumulado</h3>
+      {% include "parque/_ranking_tabela.html" with linhas=total %}
+    </div>
+  </div>
+</div>
+{% endblock %}

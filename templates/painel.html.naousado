@@ -1,0 +1,344 @@
+{% load static %}<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel · ITAM Make</title>
+{% comment %}
+PAINEL — a tela inicial nova. Documento COMPLETO e autossuficiente.
+
+Decisão do dono: "crie telas novas, não altere essa que já tem. Você vai sempre
+quebrar alguma coisa de formatação. Depois a gente migra os dados pra tela nova
+e descarta a velha."
+
+Por isso este arquivo NÃO estende o layout do unfold e NÃO carrega o
+`make-admin.css` (5,3 mil linhas com `!important`) nem o `make-m3.css`. Todo o
+estilo está aqui dentro. Duas consequências, e as duas são o objetivo:
+  · nada nesta tela pode quebrar uma tela que já funciona;
+  · nenhuma regra histórica pode desmontar esta.
+
+Os DADOS vêm de `apps/painel.py`, que reaproveita o `_quadro_inicio()` do
+dashboard — o mesmo que alimenta a tela antiga. Nada de mock.
+{% endcomment %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap">
+<style>
+  :root{
+    --pag:#eef4f0; --s:#fff; --s1:#f5faf7; --s2:#eaf2ec; --s3:#e0eae4;
+    --ink:#0f1a13; --ink2:#4b5a51; --ink3:#7b8a81;
+    --line:#dfeae3;
+    --pri:#00713a; --pri-c:#c9f7d8; --on-pri-c:#002110;
+    --ok:#00713a; --ok-c:#c9f7d8;
+    --attn:#6b5e00; --attn-c:#f9edaa;
+    --warn:#8a5a00; --warn-c:#ffe4bc;
+    --crit:#b3261e; --crit-c:#ffdfdb;
+    --info:#00629d; --info-c:#d6e8ff;
+    --sh1:0 1px 2px rgba(15,26,19,.05);
+    --sh2:0 2px 4px rgba(15,26,19,.06),0 12px 28px -18px rgba(15,26,19,.28);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--pag);color:var(--ink);
+    font:400 15px/1.55 Figtree,"Segoe UI",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;text-decoration:none}
+
+  /* =============== moldura =============== */
+  .app{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:100vh}
+  @media(max-width:900px){.app{grid-template-columns:1fr}.dr{display:none}}
+
+  /* =============== gaveta =============== */
+  .dr{background:var(--s);border-right:1px solid var(--line);padding:14px 12px;display:flex;flex-direction:column;gap:2px}
+  .mk{display:flex;align-items:center;gap:10px;padding:4px 6px 14px}
+  .mk__ic{display:grid;place-items:center;width:34px;height:34px;flex:0 0 auto;border-radius:11px;background:var(--pri-c);color:var(--on-pri-c);font:800 15px/1 Figtree,sans-serif}
+  .mk__n{font:700 15px/1.1 Figtree,sans-serif;letter-spacing:-.01em}
+  .mk__ch{margin-left:auto;color:var(--ink3);font-size:14px}
+  .nv{display:flex;align-items:center;gap:11px;padding:9px 11px;margin:1px 0;border-radius:14px;color:var(--ink2);font:500 13.5px/18px Figtree,sans-serif}
+  .nv:hover{background:var(--s2);color:var(--ink)}
+  .nv svg{width:18px;height:18px;flex:0 0 auto;opacity:.85}
+  .nv--on{background:var(--pri-c);color:var(--on-pri-c);font-weight:600}
+  .nv--on svg{opacity:1}
+  .nv__n{margin-left:auto;min-width:19px;height:19px;padding:0 6px;display:inline-grid;place-items:center;border-radius:999px;background:var(--crit-c);color:var(--crit);font:700 10.5px/1 Figtree,sans-serif;font-variant-numeric:tabular-nums}
+  .sec{display:flex;align-items:center;gap:8px;padding:18px 11px 6px;font:700 9.5px/1 Figtree,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3)}
+  .sec__add{margin-left:auto;display:grid;place-items:center;width:18px;height:18px;border-radius:999px;background:var(--s2);color:var(--ink3);font:600 13px/1 Figtree,sans-serif}
+  .sec__add:hover{background:var(--pri-c);color:var(--on-pri-c)}
+  .un{display:flex;align-items:center;gap:10px;padding:7px 11px;border-radius:14px;font:500 13px/18px Figtree,sans-serif;color:var(--ink2)}
+  .un:hover{background:var(--s2);color:var(--ink)}
+  .un__pt{width:8px;height:8px;border-radius:999px;background:var(--c);flex:0 0 auto}
+  .un__n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .un__q{margin-left:auto;font:500 11px/1 Figtree,sans-serif;color:var(--ink3);font-variant-numeric:tabular-nums}
+  .aj{margin-top:auto;padding:14px 13px;text-align:center;background:var(--s2);border-radius:18px}
+  .aj__ic{width:36px;height:36px;margin:0 auto 8px;display:grid;place-items:center;border-radius:999px;background:var(--pri-c);color:var(--on-pri-c);font-size:17px}
+  .aj h4{font:700 12.5px/1.2 Figtree,sans-serif;margin:0 0 4px}
+  .aj p{font:400 11px/15px Figtree,sans-serif;color:var(--ink2);margin:0 0 10px}
+  .aj__b{display:block;padding:7px 12px;border-radius:999px;background:var(--s);border:1px solid var(--line);font:600 11.5px/1 Figtree,sans-serif}
+
+  /* =============== barra do topo =============== */
+  .main{min-width:0;display:flex;flex-direction:column}
+  .tb{display:flex;align-items:center;gap:12px;padding:12px 20px;background:var(--s);border-bottom:1px solid var(--line)}
+  .busca{display:flex;align-items:center;gap:9px;flex:0 1 340px;min-width:170px;height:40px;padding:0 15px;border-radius:999px;background:var(--s2)}
+  .busca svg{width:17px;height:17px;flex:0 0 auto;color:var(--ink3)}
+  .busca input{flex:1 1 auto;min-width:0;border:0;background:transparent;font:400 13.5px/1 Figtree,sans-serif;color:var(--ink);outline:none}
+  .busca input::placeholder{color:var(--ink3)}
+  .tb__dir{display:flex;align-items:center;gap:3px;margin-left:auto}
+  .ib{position:relative;display:grid;place-items:center;width:38px;height:38px;border-radius:999px;color:var(--ink2)}
+  .ib:hover{background:var(--s2)}
+  .ib svg{width:19px;height:19px}
+  .ib__pt{position:absolute;top:8px;right:9px;width:7px;height:7px;border-radius:999px;background:var(--crit);border:2px solid var(--s)}
+  .usr{display:flex;align-items:center;gap:10px;padding:4px 8px 4px 12px;margin-left:6px;border-radius:999px;position:relative}
+  .usr:hover{background:var(--s2)}
+  .usr__t{text-align:right;line-height:1.25;min-width:0}
+  .usr__n{font:600 13px/1.25 Figtree,sans-serif;display:block;white-space:nowrap}
+  .usr__s{font:400 11px/1.25 Figtree,sans-serif;color:var(--ink3);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}
+  .av{display:grid;place-items:center;flex:0 0 auto;width:36px;height:36px;border-radius:999px;background:var(--pri-c);color:var(--on-pri-c);font:700 13px/1 Figtree,sans-serif;background-size:cover;background-position:center}
+  .av--sm{width:24px;height:24px;font-size:9.5px;border:2px solid var(--s)}
+  /* menu da conta: <details>, sem depender de JS nem de Alpine */
+  .conta{position:relative}
+  .conta>summary{list-style:none;cursor:pointer}
+  .conta>summary::-webkit-details-marker{display:none}
+  .conta__m{position:absolute;top:calc(100% + 8px);right:0;z-index:40;width:230px;background:var(--s);border:1px solid var(--line);border-radius:14px;box-shadow:var(--sh2);padding:6px;display:grid;gap:2px}
+  .conta__e{padding:8px 10px 10px;border-bottom:1px solid var(--line);margin-bottom:4px;font:400 11.5px/16px Figtree,sans-serif;color:var(--ink3);overflow:hidden;text-overflow:ellipsis}
+  .conta__i{display:block;padding:8px 10px;border-radius:8px;font:500 12.5px/17px Figtree,sans-serif}
+  .conta__i:hover{background:var(--s2)}
+  .conta__sair{width:100%;text-align:left;border:0;background:transparent;color:var(--crit);cursor:pointer;padding:8px 10px;border-radius:8px;font:600 12.5px/17px Figtree,sans-serif}
+  .conta__sair:hover{background:var(--crit-c)}
+
+  /* =============== cabeçalho da tela =============== */
+  .hd{padding:22px 20px 0}
+  .hd__l1{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .hd__t{font:800 27px/1.15 Figtree,sans-serif;letter-spacing:-.03em;margin:0}
+  .hd__chip{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;background:var(--pri-c);color:var(--on-pri-c);font:600 11.5px/16px Figtree,sans-serif}
+  .hd__chip i{width:6px;height:6px;border-radius:999px;background:currentColor}
+  .pilha{display:flex;margin-left:auto}
+  .pilha .av--sm+.av--sm{margin-left:-8px}
+  .hd__l2{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:16px 0 0}
+  .flt{display:inline-flex;align-items:center;gap:7px;padding:0 11px;height:34px;border:1px solid var(--line);border-radius:10px;background:var(--s);color:var(--ink2);font:500 12.5px/1 Figtree,sans-serif}
+  .flt svg{width:14px;height:14px}
+  .flt select{border:0;background:transparent;font:500 12.5px/1 Figtree,sans-serif;color:var(--ink);outline:none;cursor:pointer}
+  .vis{display:flex;gap:4px;margin-left:auto}
+  .vis__b{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--s);color:var(--ink3)}
+  .vis__b--on{background:var(--pri);border-color:var(--pri);color:#fff}
+
+  /* =============== quadro =============== */
+  .board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:18px 20px 32px}
+  @media(max-width:1080px){.board{grid-template-columns:1fr}}
+  .col{background:var(--s2);border-radius:18px;padding:12px;min-width:0}
+  .col__cab{display:flex;align-items:center;gap:8px;padding:2px 4px 10px}
+  .col__pt{width:8px;height:8px;border-radius:999px;background:var(--c)}
+  .col__t{font:600 13.5px/1 Figtree,sans-serif}
+  .col__n{min-width:19px;height:19px;padding:0 6px;display:inline-grid;place-items:center;border-radius:999px;background:var(--s3);color:var(--ink2);font:700 10.5px/1 Figtree,sans-serif;font-variant-numeric:tabular-nums}
+  .col__reg{height:3.5px;border-radius:999px;background:var(--c);margin:0 4px 12px}
+  .col--crit{--c:var(--crit)}.col--attn{--c:var(--attn)}.col--ok{--c:var(--ok)}
+
+  .cd{display:block;background:var(--s);border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-bottom:10px;box-shadow:var(--sh1);transition:box-shadow .14s,transform .14s,border-color .14s}
+  .cd:last-child{margin-bottom:0}
+  .cd:hover{border-color:var(--c);box-shadow:var(--sh2);transform:translateY(-1px)}
+  .cd__l1{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+  .tag{padding:3px 9px;border-radius:6px;font:600 10px/14px Figtree,sans-serif;letter-spacing:.4px;white-space:nowrap}
+  .tag--crit{background:var(--crit-c);color:var(--crit)}
+  .tag--warn{background:var(--warn-c);color:var(--warn)}
+  .tag--attn{background:var(--attn-c);color:var(--attn)}
+  .tag--ok{background:var(--ok-c);color:var(--ok)}
+  .tag--info{background:var(--info-c);color:var(--info)}
+  .cd__t{font:600 14.5px/19px Figtree,sans-serif;letter-spacing:-.1px;margin:0 0 5px}
+  .cd__d{font:400 12px/17px Figtree,sans-serif;color:var(--ink2);margin:0 0 10px}
+  .barra{height:5px;border-radius:999px;background:var(--s3);overflow:hidden;display:flex;margin:2px 0 10px}
+  .cd__l2{display:flex;align-items:center;gap:12px}
+  .meta{display:inline-flex;align-items:center;gap:5px;font:500 11px/1 Figtree,sans-serif;color:var(--ink3)}
+  .meta svg{width:13px;height:13px}
+  .meta b{color:var(--ink);font-variant-numeric:tabular-nums}
+  .pat{margin-left:auto;padding:3px 8px;border-radius:6px;background:var(--s2);color:var(--ink2);font:600 10.5px/14px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
+  .vazio{padding:26px 10px;text-align:center;font:400 12.5px/18px Figtree,sans-serif;color:var(--ink3)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ==================== gaveta ==================== -->
+  <aside class="dr">
+    <div class="mk">
+      <span class="mk__ic" aria-hidden="true">I</span>
+      <span class="mk__n">ITAM</span>
+    </div>
+
+    <a class="nv nv--on" href="/painel/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>
+      Início
+    </a>
+    <a class="nv" href="/parque/reparos/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>
+      Agenda
+      {% if quadro.0.itens %}<span class="nv__n">{{ quadro.0.itens|length }}</span>{% endif %}
+    </a>
+    <a class="nv" href="/parque/mapa-completo/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9V5a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v4"/><path d="M3 9h18l-1.2 10.1a1 1 0 0 1-1 .9H5.2a1 1 0 0 1-1-.9z"/><path d="M9 13h6"/></svg>
+      Parque
+    </a>
+    <a class="nv" href="/admin/orgs/person/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Cadastros
+    </a>
+    <a class="nv" href="/admin/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.5-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 3a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.4l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 11a2 2 0 1 1 0 4z"/></svg>
+      Sistema
+    </a>
+
+    {% if unidades %}
+      <p class="sec">Unidades
+        <a class="sec__add" href="/admin/orgs/location/add/" title="Nova unidade" aria-label="Nova unidade">+</a>
+      </p>
+      {% for u in unidades %}
+        <a class="un" href="{{ u.url }}" title="Abrir o mapa de {{ u.nome }}">
+          <i class="un__pt" style="--c:{{ u.cor }}" aria-hidden="true"></i>
+          <span class="un__n">{{ u.nome }}</span>
+          <span class="un__q">{{ u.baias }}</span>
+        </a>
+      {% endfor %}
+    {% endif %}
+
+    <div class="aj">
+      <div class="aj__ic" aria-hidden="true">?</div>
+      <h4>Assistente</h4>
+      <p>Dúvida em alguma tela? Pergunte em português.</p>
+      <a class="aj__b" href="/ajuda/">Abrir assistente</a>
+    </div>
+  </aside>
+
+  <!-- ==================== conteúdo ==================== -->
+  <div class="main">
+
+    <div class="tb">
+      <form class="busca" method="get" action="/parque/mapa-completo/" role="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="search" name="q" placeholder="Buscar máquina, patrimônio, colaborador…" aria-label="Buscar">
+      </form>
+
+      <div class="tb__dir">
+        <a class="ib" href="/parque/registros/" title="Registros" aria-label="Registros">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>
+        </a>
+        <a class="ib" href="/ajuda/" title="Ajuda" aria-label="Ajuda">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9.5a3 3 0 0 1 5.8 1c0 2-2.9 2.3-2.9 4.2M12 18h.01"/></svg>
+        </a>
+        <a class="ib" href="/parque/aprovacoes/" title="Notificações" aria-label="Notificações">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          <i class="ib__pt"></i>
+        </a>
+
+        {% comment %}
+        Menu da conta em <details>. Sem Alpine e sem JS de propósito: foi o
+        Alpine desta subárvore que quebrou quando tentei mover o bloco na tela
+        antiga, e "Sair" não pode depender de framework para funcionar.
+        {% endcomment %}
+        <details class="conta">
+          <summary class="usr">
+            <span class="usr__t">
+              <span class="usr__n">{{ usuario_nome }}</span>
+              <span class="usr__s">{{ usuario_papel }}</span>
+            </span>
+            <span class="av" {% if usuario_foto %}style="background-image:url('{{ usuario_foto }}');color:transparent"{% endif %} aria-hidden="true">{{ usuario_ini }}</span>
+            <span class="mk__ch" aria-hidden="true">⌄</span>
+          </summary>
+          <div class="conta__m">
+            <p class="conta__e">{{ request.user.email|default:request.user.get_username }}</p>
+            <a class="conta__i" href="/trocar-senha/">Trocar senha</a>
+            <a class="conta__i" href="/admin/">Tela antiga (admin)</a>
+            <form method="post" action="{% url 'admin:logout' %}">{% csrf_token %}
+              <button type="submit" class="conta__sair">Sair</button>
+            </form>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="hd">
+      <div class="hd__l1">
+        <h1 class="hd__t">Início</h1>
+        <span class="hd__chip"><i aria-hidden="true"></i>{{ total_maquinas }} máquinas na operação</span>
+        {% if pilha %}
+          <span class="pilha" aria-hidden="true">
+            {% for p in pilha %}<span class="av av--sm" title="{{ p.nome }}">{{ p.ini }}</span>{% endfor %}
+            {% if pilha_resto %}<span class="av av--sm">+{{ pilha_resto }}</span>{% endif %}
+          </span>
+        {% endif %}
+      </div>
+
+      <form class="hd__l2" method="get">
+        <span class="flt">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16l-6 7v6l-4 2v-8z"/></svg>
+          <select name="unidade" onchange="this.form.submit()" aria-label="Filtrar por unidade">
+            <option value="">Unidade: todas</option>
+            {% for u in unidades %}<option value="{{ u.nome }}" {% if u.nome == uni_sel %}selected{% endif %}>{{ u.nome }}</option>{% endfor %}
+          </select>
+        </span>
+        <span class="flt">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>
+          <select name="periodo" onchange="this.form.submit()" aria-label="Período">
+            <option value="hoje" {% if periodo == "hoje" %}selected{% endif %}>Hoje</option>
+            <option value="semana" {% if periodo == "semana" %}selected{% endif %}>Esta semana</option>
+            <option value="mes" {% if periodo == "mes" %}selected{% endif %}>Este mês</option>
+          </select>
+        </span>
+        <span class="vis">
+          <span class="vis__b vis__b--on" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><rect x="3" y="3" width="7" height="18" rx="1.5"/><rect x="14" y="3" width="7" height="18" rx="1.5"/></svg>
+          </span>
+          <a class="vis__b" href="/parque/reparos/" title="Ver em lista" aria-label="Ver em lista">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </a>
+        </span>
+      </form>
+    </div>
+
+    <div class="board">
+      {% for col in quadro %}
+        <section class="col col--{{ col.cor }}" aria-label="{{ col.titulo }}">
+          <div class="col__cab">
+            <i class="col__pt" aria-hidden="true"></i>
+            <span class="col__t">{{ col.titulo }}</span>
+            <span class="col__n">{{ col.itens|length }}</span>
+          </div>
+          <div class="col__reg" aria-hidden="true"></div>
+
+          {% for it in col.itens %}
+            <a class="cd" href="{{ it.url|default:'#' }}">
+              <div class="cd__l1"><span class="tag tag--{{ it.tag_cor }}">{{ it.tag }}</span></div>
+              <h3 class="cd__t">{{ it.titulo }}</h3>
+              <p class="cd__d">{{ it.desc }}</p>
+              {% if it.barra %}
+                <span class="barra" aria-hidden="true"><i style="width:{{ it.barra }}%;background:var(--{{ it.barra_cor }})"></i></span>
+              {% endif %}
+              <div class="cd__l2">
+                {% if it.quem or it.quem2 %}
+                  <span class="pilha" style="margin:0">
+                    {% if it.quem %}<span class="av av--sm" title="{{ it.quem.nome }}">{{ it.quem.ini }}</span>{% endif %}
+                    {% if it.quem2 %}<span class="av av--sm" title="{{ it.quem2.nome }}">{{ it.quem2.ini }}</span>{% endif %}
+                  </span>
+                {% endif %}
+                {% if it.registros %}
+                  <span class="meta">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <b>{{ it.registros }}</b> registro{{ it.registros|pluralize }}
+                  </span>
+                {% elif it.meta %}
+                  <span class="meta">{{ it.meta }}</span>
+                {% endif %}
+                {% if it.pat %}<span class="pat">{{ it.pat }}</span>{% endif %}
+              </div>
+            </a>
+          {% empty %}
+            <p class="vazio">
+              {% if col.key == "precisa" %}Nada esperando por você.
+              {% elif col.key == "andando" %}Nenhum chamado em andamento.
+              {% else %}Nada concluído hoje ainda.{% endif %}
+            </p>
+          {% endfor %}
+        </section>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+</body>
+</html>

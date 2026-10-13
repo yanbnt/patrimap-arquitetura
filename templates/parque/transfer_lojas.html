@@ -1,0 +1,228 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+{% csrf_token %}
+<style>
+  /* ==========================================================================
+     transfer_lojas.html — prefixo .tlp-  ·  Material Design 3
+     Fluxo em dois passos (escolher a loja de origem → escolher a máquina).
+     O passo aparece no eyebrow e no subtítulo, para o operador sempre saber
+     onde está. Lojas e baias como CARTÕES FILLED do M3 (superfície tonal, sem
+     borda e sem sombra; hover sobe um tom); o caminhão não muda.
+     ========================================================================== */
+
+  .tlp-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+  .tlp-head__id { flex: 1 1 340px; min-width: 0; display: grid; gap: 4px; }
+  .mapa__voltar {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 40px; padding: 0 24px; box-sizing: border-box;
+    border: 1px solid var(--md-outline) !important; border-radius: var(--md-shape-full) !important;
+    background: transparent !important; color: var(--md-primary) !important;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    text-decoration: none; white-space: nowrap; box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .mapa__voltar:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important; color: var(--md-primary) !important; }
+
+  /* Escolha da loja: lista de cartões filled — sem moldura, sem sombra. */
+  .tlp-skin .tl-units { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
+  .tlp-skin .tl-unit {
+    display: flex; align-items: center; gap: 16px; width: 100%; text-align: left;
+    padding: 16px; cursor: pointer; text-decoration: none;
+    background: var(--md-surface-container-low) !important; border: 0 !important;
+    border-radius: var(--md-shape-md) !important; box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .tlp-skin .tl-unit:hover {
+    transform: none !important; background: var(--md-surface-container) !important;
+  }
+  .tlp-skin .tl-unit__icon { color: var(--md-primary); flex: none; }
+  .tlp-skin .tl-unit__txt { display: grid; gap: 2px; min-width: 0; flex: 1; }
+  .tlp-skin .tl-unit__nome { font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface); }
+  .tlp-skin .tl-unit__cidade { font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant); }
+  .tlp-skin .tl-unit__seta { color: var(--md-on-surface-variant); flex: none; }
+
+  /* Setores e cartões: mesma pele M3 dos mapas. */
+  .tlp-skin .mapa__planta { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 16px; }
+  .tlp-skin .mapa-setor {
+    background: var(--md-surface-container-lowest) !important; border: 0 !important;
+    border-radius: var(--md-shape-lg) !important; box-shadow: none !important; padding: 16px;
+  }
+  .tlp-skin .mapa-setor::before { display: none; }
+  .tlp-skin .mapa-setor__titulo {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface);
+    margin: 0 0 12px; padding: 0; border: 0;
+  }
+  .tlp-skin .mapa .mapa-setor__qtd, .tlp-skin .mapa-setor__qtd {
+    margin-left: auto; min-width: 0; height: 24px; padding: 0 8px;
+    display: inline-flex; align-items: center; border: 0; border-radius: var(--md-shape-sm);
+    background: var(--md-surface-container-high) !important; color: var(--md-on-surface-variant) !important;
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; font-variant-numeric: tabular-nums;
+  }
+  .tlp-skin .mapa-setor__baias { grid-template-columns: repeat(auto-fill, minmax(166px, 1fr)); gap: 8px; }
+  .tlp-skin .mapa-setor__baias > .baia:not(.baia--add):not(.baia--sem_pc) { min-height: 118px; }
+  .tlp-skin .baia { --tlp-st: var(--md-on-surface-variant); --tlp-stc: var(--md-surface-container-high); --cor: var(--md-outline); }
+  .tlp-skin .baia--cl-otimo { --tlp-st: var(--md-st-ok); --tlp-stc: var(--md-st-ok-cont); --cor: var(--md-st-ok); }
+  .tlp-skin .baia--cl-bom { --tlp-st: var(--md-st-attn); --tlp-stc: var(--md-st-attn-cont); --cor: var(--md-st-attn); }
+  .tlp-skin .baia--cl-baixo { --tlp-st: var(--md-st-warn); --tlp-stc: var(--md-st-warn-cont); --cor: var(--md-st-warn); }
+  .tlp-skin .baia--cl-critico { --tlp-st: var(--md-st-crit); --tlp-stc: var(--md-st-crit-cont); --cor: var(--md-st-crit); }
+  .tlp-skin .baia:not(.baia--add) {
+    padding: 12px;
+    background: var(--md-surface-container-low) !important; border: 0 !important;
+    border-radius: var(--md-shape-md) !important; box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .tlp-skin .baia:not(.baia--add)::before { display: none; }
+  .tlp-skin .baia:not(.baia--add):hover {
+    transform: none !important; box-shadow: none !important;
+    background: var(--md-surface-container) !important;
+  }
+  .tlp-skin .baia:focus-visible { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+  .tlp-skin .baia__top { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; min-height: 20px; }
+  .tlp-skin .baia__icone { color: var(--md-on-surface-variant); font-size: 0; }
+  .tlp-skin .baia__icone svg { width: 18px; height: 18px; }
+  .tlp-skin .baia__tel { margin-left: auto; margin-right: 0; font-size: 0; }
+  .tlp-skin .baia__tel svg { width: 14px; height: 14px; }
+  .tlp-skin .baia__tel--ativo { color: var(--md-st-ok); }
+  .tlp-skin .baia__tel--inativo { color: var(--md-st-warn); }
+  .tlp-skin .baia__tel--sem { color: var(--md-outline-variant); }
+  .tlp-skin .baia__score {
+    min-width: 0; height: 20px; padding: 0 8px;
+    display: inline-flex; align-items: center; border: 0; border-radius: var(--md-shape-sm);
+    background: var(--tlp-stc) !important; color: var(--tlp-st) !important;
+    font: 500 11px/16px var(--md-font) !important; letter-spacing: .5px; font-variant-numeric: tabular-nums;
+  }
+  .tlp-skin .baia__nome {
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    color: var(--md-on-surface) !important; font-variant-numeric: tabular-nums;
+  }
+  .tlp-skin .baia__ocupante {
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; margin-top: 2px;
+    color: var(--md-on-surface-variant) !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tlp-skin .baia__specs { font: 400 12px/16px var(--md-font); letter-spacing: .4px; margin-top: 6px; color: var(--md-on-surface-variant) !important; }
+  .tlp-skin .baia__classe {
+    display: inline-flex; align-items: center; margin-top: 8px;
+    height: 20px; padding: 0 8px; border-radius: var(--md-shape-sm);
+    background: var(--tlp-stc); color: var(--tlp-st) !important;
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; text-transform: none;
+  }
+  .tlp-skin .baia__perifs { margin-top: 8px; gap: 8px; opacity: .5; transition: opacity var(--md-dur-short) var(--md-ease-standard); }
+  .tlp-skin .baia:hover .baia__perifs, .tlp-skin .baia:focus-visible .baia__perifs { opacity: 1; }
+  .tlp-skin .baia__perif { color: var(--md-on-surface-variant); font-size: 0; }
+  .tlp-skin .baia__perif svg { width: 14px; height: 14px; }
+  .tlp-skin .baia__tip {
+    background: var(--md-inverse-surface); color: var(--md-inverse-on-surface);
+    border-radius: var(--md-shape-xs); padding: 8px 12px;
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; box-shadow: var(--md-elev-2);
+  }
+
+  /* Legenda compacta */
+  .tlp-leg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; margin: 0 0 20px; }
+  .tlp-leg__lbl { font: 500 11px/16px var(--md-font); letter-spacing: .5px; text-transform: uppercase; color: var(--md-on-surface-variant); }
+  .tlp-leg__i { display: inline-flex; align-items: center; gap: 8px; font: 500 12px/16px var(--md-font); letter-spacing: .5px; color: var(--md-on-surface-variant); }
+  .tlp-leg__i::before { content: ""; width: 8px; height: 8px; border-radius: var(--md-shape-full); background: var(--tlp-lc, var(--md-outline)); }
+  .tlp-leg__i--pc { --tlp-lc: var(--md-st-ok); }
+  .tlp-leg__i--nb { --tlp-lc: var(--md-primary); }
+  .tlp-leg__i--defeito { --tlp-lc: var(--md-st-crit); }
+  .tlp-leg__i--sempc { --tlp-lc: var(--md-st-warn); }
+
+  .tlp-alert { margin: 0 0 20px; }
+  .tlp-empty { margin: 8px 0 0; }
+
+  @media (max-width: 900px) {
+    .tlp-skin .mapa__planta { grid-template-columns: 1fr; }
+    .tlp-head { align-items: flex-start; }
+  }
+</style>
+
+{% if escolher_origem %}
+  {# ---------- Passo 1: escolher a loja de ORIGEM ---------- #}
+  <header class="mkpro-head tlp-head">
+    <div class="tlp-head__id">
+      <p class="mkpro-head__eyebrow">Parque de máquinas · Transferência · Passo 1 de 2</p>
+      <h1 class="mkpro-head__title">De qual loja a máquina vai sair?</h1>
+      <p class="mkpro-head__sub">Escolha a loja de <b>origem</b>. No passo seguinte você escolhe a máquina e o destino.</p>
+    </div>
+    <div class="mkpro-head__actions">
+      <a data-mk-voltar class="mapa__voltar" href="{{ voltar_url }}">← {{ voltar_nome }}</a>
+    </div>
+  </header>
+  <div class="tl tlp-skin">
+    <div class="tl-units">
+      {% for u in unidades %}
+        <a class="tl-unit" href="{% url 'parque_transferencia_lojas_unidade' u.id %}">
+          <span class="tl-unit__icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 9.5 2-5.5h15l2 5.5"/><path d="M4 9.5V20h16V9.5"/><path d="M9.5 20v-6h5v6"/></svg></span>
+          <span class="tl-unit__txt">
+            <span class="tl-unit__nome">{{ u.name }}</span>
+            {% if u.city %}<span class="tl-unit__cidade">{{ u.city }}</span>{% endif %}
+          </span>
+          <svg class="tl-unit__seta" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+      {% empty %}
+        <div class="mkpro-empty tlp-empty">
+          <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 9.5 2-5.5h15l2 5.5"/><path d="M4 9.5V20h16V9.5"/><path d="M9.5 20v-6h5v6"/></svg></span>
+          <p class="mkpro-empty__title">Nenhuma loja disponível para transferência</p>
+          <p class="mkpro-empty__hint">É preciso ter ao menos duas unidades cadastradas para mover máquinas entre lojas.</p>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+{% else %}
+  {# ---------- Passo 2: escolher a máquina que sai ---------- #}
+  <header class="mkpro-head tlp-head">
+    <div class="tlp-head__id">
+      <p class="mkpro-head__eyebrow">Parque de máquinas · Transferência · Passo 2 de 2</p>
+      <h1 class="mkpro-head__title">Saída: {{ unidade.name }}</h1>
+      <p class="mkpro-head__sub">Escolha a máquina que vai sair desta loja e arraste-a até o caminhão.</p>
+    </div>
+    <div class="mkpro-head__actions">
+      <a class="mapa__voltar" href="{% url 'parque_transferencia_lojas' %}">← Trocar loja de origem</a>
+    </div>
+  </header>
+  <div class="tl mapa tlp-skin"
+       data-pode-mover="{% if pode_mover %}1{% else %}0{% endif %}"
+       data-transferir-url="{% url 'parque_transferir_entre_lojas' %}"
+       data-origem-unidade="{{ unidade.name }}">
+
+    <div class="mkpro-alert tlp-alert" role="status">
+      <span class="mkpro-alert__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h3"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>
+      <div><strong>Como enviar.</strong> Arraste uma <b>máquina com PC</b> até o caminhão no rodapé para iniciar a transferência para outra loja.</div>
+    </div>
+
+    <div class="tlp-leg">
+      <span class="tlp-leg__lbl">Situação</span>
+      <span class="tlp-leg__i tlp-leg__i--pc">Com PC</span>
+      <span class="tlp-leg__i tlp-leg__i--nb">Notebook</span>
+      <span class="tlp-leg__i tlp-leg__i--defeito">Defeito</span>
+      <span class="tlp-leg__i tlp-leg__i--sempc">Sem PC</span>
+    </div>
+
+    <div class="mapa__planta" id="transfer-planta">
+      {% for setor in setores %}
+        <section class="mapa-setor">
+          <header class="mapa-setor__titulo">{{ setor.nome }}
+            <span class="mapa-setor__qtd mkpro-tabular">{{ setor.baias.count }}</span>
+          </header>
+          <div class="mapa-setor__baias" data-setor="{{ setor.id }}" data-setor-nome="{{ setor.nome }}">
+            {% for b in setor.baias.all %}
+              {% include "parque/_baia.html" %}
+            {% endfor %}
+          </div>
+        </section>
+      {% empty %}
+        <div class="mkpro-empty tlp-empty">
+          <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17"/><path d="M3 21h18M12.5 12h.01"/></svg></span>
+          <p class="mkpro-empty__title">Nenhum setor cadastrado nesta unidade</p>
+          <p class="mkpro-empty__hint">Sem setor não há baias para transferir. Cadastre os setores da loja em Unidades / Setores.</p>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% include "parque/_transfer_overlays.html" %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,249 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  /* ==========================================================================
+     tabela_estoque.html — prefixo .tbe-  ·  Material Design 3
+     Data table do M3: linha de 52px, divisor outline-variant, cabeçalho grudento
+     em label-medium (sem maiúscula, sem peso 700), SEM zebra, hover como state
+     layer de 8% e números à direita. O filtro de unidade é uma fileira de FILTER
+     CHIPS (32px, raio 8px); a unidade escolhida vira chip selecionado com "×".
+     Saíram: moldura da tabela, faixa cinza do cabeçalho, filete verde no hover,
+     verdes em rgba solta e a pílula sólida saturada da situação.
+     ========================================================================== */
+
+  /* 1. Cabeçalho da tela */
+  .tbe-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+  .tbe-head__id { flex: 1 1 340px; min-width: 0; display: grid; gap: 4px; }
+  .tbe-sub { display: flex; flex-wrap: wrap; gap: 3px 16px; }
+  .tbe-sub span { position: relative; }
+  .tbe-sub span + span::before { content: "·"; position: absolute; left: -10px; opacity: .55; }
+  .mapa__voltar {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 40px; padding: 0 24px; box-sizing: border-box;
+    border: 1px solid var(--md-outline) !important; border-radius: var(--md-shape-full) !important;
+    background: transparent !important; color: var(--md-primary) !important;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    text-decoration: none; white-space: nowrap; box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .mapa__voltar:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important; color: var(--md-primary) !important; }
+  /* Segmented button do M3. */
+  .mapa__view {
+    display: inline-flex; gap: 0; height: 40px; padding: 0; box-sizing: border-box;
+    border: 1px solid var(--md-outline); border-radius: var(--md-shape-full);
+    background: transparent; overflow: hidden;
+  }
+  .mapa__view-btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 0 20px;
+    border-radius: var(--md-shape-full);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    color: var(--md-on-surface); text-decoration: none; background: transparent;
+  }
+  .mapa__view-btn:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+  .mapa__view-btn.is-active { background: var(--md-secondary-container); color: var(--md-on-secondary-container); box-shadow: none; }
+  .tbe-i { width: 18px; height: 18px; flex: none; display: block; }
+  .tbe-i--sm { width: 18px; height: 18px; }
+  /* A ÚNICA ação filled da tela. */
+  .tab-novo {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 40px; padding: 0 24px; box-sizing: border-box; flex: 0 0 auto;
+    border: 0 !important; border-radius: var(--md-shape-full) !important;
+    background: var(--md-primary) !important; color: var(--md-on-primary) !important;
+    font: 500 14px/20px var(--md-font) !important; letter-spacing: .1px;
+    text-decoration: none; white-space: nowrap; box-shadow: none !important; transform: none !important;
+  }
+  .tab-novo:hover { background: var(--md-primary) !important; filter: none; }
+
+  /* 2. Barra de filtro: A MESMA de toda tela de lista.
+
+     Antes esta tela tinha DUAS fileiras próprias — `.tab-chips` (uma ficha por
+     loja + "Sem unidade") e `.tbe-active` (o chip do que estava aplicado) — e a
+     busca numa terceira linha, num campo com moldura de 56px. Nada disso batia
+     com o mapa nem com a Tabela: era a "visão distinta" que o dono apontou.
+
+     Agora `.tab-acoes` é o HOST do popup (o `initFiltrarPopup` monta no pai da
+     `.flt-bar`): botão "Filtrar", chips de filtro aplicado e a busca na mesma
+     linha. O acabamento é o de `.tbd-fbar` (make-m3.css §32), copiado aqui
+     porque aquela regra lista as classes de host uma a uma. */
+  .tab-acoes {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px;
+    margin: 0 0 20px !important; padding: 10px 12px !important;
+    background: var(--md-surface) !important;
+    border: 1px solid var(--md-outline-variant) !important;
+    border-radius: var(--md-shape-lg) !important;
+    box-shadow: none !important;
+  }
+  /* "Filtrando por…" numa linha própria: não empurra a busca (§21.1). */
+  .tab-acoes .fltx-active { flex: 1 0 100%; order: 99; margin: 2px 0 0 !important; }
+
+  /* `.mapa .tab-acoes__busca` da folha antiga solta a largura; o escopo desta
+     tela precisa da mesma força para devolver o limite de leitura. */
+  .tbe-skin .tab-acoes__busca {
+    position: relative; display: flex; align-items: center; gap: 8px;
+    flex: 1 1 300px; min-width: 0; max-width: 480px; margin: 0;
+    height: 42px; padding: 0 14px;
+    background: var(--md-surface-container); border: 0;
+    border-radius: var(--md-shape-full);
+  }
+  .tbe-busca-ico {
+    width: 19px; height: 19px; line-height: 0; flex: none;
+    color: var(--md-on-surface-variant); pointer-events: none;
+  }
+  .tbe-busca-ico svg { width: 19px; height: 19px; display: block; }
+  /* Campo preenchido, sem moldura própria — a pílula em volta já é o campo. */
+  #main .tab-acoes .mapa__busca-input {
+    flex: 1 1 auto; min-width: 0;
+    height: 42px !important; min-height: 42px !important;
+    box-sizing: border-box; padding: 0 !important;
+    font: 400 13.5px/42px var(--md-font) !important; letter-spacing: normal !important;
+    color: var(--md-on-surface) !important; background: transparent !important;
+    border: 0 !important; border-radius: 0 !important;
+    box-shadow: none !important; outline: none; -webkit-appearance: none; appearance: none;
+  }
+  #main .tab-acoes .mapa__busca-input::placeholder { color: var(--md-on-surface-variant) !important; opacity: 1; }
+  #main .tab-acoes .mapa__busca-input:focus { border: 0 !important; box-shadow: none !important; }
+  .tab-acoes .mapa__busca-x {
+    width: 32px; height: 32px; padding: 0; flex: none;
+    display: grid; place-items: center; border: 0; border-radius: var(--md-shape-full); cursor: pointer;
+    background: transparent; color: var(--md-on-surface-variant); font-size: 18px; line-height: 1;
+  }
+  .tab-acoes .mapa__busca-x:hover {
+    background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); color: var(--md-on-surface);
+  }
+
+  /* 3. A tabela (data table do M3) */
+  .tab-wrap {
+    background: var(--md-surface-container-low) !important;
+    border: 0 !important;
+    border-radius: var(--md-shape-md) !important;
+    box-shadow: none !important;
+    overflow: auto; max-height: calc(100vh - 300px);
+  }
+  .tab-tabela {
+    border-collapse: separate; border-spacing: 0; width: 100%;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+  }
+  .tab-tabela th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--md-surface-container-low) !important; color: var(--md-on-surface-variant) !important;
+    border: 0 !important; border-bottom: 1px solid var(--md-outline-variant) !important;
+    padding: 14px 16px !important; text-align: left;
+    font: 500 12px/16px var(--md-font) !important; letter-spacing: .5px !important;
+    text-transform: none; white-space: nowrap;
+  }
+  /* Linha de 52px: 20px de texto + 16px acima e abaixo. */
+  .tab-tabela td {
+    padding: 16px !important; vertical-align: middle;
+    border: 0 !important; border-bottom: 1px solid var(--md-outline-variant) !important;
+    color: var(--md-on-surface) !important;
+  }
+  .tab-tabela tbody tr:nth-child(even) td { background: transparent !important; }
+  .tab-row { cursor: pointer; }
+  /* Hover = state layer de 8%. */
+  .tab-tabela tbody tr:hover td { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent) !important; }
+  .tab-tabela tbody tr:last-child td { border-bottom: 0 !important; }
+  .tab-col-chk { width: 48px; text-align: center; }
+  .tab-col-chk input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--md-primary); }
+  .tab-th-sort:hover { color: var(--md-on-surface) !important; }
+  .tab-th-sort[data-sort="asc"]::after, .tab-th-sort[data-sort="desc"]::after { color: var(--md-primary); }
+  /* Situação: chip tonal. A cor continua vindo da view, agora em `--tbe-c`. */
+  .tab-badge {
+    display: inline-flex; align-items: center; height: 24px; padding: 0 8px;
+    border: 0; border-radius: var(--md-shape-sm);
+    background: color-mix(in srgb, var(--tbe-c, var(--md-outline)) 22%, var(--md-surface-container-low));
+    color: var(--md-on-surface); white-space: nowrap; box-shadow: none;
+    font: 500 11px/16px var(--md-font) !important; letter-spacing: .5px;
+  }
+  .tab-resumo { color: var(--md-on-surface-variant) !important; max-width: 420px; }
+  /* Contagem alinhada pelos dígitos, à direita (contrato §4). */
+  .tab-tabela th.tbe-num, .tab-tabela td.tbe-num {
+    text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .tab-vazio { text-align: center; color: var(--md-on-surface-variant); padding: 24px !important; }
+  .tab-tabela td.tab-vazio:has(.mkpro-empty) { padding: 12px !important; }
+
+  @media (max-width: 900px) { .tbe-head { align-items: flex-start; } }
+</style>
+<div class="mapa tbe-skin">
+
+  <header class="mkpro-head tbe-head">
+    <div class="tbe-head__id">
+      <p class="mkpro-head__eyebrow">Parque de máquinas · Estoque</p>
+      <h1 class="mkpro-head__title">{{ titulo }}</h1>
+      <p class="mkpro-head__sub tbe-sub">
+        {% if total %}<span class="mkpro-tabular">{{ total }} máquinas</span>{% endif %}
+        <span>Computadores por unidade e situação</span>
+        <span>Clique numa linha para editar</span>
+      </p>
+    </div>
+    <div class="mkpro-head__actions">
+      <a data-mk-voltar class="mapa__voltar" href="{{ voltar_url }}">← {{ voltar_nome }}</a>
+      {% if view_tabela %}
+        <div class="mapa__view">
+          <a class="mapa__view-btn {% if view_atual == 'mapa' %}is-active{% endif %}" href="{{ view_mapa }}"><svg class="tbe-i tbe-i--sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg> Mapa</a>
+          <a class="mapa__view-btn {% if view_atual == 'tabela' %}is-active{% endif %}" href="{{ view_tabela }}"><svg class="tbe-i tbe-i--sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18"/></svg> Tabela</a>
+        </div>
+      {% endif %}
+      <a class="tab-novo" href="{{ novo_url }}"><svg class="tbe-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Novo</a>
+    </div>
+  </header>
+
+  <div class="tab-acoes">
+    {% include "parque/_filtros.html" %}
+    <div class="mapa__busca tab-acoes__busca">
+      <span class="mapa__busca-ico tbe-busca-ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      </span>
+      <input type="search" id="tab-busca" class="mapa__busca-input" autocomplete="off"
+             placeholder="Filtrar nesta lista…" aria-label="Filtrar nesta lista">
+      <button type="button" id="tab-busca-x" class="mapa__busca-x" aria-label="Limpar busca" hidden>×</button>
+    </div>
+  </div>
+
+  <form id="disp-bulk-form" method="post" action="{% url 'parque_excluir_dispositivos' %}"
+        onsubmit="return confirm('Excluir os itens selecionados? Esta ação não pode ser desfeita.');">
+    {% csrf_token %}
+    <input type="hidden" name="modelo" value="{{ modelo }}">
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  </form>
+
+  <div class="tab-wrap">
+    <table class="tab-tabela">
+      <thead>
+        <tr>
+          <th class="tab-col-chk"><input type="checkbox" id="tr-all" title="Selecionar todos"></th>
+          <th>Patrimônio / etiqueta</th><th>Unidade</th><th>Baia / posição</th>
+          <th>Resumo specs</th><th class="tbe-num">Reparos</th><th>Situação</th>
+        </tr>
+      </thead>
+      <tbody id="tab-body"
+             data-modelo="{{ modelo }}"
+             data-etiqueta="{{ etiqueta_url }}"
+             data-pode-excluir="{% if pode_excluir %}1{% else %}0{% endif %}">
+        {% for r in linhas %}
+          <tr class="tab-row" data-edit="{{ r.edit }}" data-reativar="{{ r.reativar }}" tabindex="0">
+            <td class="tab-col-chk"><input type="checkbox" class="tr-chk" name="itens" value="{{ r.pk }}" form="disp-bulk-form"></td>
+            <td><b>{{ r.patrimonio }}</b></td>
+            <td>{{ r.unidade }}</td>
+            <td>{{ r.pos }}</td>
+            <td class="tab-resumo">{{ r.resumo }}</td>
+            <td class="tbe-num">{{ r.reparos }}</td>
+            {# A cor da view alimenta `--tbe-c`, que o CSS mistura em contêiner tonal. #}
+            <td><span class="tab-badge" style="--tbe-c:{{ r.sit_cor }}">{{ r.sit_label }}</span></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7" class="tab-vazio">
+            <div class="mkpro-empty mkpro-empty--slim">
+              <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+              <p class="mkpro-empty__title">Nenhum computador no estoque</p>
+              <p class="mkpro-empty__hint">Máquinas devolvidas ao estoque ou sem baia aparecem aqui. Use <b>Novo</b> para cadastrar uma.</p>
+            </div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,484 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+{% with qs_uni=uni_sel_val|urlencode %}
+<style>
+  /* =========================================================================
+     preventiva_tarefas — cabeçalho da família "pvx" agora é o SEGMENTED BUTTON
+     do Material Design 3: um grupo com borda `outline` externa, divisores
+     internos de 1px, item ativo em `secondary-container` e ícone de CHECK no
+     ativo (DESIGN-SYSTEM.md §4). O "voltar" saiu do grupo — navegação não é
+     seleção — e virou text button.
+
+     O hero mantém INTEGRALMENTE a lógica de medalha/nível (regra de negócio:
+     nível pelos pontos do mês, próximo nível e quanto falta) e só enxuga o
+     visual. O que SAIU (§5): a borda e a sombra do hero, das seções e dos
+     cartões, a faixa de 3px de nível, a borda do chip de nível, a borda do
+     gráfico, a borda tracejada do callout, as bordas dos ícones em círculo, o
+     peso 800 nos números e o peso 700 nos rótulos pequenos.
+     O que ENTROU (§4): superfícies tonais aninhadas (container-low na seção,
+     container no cartão, -high no bloco de dentro), número em headline-medium
+     PESO 400 e nível como CHIP TONAL (o par cor + on-cor do nível).
+
+     Botões: sistema global (.pvx-btn + --ok/--soft/--ghost). Cor por --md-*.
+     ====================================================================== */
+  .pvx { display: flex; flex-direction: column; gap: 16px; }
+  .pvx *, .pvx *::before, .pvx *::after { box-sizing: border-box; }
+  .pvx svg { display: block; }
+  .pvx .num { font-variant-numeric: tabular-nums; }
+
+  /* --- botões: base de layout do sistema M3 + o text button -------------- */
+  .pvx .pvx-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  .pvx .pvx-btn svg { width: 18px; height: 18px; flex: none; }
+  /* `#main` na frente vence o `!important` do CSS histórico (§9.2). */
+  #main .pvx-txt {
+    background: transparent !important; color: var(--md-primary) !important;
+    padding: 0 12px !important;
+  }
+
+  /* --- segmented button (o cabeçalho da família) ------------------------ */
+  .pvx-nav { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .pvx-seg {
+    display: flex; max-width: 100%; overflow-x: auto;
+    border: 1px solid var(--md-outline); border-radius: var(--md-shape-full);
+    background: transparent;
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  .pvx-seg::-webkit-scrollbar { display: none; }
+  .pvx-seg__i {
+    position: relative; overflow: hidden; flex: 0 0 auto;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 40px; padding: 0 16px;
+    border: 0; border-left: 1px solid var(--md-outline);
+    background: transparent; color: var(--md-on-surface); text-decoration: none;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; white-space: nowrap;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .pvx-seg__i:first-child { border-left: 0; }
+  .pvx-seg__i::before {
+    content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0;
+    pointer-events: none; transition: opacity var(--md-dur-short) var(--md-ease-standard);
+  }
+  .pvx-seg__i:hover::before { opacity: .08; }
+  .pvx-seg__i:active::before { opacity: .12; }
+  .pvx-seg__i.is-active { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+  .pvx-seg__i svg { width: 18px; height: 18px; flex: none; }
+  /* No M3 o item selecionado troca o ícone da vista pelo CHECK. */
+  .pvx-seg__i .pvx-seg__ck { display: none; }
+  .pvx-seg__i.is-active .pvx-seg__ck { display: block; }
+  .pvx-seg__i.is-active .pvx-seg__ic { display: none; }
+
+  /* --- hero: nível, pontos e evolução ----------------------------------- */
+  .pvx-hero {
+    --tier: var(--md-on-surface-variant);
+    --tier-cont: var(--md-surface-container-high);
+    display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 24px;
+    background: var(--md-surface-container-low);
+    border: 0; border-radius: var(--md-shape-lg); box-shadow: none;
+    padding: 24px;
+  }
+  @media (max-width: 860px) { .pvx-hero { grid-template-columns: 1fr; } }
+  /* Nível → par tonal (cor + on-cor). A REGRA é a mesma; só o tom vem do M3. */
+  .pvx-hero--zero { --tier: var(--md-on-surface-variant); --tier-cont: var(--md-surface-container-high); }
+  .pvx-hero--bronze { --tier: var(--md-st-warn); --tier-cont: var(--md-st-warn-cont); }
+  .pvx-hero--prata { --tier: var(--md-on-surface-variant); --tier-cont: var(--md-surface-container-highest); }
+  .pvx-hero--ouro { --tier: var(--md-st-attn); --tier-cont: var(--md-st-attn-cont); }
+  .pvx-hero--diamante { --tier: var(--md-st-ok); --tier-cont: var(--md-st-ok-cont); }
+
+  .pvx-ola {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0;
+    font: 400 22px/28px var(--md-font); letter-spacing: 0; color: var(--md-on-surface);
+  }
+  .pvx-nivel {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 32px; padding: 0 12px; border: 0; border-radius: var(--md-shape-sm);
+    background: var(--tier-cont); color: var(--tier);
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px; text-transform: uppercase;
+  }
+  .pvx-nivel svg { width: 16px; height: 16px; flex: none; }
+  .pvx-sub {
+    margin: 8px 0 20px;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant);
+  }
+  .pvx-sub b { color: var(--md-on-surface); font-weight: 500; }
+
+  .pvx-chips { display: flex; flex-wrap: wrap; gap: 24px; }
+  .pvx-chip { display: flex; flex-direction: column; gap: 2px; }
+  /* Número grande em headline-medium, PESO 400 (§3). */
+  .pvx-chip__n {
+    font: 400 28px/36px var(--md-font); letter-spacing: 0;
+    color: var(--md-on-surface); font-variant-numeric: tabular-nums;
+  }
+  .pvx-chip__l {
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: uppercase; color: var(--md-on-surface-variant);
+  }
+  .pvx-chip--hl .pvx-chip__n { color: var(--md-primary); }
+
+  .pvx-hint {
+    display: block; margin-top: 16px;
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+  }
+  .pvx-hint b { color: var(--md-on-surface); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .pvx-herolink {
+    display: inline-flex; align-items: center; gap: 8px; margin-top: 12px;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    color: var(--md-primary); text-decoration: none;
+  }
+  .pvx-herolink:hover { text-decoration: underline; }
+  .pvx-herolink svg { width: 18px; height: 18px; flex: none; }
+
+  .pvx-chartbox {
+    display: flex; flex-direction: column;
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container); padding: 16px;
+  }
+  .pvx-chartbox__l {
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: uppercase; color: var(--md-on-surface-variant); margin-bottom: 8px;
+  }
+  .pvx-bars { flex: 1; display: flex; align-items: stretch; gap: 8px; padding-top: 8px; min-height: 108px; }
+  .pvx-bar { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; justify-content: flex-end; }
+  .pvx-bar__track { width: 100%; flex: 1; display: flex; align-items: flex-end; }
+  .pvx-bar__fill { width: 100%; border-radius: var(--md-shape-xs) var(--md-shape-xs) 0 0; background: var(--md-primary); min-height: 4px; }
+  .pvx-bar__lbl { font: 400 11px/16px var(--md-font); letter-spacing: .5px; color: var(--md-on-surface-variant); }
+  .pvx-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; min-height: 108px; }
+  .pvx-empty__i {
+    width: 40px; height: 40px; border: 0; border-radius: var(--md-shape-full);
+    display: grid; place-items: center;
+    background: var(--md-secondary-container); color: var(--md-on-secondary-container);
+  }
+  .pvx-empty__i svg { width: 20px; height: 20px; }
+  .pvx-empty__t { font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface); }
+  .pvx-empty__d { font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); }
+
+  /* --- seções (acordeão) ------------------------------------------------- */
+  .pvx-sec {
+    background: var(--md-surface-container-low);
+    border: 0; border-radius: var(--md-shape-lg); box-shadow: none; overflow: hidden;
+  }
+  .pvx-sec__sum {
+    position: relative; list-style: none; cursor: pointer;
+    display: flex; align-items: center; gap: 16px; padding: 16px;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .pvx-sec__sum::-webkit-details-marker { display: none; }
+  .pvx-sec__sum:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+  .pvx-tile {
+    width: 40px; height: 40px; flex: none; border: 0; border-radius: var(--md-shape-full);
+    display: grid; place-items: center;
+    background: var(--md-secondary-container); color: var(--md-on-secondary-container);
+  }
+  .pvx-tile svg { width: 20px; height: 20px; }
+  .pvx-sec__tt {
+    display: flex; align-items: center; gap: 8px;
+    font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface);
+  }
+  .pvx-sec__d { margin-top: 2px; font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); }
+  .pvx-sec__q {
+    min-height: 24px; display: inline-flex; align-items: center; padding: 0 8px;
+    border: 0; border-radius: var(--md-shape-sm);
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; font-variant-numeric: tabular-nums;
+  }
+  .pvx-chev { margin-left: auto; color: var(--md-on-surface-variant); transition: transform var(--md-dur-medium) var(--md-ease-emphasized); }
+  .pvx-chev svg { width: 20px; height: 20px; }
+  .pvx-sec[open] .pvx-chev { transform: rotate(180deg); }
+  /* Divisor de lista em outline-variant — a única linha permitida (§5.1). */
+  .pvx-sec[open] .pvx-sec__sum { border-bottom: 1px solid var(--md-outline-variant); }
+  .pvx-sec__body { padding: 16px; }
+  .pvx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); gap: 12px; }
+  /* CELULAR estreito: `auto-fill` com mínimo de 248px não cria coluna menor —
+     cria uma coluna de 248px que estoura. Medido em 320px: o `.pvx-sec__body`
+     tem 228px de área útil e o cartão saía com 248px (20px para fora, o que
+     o `overflow: hidden` do `<details>` recortava). Uma coluna que encolhe. */
+  @media (max-width: 560px) {
+    .pvx-grid { grid-template-columns: minmax(0, 1fr); }
+    .pvx-grid > .pvx-card { min-width: 0; }
+  }
+
+  /* --- cartão de máquina: um tom acima da seção -------------------------- */
+  .pvx-card {
+    display: flex; flex-direction: column; gap: 12px;
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container); padding: 16px;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .pvx-card:hover { background: var(--md-surface-container-high); }
+  .pvx-card__top { display: flex; align-items: center; gap: 12px; }
+  .pvx-card__ic {
+    width: 40px; height: 40px; flex: none; border: 0; border-radius: var(--md-shape-full);
+    display: grid; place-items: center;
+    background: var(--md-surface-container-highest); color: var(--md-on-surface-variant);
+  }
+  .pvx-card__ic svg { width: 18px; height: 18px; }
+  .pvx-card__n { font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface); }
+  .pvx-card__s { font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); }
+  .pvx-card__resp {
+    display: flex; align-items: center; gap: 8px;
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+  }
+  .pvx-card__resp svg { width: 14px; height: 14px; flex: none; }
+  .pvx-metric {
+    display: flex; align-items: center; gap: 8px;
+    border: 0; border-radius: var(--md-shape-sm); padding: 8px 12px;
+    background: var(--md-surface-container-highest); color: var(--md-on-surface);
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; font-variant-numeric: tabular-nums;
+  }
+  .pvx-metric svg { width: 16px; height: 16px; flex: none; color: var(--md-on-surface-variant); }
+
+  .pvx-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .pvx-callout {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+    border: 0; border-radius: var(--md-shape-md); padding: 16px;
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+  }
+  .pvx-callout svg { width: 18px; height: 18px; flex: none; color: var(--md-primary); }
+
+  /* --- lista densa (sem telemetria) --------------------------------------- */
+  .pvx-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  /* CELULAR: uma coluna — e ela tem de poder ENCOLHER.
+     Medido em 375px: com `1fr` (que é `minmax(auto, 1fr)`) a faixa nasceu com
+     547,7px dentro de um `.pvx-rows` de 283px, porque o `auto` do mínimo vale
+     o min-content da linha — e a linha é um flex com um `.pvx-row__s` em
+     `white-space: nowrap`. Os 265px que sobravam ficavam ESCONDIDOS: quem
+     recorta é o `overflow: hidden` do `<details class="pvx-sec">`, então não
+     havia barra, arrasto nem aviso — o texto simplesmente não existia na tela.
+
+     São DUAS correções, e uma sem a outra não resolve:
+     · `minmax(0, 1fr)` solta a FAIXA do min-content;
+     · `min-width: 0` solta o ITEM, que como item de grid também nasce com
+       mínimo automático = min-content e continuaria estourando a faixa.
+     Com as duas, a faixa fica em 283px e o `.pvx-row__s` (que já tem
+     `text-overflow: ellipsis`) corta com reticências, como devia. */
+  @media (max-width: 860px) {
+    .pvx-rows { grid-template-columns: minmax(0, 1fr); }
+    .pvx-rows > .pvx-row { min-width: 0; }
+  }
+  .pvx-row {
+    display: flex; align-items: center; gap: 12px;
+    border: 0; border-radius: var(--md-shape-sm);
+    background: var(--md-surface-container); padding: 8px 12px;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .pvx-row:hover { background: var(--md-surface-container-high); }
+  .pvx-row__ic {
+    width: 32px; height: 32px; flex: none; border: 0; border-radius: var(--md-shape-full);
+    display: grid; place-items: center;
+    background: var(--md-surface-container-highest); color: var(--md-on-surface-variant);
+  }
+  .pvx-row__ic svg { width: 16px; height: 16px; }
+  .pvx-row__n { font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface); }
+  .pvx-row__s {
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pvx-grow { flex: 1; min-width: 0; }
+  /* Ação só-ícone da lista densa = icon button M3 de 40px. */
+  #main .pvx-row .pvx-btn { width: 40px; padding: 0 !important; }
+
+  /* CELULAR: as duas ações descem para uma segunda linha.
+     Depois de a faixa passar a encolher (regra acima), a linha ficou assim em
+     375px: 32px de ícone + 12 de vão + TEXTO + 12 + 40 + 12 + 40 dentro de
+     283px — sobravam 111px para o texto, e o título "Agente de coleta não está
+     reportando" virava três linhas de 20px num pedaço de 111px. Com o wrap e
+     um flex-basis que já consome a linha, os dois botões caem para baixo e o
+     texto passa de 111px para 215px. O `justify-content: flex-end` alinha a
+     dupla à direita na linha nova — e não mexe na primeira linha, onde o
+     `flex-grow` do texto já consumiu toda a folga. */
+  @media (max-width: 560px) {
+    .pvx-row { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
+    .pvx-row > .pvx-grow { flex: 1 1 calc(100% - 44px); }
+  }
+</style>
+
+<div class="pvx">
+
+  {# --- cabeçalho da família: text button de voltar + segmented button --- #}
+  <div class="pvx-nav">
+    <a data-mk-voltar class="pvx-btn pvx-txt" href="{{ voltar_url }}"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg> {{ voltar_nome }}</a>
+    <div class="pvx-seg" role="tablist" aria-label="Vistas da preventiva">
+      <a class="pvx-seg__i is-active" role="tab" aria-selected="true" href="?vista=tarefas{% if uni_sel_val %}&unidade={{ qs_uni }}{% endif %}{% for s in setor_sel_vals %}&setor={{ s|urlencode }}{% endfor %}"><svg class="pvx-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="pvx-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Tarefas</a>
+      <a class="pvx-seg__i" role="tab" aria-selected="false" href="?vista=calendario{% if uni_sel_val %}&unidade={{ qs_uni }}{% endif %}{% for s in setor_sel_vals %}&setor={{ s|urlencode }}{% endfor %}"><svg class="pvx-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="pvx-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/></svg> Calendário</a>
+      <a class="pvx-seg__i" role="tab" aria-selected="false" href="?vista=tabela{% if uni_sel_val %}&unidade={{ qs_uni }}{% endif %}{% for s in setor_sel_vals %}&setor={{ s|urlencode }}{% endfor %}"><svg class="pvx-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="pvx-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg> Tabela</a>
+      <a class="pvx-seg__i" role="tab" aria-selected="false" href="?vista=grupos"><svg class="pvx-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="pvx-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="8" r="3"/><circle cx="17" cy="8" r="3"/><path d="M2 20a5 5 0 0 1 10 0M12 20a5 5 0 0 1 10 0"/></svg> Grupos</a>
+      <a class="pvx-seg__i" role="tab" aria-selected="false" href="?vista=ranking"><svg class="pvx-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="pvx-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg> Ranking</a>
+    </div>
+  </div>
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · Preventiva</p>
+    <h1 class="mkpro-head__title">Tarefas de saúde do parque</h1>
+    <p class="mkpro-head__sub">Máquinas que pedem ação agora, agrupadas pelo motivo. Concluir soma pontos no ranking.</p>
+  </header>
+
+  {# --- hero: nível (regra de negócio), pontos e evolução --- #}
+  <div class="pvx-hero pvx-hero--{{ nivel }}">
+    <div>
+      <h2 class="pvx-ola">Olá, {{ saudacao_nome }}!
+        <span class="pvx-nivel" title="Nível pelos pontos do mês"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="6"/><path d="M9 14l-2 7 5-3 5 3-2-7"/></svg> {{ nivel_nome }}</span>
+      </h2>
+      <p class="pvx-sub">{% if minha_unidade %}Tarefas da unidade <b>{{ minha_unidade }}</b>. {% endif %}Conclua preventivas para somar pontos e subir no ranking.</p>
+      <div class="pvx-chips">
+        <div class="pvx-chip pvx-chip--hl"><span class="pvx-chip__n num">{{ pontos_mes }}</span><span class="pvx-chip__l">pts no mês</span></div>
+        <div class="pvx-chip"><span class="pvx-chip__n num">{{ pontos_total }}</span><span class="pvx-chip__l">pts no total</span></div>
+        <div class="pvx-chip"><span class="pvx-chip__n num">{% if posicao %}{{ posicao }}º{% else %}—{% endif %}</span><span class="pvx-chip__l">no ranking</span></div>
+        <div class="pvx-chip"><span class="pvx-chip__n num">{{ n_total }}</span><span class="pvx-chip__l">preventivas</span></div>
+      </div>
+      {% if nivel_prox %}<span class="pvx-hint">Faltam <b>{{ nivel_faltam }}</b> pts este mês pro nível <b>{{ nivel_prox }}</b>.</span>{% endif %}
+      <a class="pvx-herolink" href="?vista=ranking"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0Z"/></svg> Ver ranking completo</a>
+    </div>
+    {% comment %}
+    O painel "Seus pontos por mês" saiu daqui. Motivo, nas palavras do dono:
+    "por que tem dois gráficos diferentes, sendo que exibem a mesma
+    informação?" — ele ficava lado a lado com o gráfico de preventivas por mês
+    (o `_prev_grafico.html`), tratando do mesmo assunto e, sem pontos, só
+    mostrando um estado vazio. Os pontos continuam nas fichas ao lado
+    (pts no mês / no total / ranking) e a evolução completa está no Ranking.
+    {% endcomment %}
+  </div>
+
+  {% include "parque/_prev_grafico.html" %}
+
+  {% if gestao %}
+    {% include "parque/_filtros.html" with uni_lbl="Unidade" setor_lbl="Setor" keep="vista=tarefas" %}
+  {% endif %}
+
+  {# --- seções acionáveis (abertas): score baixo + uptime alto --- #}
+  {% for sec in secoes %}{% if sec.key != 'sem_telemetria' %}
+  <details class="pvx-sec" open>
+    <summary class="pvx-sec__sum">
+      <span class="pvx-tile pvx-tile--{{ sec.tone }}">
+        {% if sec.key == 'score_baixo' %}<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5v14M4 19h16"/><path d="M8 10l3 3 3-4 4 5"/></svg>{% else %}<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>{% endif %}
+      </span>
+      <div><div class="pvx-sec__tt">{{ sec.titulo }} <span class="pvx-sec__q">{{ sec.qtd }}</span></div><div class="pvx-sec__d">{{ sec.ajuda }}</div></div>
+      <span class="pvx-chev"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+    </summary>
+    <div class="pvx-sec__body">
+      {% if sec.itens %}
+      <div class="pvx-grid">
+        {% for it in sec.itens %}
+        <div class="pvx-card">
+          <div class="pvx-card__top">
+            <span class="pvx-card__ic">{% if it.eh_notebook %}<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>{% else %}<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8"/></svg>{% endif %}</span>
+            <div><div class="pvx-card__n">{{ it.colaborador|default:it.titulo }}</div><div class="pvx-card__s">{{ it.local }}{% if it.patrimonio %} · {{ it.patrimonio }}{% endif %}</div></div>
+          </div>
+          <div class="pvx-metric">{% if sec.key == 'score_baixo' %}<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l6 6 4-4 8 8"/><path d="M21 16v5h-5"/></svg>{% else %}<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>{% endif %} {{ it.metrica }}</div>
+          {% if it.responsavel %}<div class="pvx-card__resp"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg> {{ it.responsavel }}</div>{% endif %}
+          {# Ações repetidas: a de peso é TONAL; as demais, text button. #}
+          <div class="pvx-acts">
+            <button type="button" class="pvx-btn pvx-txt" data-ver="{{ it.verkey }}"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg> Ver</button>
+            <button type="button" class="pvx-btn pvx-btn--soft" data-tf-open data-id="{{ it.id }}" data-acao="concluir" data-nome="{{ it.colaborador|default:it.titulo }}" data-titulo="{{ it.titulo }}"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Concluir</button>
+            <button type="button" class="pvx-btn pvx-txt" data-adiar-open data-kind="{{ it.kind }}" data-pk="{{ it.maquina_pk }}" data-nome="{{ it.colaborador|default:it.titulo }}"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4M21 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h6"/><path d="M3 10h6"/><circle cx="17.5" cy="17.5" r="4.5"/><path d="M17.5 15.7v1.8l1.3.9"/></svg> Adiar</button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="pvx-vazio mkpro-empty mkpro-empty--slim">
+        <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg></span>
+        <p class="mkpro-empty__title">Nenhuma máquina nesta condição</p>
+        <p class="mkpro-empty__hint">Nada a fazer por aqui agora — as máquinas que caírem nesta condição aparecem nesta lista.</p>
+      </div>
+      {% endif %}
+    </div>
+  </details>
+  {% endif %}{% endfor %}
+
+  {# --- seção Sem telemetria (recolhida, densa) --- #}
+  {% for sec in secoes %}{% if sec.key == 'sem_telemetria' %}
+  <details class="pvx-sec">
+    <summary class="pvx-sec__sum">
+      <span class="pvx-tile pvx-tile--green"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 5 4-12 2 7h6"/></svg></span>
+      <div><div class="pvx-sec__tt">{{ sec.titulo }} <span class="pvx-sec__q">{{ sec.qtd }}</span></div><div class="pvx-sec__d">{{ sec.ajuda }}</div></div>
+      <span class="pvx-chev"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
+    </summary>
+    <div class="pvx-sec__body">
+      {% if sec.itens %}
+      <div class="pvx-callout"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg> São muitas e todas pedem a mesma ação (instalar/relançar o agente). Trate direto por aqui.</div>
+      <div class="pvx-rows">
+        {% for it in sec.itens %}
+        <div class="pvx-row">
+          <span class="pvx-row__ic">{% if it.eh_notebook %}<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>{% else %}<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8"/></svg>{% endif %}</span>
+          <div class="pvx-grow"><div class="pvx-row__n">{{ it.colaborador|default:it.titulo }}</div><div class="pvx-row__s">{{ it.local }}{% if it.patrimonio %} · {{ it.patrimonio }}{% endif %} · {{ it.metrica }}</div></div>
+          <button type="button" class="pvx-btn pvx-btn--soft" title="Concluir" aria-label="Concluir preventiva de {{ it.colaborador|default:it.titulo }}" data-tf-open data-id="{{ it.id }}" data-acao="concluir" data-nome="{{ it.colaborador|default:it.titulo }}" data-titulo="{{ it.titulo }}"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+          <button type="button" class="pvx-btn pvx-txt" title="Adiar" aria-label="Adiar preventiva de {{ it.colaborador|default:it.titulo }}" data-adiar-open data-kind="{{ it.kind }}" data-pk="{{ it.maquina_pk }}" data-nome="{{ it.colaborador|default:it.titulo }}"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4M21 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h6"/><path d="M3 10h6"/><circle cx="17.5" cy="17.5" r="4.5"/><path d="M17.5 15.7v1.8l1.3.9"/></svg></button>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="pvx-vazio mkpro-empty mkpro-empty--slim">
+        <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg></span>
+        <p class="mkpro-empty__title">Nenhuma máquina nesta condição</p>
+        <p class="mkpro-empty__hint">Nada a fazer por aqui agora — as máquinas que caírem nesta condição aparecem nesta lista.</p>
+      </div>
+      {% endif %}
+    </div>
+  </details>
+  {% endif %}{% endfor %}
+
+</div>
+
+{# Loja OCULTA de cards .baia — "Ver" dispara o clique aqui p/ abrir o zoom. #}
+<div id="tf-cards" hidden>
+  {% for sec in secoes %}{% for it in sec.itens %}{% if it.tipo != 'sem_telemetria' %}
+    <div class="tf-cardwrap" data-verkey="{{ it.verkey }}">
+      {% if it.card_baia %}
+        {% include "parque/_baia.html" with b=it.card_baia %}
+      {% else %}
+        <button type="button" class="baia baia--notebook baia--cl-{{ it.classe|slugify }}"
+          data-nome="{{ it.titulo }}" data-colaborador="{{ it.colaborador|default:'—' }}"
+          data-patrimonio="{{ it.patrimonio }}" data-status="Notebook"
+          data-so="—" data-cpu="{{ it.resumo }}" data-placa="—" data-ram="—" data-disco="—"
+          data-mouse="—" data-teclado="—" data-webcam="—" data-headset="—" data-monitor="—" data-leitor="—"
+          data-pcstatus="notebook" data-tipo="notebook"
+          data-desempenho="{{ it.score|default_if_none:'' }}" data-classe="{{ it.classe }}" data-diag="[]">
+          <div class="baia__nome">{{ it.titulo }}</div>
+        </button>
+      {% endif %}
+    </div>
+  {% endif %}{% endfor %}{% endfor %}
+</div>
+
+{% include "parque/_zoom.html" %}
+
+{% comment %}
+Diálogo compartilhado de Concluir / Dispensar (JS initTarefas preenche id/ação).
+Usa o componente `.pvdlg` — o CSS do diálogo M3 vem do parcial `_adiar_modal.html`,
+incluído logo abaixo (o bloco duplicado que existia aqui foi REMOVIDO).
+{% endcomment %}
+<div class="pvdlg" id="tf-modal" hidden>
+  <div class="pvdlg__backdrop" data-tf-close></div>
+  <div class="pvdlg__card" role="dialog" aria-modal="true" aria-labelledby="tf-dlg-tit">
+    <div class="pvdlg__head">
+      <span class="pvdlg__ico" id="tf-dlg-ico"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+      <div class="pvdlg__headtxt">
+        <h2 class="pvdlg__tit" id="tf-dlg-tit">Concluir tarefa</h2>
+        <p class="pvdlg__sub" id="tf-dlg-maq">—</p>
+      </div>
+      <button type="button" class="pvdlg__x" data-tf-close aria-label="Fechar">×</button>
+    </div>
+    <form method="post" action="{% url 'parque_tarefa_acao' %}" class="pvdlg__body">
+      {% csrf_token %}
+      <input type="hidden" name="tarefa_id" id="tf-id">
+      <input type="hidden" name="acao" id="tf-acao">
+      <label class="pvdlg__lbl" for="tf-obs">Observação (opcional)</label>
+      <textarea id="tf-obs" name="observacao" rows="3" class="pvdlg__ta"
+                placeholder="O que foi feito / motivo de dispensar…"></textarea>
+      <div class="pvdlg__actions">
+        <button type="button" class="pvdlg__cancel" data-tf-close>Cancelar</button>
+        <button type="submit" class="pvdlg__ok" id="tf-submit"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Concluir</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% include "parque/_adiar_modal.html" %}
+{% endwith %}
+{% endblock %}

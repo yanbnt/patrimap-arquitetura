@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+{% load static %}
+{% comment %}
+  protocolo.html — DOCUMENTO IMPRESSO (papel corporativo).
+
+  TEMA CLARO ÚNICO, por decisão de projeto: isto é papel. Não existe versão
+  escura, não há tokens `--ui-*` aqui e as cores são pretas/brancas explícitas —
+  a folha tem de sair igual em qualquer navegador, com ou sem tema do sistema.
+
+  Regras do papel (DESIGN-SYSTEM.md §"documentos"):
+    · timbre = logo BRANCA sobre a faixa #0a2416 (a logo some em fundo claro),
+      com espécie do documento, nome, número e data de emissão;
+    · tabela de itens em hairline, `thead` repetido a cada página;
+    · assinatura com linha real e legenda "Nome legível · Data";
+    · @page A4 com margem de 10mm, `page-break-inside: avoid` nos blocos;
+    · na impressão: sem sombra, sem zebra e sem fundo chapado — toner é caro.
+{% endcomment %}
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>Comprovante de transferência #{{ t.pk }}</title>
+  <style>
+    /* Mesma família do sistema (Figtree). Estes documentos são páginas
+       independentes: não carregam o CSS do app, por isso importam a fonte. */
+    @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap');
+    :root {
+      --pt-band: #0a2416;        /* faixa do timbre — a logo é branca */
+      --pt-lima: #cbf542;
+      --pt-ink: #111318;         /* texto preto de documento */
+      --pt-ink-soft: #4b5563;
+      --pt-hair: #a9b3ac;        /* hairline forte (moldura) */
+      --pt-hair-soft: #d2dad4;   /* hairline fina (linhas internas) */
+      --pt-tint: #f2f6f3;        /* tinta mínima — só na tela */
+      --pt-verde: #00a651;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 24px;
+      font-family: Figtree, "Segoe UI", Arial, sans-serif;
+      background: #eef1ef; color: var(--pt-ink);
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+
+    /* ---------- Barra de ações (só tela) ---------- */
+    .barra-acoes {
+      display: flex; gap: 10px; align-items: center;
+      margin: 0 auto 16px; max-width: 200mm;
+    }
+    .barra-acoes h1 {
+      flex: 1; margin: 0; font-size: 15px; font-weight: 800; letter-spacing: -.01em;
+      color: #14532d;
+    }
+    .barra-acoes h1 small {
+      display: block; font-size: 11px; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: #067a38;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 0; border-radius: 9px; padding: 9px 16px; font-weight: 700;
+      font-size: 13px; font-family: inherit; cursor: pointer; text-decoration: none;
+      color: #fff; background: var(--pt-verde);
+    }
+    .btn:hover { background: #00913f; }
+    .btn svg { width: 16px; height: 16px; flex: none; }
+    .btn--sec { background: #fff; color: #14532d; border: 1px solid #cbd8ce; }
+    .btn--sec:hover { background: var(--pt-tint); }
+
+    /* ---------- Folha A4 ---------- */
+    .folha {
+      background: #fff; width: 200mm; margin: 0 auto;
+      border: 1px solid var(--pt-hair);
+      overflow: hidden;
+    }
+
+    /* Timbre: logo branca sobre a faixa da marca + identificação do documento */
+    .pt-banner {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 18px; padding: 8mm; background: var(--pt-band);
+      border-bottom: 2.5px solid var(--pt-lima);
+    }
+    .pt-banner__logo { height: 14mm; width: auto; display: block; }
+    .pt-banner__doc { text-align: right; color: #fff; }
+    .pt-banner__kind {
+      margin: 0; font-size: 8pt; font-weight: 700; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--pt-lima);
+    }
+    .pt-banner__name { margin: 1mm 0 0; font-size: 14pt; font-weight: 800; letter-spacing: -.015em; }
+    .pt-banner__meta {
+      margin: 1.5mm 0 0; font-size: 9pt; color: #cfe0d6;
+      font-variant-numeric: tabular-nums;
+    }
+    .pt-banner__meta b { color: #fff; font-weight: 700; }
+
+    /* Rótulo de seção — a régua da hierarquia do documento */
+    .pt-secao {
+      margin: 0; padding: 3mm 8mm;
+      font-size: 8pt; font-weight: 800; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--pt-ink-soft);
+      border-bottom: 1px solid var(--pt-hair);
+      background: var(--pt-tint);
+    }
+
+    /* ---------- Grade SAÍDA / DESTINO ---------- */
+    .pt-grade { display: grid; grid-template-columns: 1fr 1fr; }
+    .pt-col { padding: 2mm 0 3mm; }
+    .pt-col + .pt-col { border-left: 1px solid var(--pt-hair); }
+    .pt-linha {
+      display: flex; gap: 8px; align-items: baseline;
+      padding: 2.2mm 8mm; font-size: 10.5pt;
+    }
+    .pt-linha + .pt-linha { border-top: 1px solid var(--pt-hair-soft); }
+    .pt-rotulo {
+      white-space: nowrap; font-size: 7.5pt; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--pt-ink-soft); min-width: 26mm;
+    }
+    .pt-valor { flex: 1; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .pt-ass { color: var(--pt-ink-soft); font-weight: 400; font-style: italic; }
+    /* Linha para preencher à mão: ocupa o espaço do valor e fica na altura da
+       escrita. Sem texto dentro — o rótulo à esquerda já diz o que é. */
+    .pt-preencher {
+      display: block; flex: 1 1 auto; min-width: 28mm;
+      height: 4.6mm; margin-top: .6mm;
+      border-bottom: .6pt solid var(--pt-ink);
+    }
+
+    /* Campo de assinatura: linha real + legenda */
+    .pt-linha--ass { display: block; padding-bottom: 3mm; }
+    .pt-assbox { display: block; margin-top: 9mm; }
+    .pt-assline { display: block; border-bottom: .6pt solid var(--pt-ink); }
+    .pt-asscap {
+      display: block; margin-top: 1.2mm; text-align: center;
+      font-size: 7pt; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--pt-ink-soft);
+    }
+
+    /* ---------- Tabela de itens (hairline, sem zebra) ---------- */
+    table.pt-itens { width: 100%; border-collapse: collapse; font-size: 10.5pt; }
+    table.pt-itens th, table.pt-itens td {
+      border: .6pt solid var(--pt-hair-soft); padding: 2.4mm 3mm; text-align: left;
+    }
+    table.pt-itens thead th {
+      font-size: 7.5pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--pt-ink-soft); background: var(--pt-tint);
+      border-color: var(--pt-hair);
+    }
+    table.pt-itens .col-n { width: 14mm; text-align: center; }
+    table.pt-itens .col-q { width: 40mm; text-align: right; }
+    table.pt-itens td.col-n,
+    table.pt-itens td.col-q { font-variant-numeric: tabular-nums; }
+    table.pt-itens td.col-n { text-align: center; color: var(--pt-ink-soft); }
+    table.pt-itens td.col-q { text-align: right; font-weight: 700; }
+
+    .pt-vazio { padding: 8mm; text-align: center; font-size: 10.5pt; color: var(--pt-ink-soft); }
+
+    /* Declaração de conferência — fecha o documento antes das assinaturas. */
+    .pt-declara {
+      margin: 0; padding: 3.5mm 8mm 5mm;
+      font-size: 8.5pt; line-height: 1.5; color: var(--pt-ink-soft);
+      border-top: 1px solid var(--pt-hair);
+    }
+
+    .pt-rodape {
+      max-width: 200mm; margin: 3mm auto 0; font-size: 7.5pt; color: #6b7280;
+      display: flex; justify-content: space-between; gap: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ---------- Impressão ---------- */
+    @media print {
+      @page { size: A4 portrait; margin: 10mm; }
+      body { background: #fff; padding: 0; }
+      .barra-acoes { display: none !important; }
+      .folha { width: auto; margin: 0; border: 0; }
+      .pt-banner { padding: 6mm; }
+      .pt-rodape { margin: 3mm 0 0; }
+      /* Sem fundo chapado: só a faixa do timbre justifica tinta. */
+      .pt-secao, table.pt-itens thead th { background: transparent; }
+      .pt-banner, .pt-secao, .pt-grade, .pt-declara { page-break-inside: avoid; }
+      table.pt-itens tr, .pt-col { page-break-inside: avoid; }
+      table.pt-itens thead { display: table-header-group; }
+      .pt-secao { page-break-after: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="barra-acoes">
+    <h1><small>Documento para impressão</small>Comprovante de transferência nº {{ t.pk }}</h1>
+    <button class="btn" onclick="window.print()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M8 17h8v4H8z"/></svg>
+      Imprimir
+    </button>
+    {% comment %}
+    NÃO use history.back() aqui: este documento é aberto por redirect
+    depois do POST que o gerou, então "voltar" no histórico devolve o
+    formulário já enviado — reenviar dali duplica o registro. A view diz
+    para onde voltar; sem isso, o mapa do parque é o destino seguro.
+    {% endcomment %}
+    <a class="btn btn--sec" href="{{ voltar_url|default:"/parque/mapa-completo/" }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+      {{ voltar_nome|default:"Voltar" }}
+    </a>
+  </div>
+
+  <div class="folha">
+    <div class="pt-banner">
+      <img class="pt-banner__logo" src="{% static 'img/make-logo.webp' %}" alt="Make Distribuidora">
+      <div class="pt-banner__doc">
+        <p class="pt-banner__kind">Parque de máquinas</p>
+        <p class="pt-banner__name">Comprovante de transferência</p>
+        <p class="pt-banner__meta">Protocolo nº <b>{{ t.pk }}</b> · Emissão <b>{{ data_saida|date:"d/m/Y" }}</b></p>
+      </div>
+    </div>
+
+    <h2 class="pt-secao">Saída e destino</h2>
+
+    <div class="pt-grade">
+      <div class="pt-col">
+        <div class="pt-linha"><span class="pt-rotulo">Saída</span><span class="pt-valor">{{ uni_origem }}</span></div>
+        <div class="pt-linha"><span class="pt-rotulo">Data</span><span class="pt-valor">{{ data_saida|date:"d/m/Y" }}</span></div>
+        <div class="pt-linha"><span class="pt-rotulo">Colaborador</span><span class="pt-valor">{{ colab_saida|default:"" }}</span></div>
+        <div class="pt-linha pt-linha--ass">
+          <span class="pt-rotulo">Assinatura de quem entrega</span>
+          <span class="pt-assbox">
+            <span class="pt-assline"></span>
+            <span class="pt-asscap">Nome legível · Data</span>
+          </span>
+        </div>
+      </div>
+      <div class="pt-col">
+        <div class="pt-linha"><span class="pt-rotulo">Destino</span><span class="pt-valor">{{ uni_destino }}{% if setor_destino_nome %} — {{ setor_destino_nome }}{% endif %}</span></div>
+        {% comment %}
+        Campo em branco quando o dado ainda não existe — NÃO texto de aviso.
+        Estava escrito "a preencher no recebimento" em itálico dentro da linha,
+        e o dono apontou o óbvio: a pessoa tem de escrever ali em cima. Papel
+        não tem placeholder; tem linha. Quem já tem valor imprime o valor.
+        {% endcomment %}
+        <div class="pt-linha"><span class="pt-rotulo">Data</span>{% if data_entrada %}<span class="pt-valor">{{ data_entrada|date:"d/m/Y" }}</span>{% else %}<span class="pt-preencher" aria-label="A preencher no recebimento"></span>{% endif %}</div>
+        <div class="pt-linha"><span class="pt-rotulo">Recebido por</span>{% if colab_destino %}<span class="pt-valor">{{ colab_destino }}</span>{% else %}<span class="pt-preencher" aria-label="A preencher no recebimento"></span>{% endif %}</div>
+        <div class="pt-linha pt-linha--ass">
+          <span class="pt-rotulo">Assinatura de quem recebe</span>
+          <span class="pt-assbox">
+            <span class="pt-assline"></span>
+            <span class="pt-asscap">Nome legível · Data</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="pt-secao">Descrição dos itens</h2>
+    <table class="pt-itens">
+      <thead>
+        <tr>
+          <th class="col-n">Nº</th>
+          <th>Descrição do produto</th>
+          <th class="col-q">Quantidade</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in linhas %}
+          <tr>
+            <td class="col-n">{{ it.n }}</td>
+            <td>{{ it.descricao }}</td>
+            <td class="col-q">{{ it.qtd }}</td>
+          </tr>
+        {% empty %}
+          <tr><td class="pt-vazio" colspan="3">Nenhum item registrado neste protocolo.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <p class="pt-declara">
+      As assinaturas acima atestam a conferência dos itens desta relação na saída e no
+      recebimento. Divergências devem ser anotadas nesta via antes da assinatura.
+    </p>
+  </div>
+
+  <p class="pt-rodape">
+    <span>Make Distribuidora · Gestão de Ativos de TI</span>
+    <span>Protocolo nº {{ t.pk }} · emitido em {{ data_saida|date:"d/m/Y" }}</span>
+  </p>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 420" width="880" height="420" role="img" aria-label="Modelo de domínio do PatriMap: Loja contém Setor, que contém Baia; a Baia recebe um Computador ou Notebook e um Colaborador; o vínculo computador-colaborador é espelhado no próprio bem.">
+  <!-- Fundo próprio: o diagrama precisa ler igual no tema claro e no escuro
+       do GitHub, e texto sem fundo some num dos dois. -->
+  <rect width="880" height="420" rx="14" fill="#f7faf7"/>
+  <rect x="0.5" y="0.5" width="879" height="419" rx="14" fill="none" stroke="#c9d6cb"/>
+
+  <style>
+    .t  { font-family: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif; }
+    .ti { font-size: 15px; font-weight: 700; fill: #10231a; }
+    .sb { font-size: 11.5px; fill: #4a5a50; }
+    .lb { font-size: 11px; fill: #4a5a50; font-weight: 600; }
+    .cap{ font-size: 12px; fill: #2f4038; }
+    .hd { font-size: 10.5px; font-weight: 700; fill: #6b7c72; letter-spacing: .9px; }
+  </style>
+
+  <defs>
+    <marker id="seta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10z" fill="#7d9186"/>
+    </marker>
+    <marker id="setaV" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10z" fill="#00713a"/>
+    </marker>
+  </defs>
+
+  <text x="32" y="38" class="t hd">ONDE A MÁQUINA ESTÁ</text>
+  <text x="470" y="38" class="t hd">QUEM USA A MÁQUINA</text>
+
+  <!-- ================= coluna esquerda: localização ================= -->
+  <g>
+    <rect x="32" y="56" width="150" height="54" rx="12" fill="#e4efe6" stroke="#b9cdbe"/>
+    <text x="48" y="80" class="t ti">Loja</text>
+    <text x="48" y="97" class="t sb">unidade física</text>
+
+    <path d="M107 110 L107 136" stroke="#7d9186" stroke-width="1.6" marker-end="url(#seta)"/>
+
+    <rect x="32" y="138" width="150" height="54" rx="12" fill="#e4efe6" stroke="#b9cdbe"/>
+    <text x="48" y="162" class="t ti">Setor</text>
+    <text x="48" y="179" class="t sb">área dentro da loja</text>
+
+    <path d="M107 192 L107 218" stroke="#7d9186" stroke-width="1.6" marker-end="url(#seta)"/>
+  </g>
+
+  <!-- ================= centro: a baia ================= -->
+  <rect x="32" y="220" width="300" height="96" rx="14" fill="#00713a"/>
+  <text x="52" y="250" class="t ti" fill="#ffffff">Baia</text>
+  <text x="52" y="270" class="t sb" fill="#cdeedb">a mesa — rótulo de localização física</text>
+  <text x="52" y="292" class="t sb" fill="#8df8b0">“onde eu acho esta máquina na empresa?”</text>
+
+  <!-- ================= direita: pessoa ================= -->
+  <rect x="470" y="56" width="188" height="54" rx="12" fill="#e4efe6" stroke="#b9cdbe"/>
+  <text x="486" y="80" class="t ti">Colaborador</text>
+  <text x="486" y="97" class="t sb">pessoa cadastrada</text>
+
+  <rect x="684" y="56" width="164" height="54" rx="12" fill="#f0f4f1" stroke="#c9d6cb" stroke-dasharray="4 3"/>
+  <text x="700" y="80" class="t ti">Conta de acesso</text>
+  <text x="700" y="97" class="t sb">opcional — nem todo</text>
+  <text x="700" y="110" class="t sb">colaborador entra</text>
+  <path d="M658 83 L682 83" stroke="#7d9186" stroke-width="1.6" marker-end="url(#seta)"/>
+
+  <!-- ocupa -->
+  <path d="M470 100 C 380 150, 350 210, 336 250" fill="none" stroke="#7d9186" stroke-width="1.6" marker-end="url(#seta)"/>
+  <text x="372" y="168" class="t lb">ocupa</text>
+
+  <!-- ================= equipamento ================= -->
+  <rect x="470" y="166" width="188" height="68" rx="12" fill="#ffffff" stroke="#b9cdbe"/>
+  <text x="486" y="191" class="t ti">Computador</text>
+  <text x="486" y="208" class="t sb">patrimônio, specs,</text>
+  <text x="486" y="222" class="t sb">status, histórico</text>
+
+  <rect x="684" y="166" width="164" height="68" rx="12" fill="#ffffff" stroke="#b9cdbe"/>
+  <text x="700" y="191" class="t ti">Notebook</text>
+  <text x="700" y="208" class="t sb">acompanha a</text>
+  <text x="700" y="222" class="t sb">pessoa, não a mesa</text>
+
+  <path d="M332 262 L466 210" fill="none" stroke="#7d9186" stroke-width="1.6" marker-end="url(#seta)"/>
+  <text x="372" y="252" class="t lb">recebe um</text>
+
+  <!-- ================= o vínculo que importa ================= -->
+  <path d="M564 110 L564 162" fill="none" stroke="#00713a" stroke-width="2.4" stroke-dasharray="6 4" marker-end="url(#setaV)"/>
+  <rect x="580" y="118" width="196" height="38" rx="9" fill="#d8f3e1" stroke="#00713a"/>
+  <text x="592" y="134" class="t lb" fill="#00492a">utilizado por</text>
+  <text x="592" y="149" class="t sb" fill="#00492a">espelhado no próprio bem</text>
+
+  <!-- ================= legenda ================= -->
+  <rect x="32" y="336" width="816" height="62" rx="12" fill="#eef4ef" stroke="#c9d6cb"/>
+  <text x="50" y="358" class="t cap"><tspan font-weight="700">A regra:</tspan> todo computador fica numa baia. Quem ocupa a baia é quem usa a máquina.</text>
+  <text x="50" y="378" class="t cap">Tirar a pessoa deixa o computador na mesa, sem ninguém. Tirar o computador da mesa não o apaga — ele volta ao estoque,</text>
+  <text x="50" y="392" class="t cap">e deixa de ter dono: máquina em prateleira não pertence a ninguém.</text>
+</svg>

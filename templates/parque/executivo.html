@@ -1,0 +1,580 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% comment %}
+LEITURA EXECUTIVA — a tela que CONCLUI, para diretoria e RH.
+
+O Dashboard responde as perguntas de quem conserta. Esta responde as de quem
+decide: onde está o problema, quanto vale atacar, e o que fazer agora.
+
+TUDO É DERIVADO. A manchete, a loja citada nela, o multiplicador, a loja que
+ganha a borda acesa e as ações listadas saem da consulta (apps/parque/executivo.py).
+Uma frase fixa mentiria no dia em que o parque melhorasse — por isso são quatro
+moldes com regra de escolha, e cada ação só aparece quando a condição dela é
+verdade.
+
+O TREEMAP é desenhado no navegador porque o algoritmo squarified precisa MEDIR a
+caixa para decidir a forma dos retângulos; o servidor manda só os números
+(`lojas_js`). Em tela estreita a caixa fica em pé e o corpo do texto diminui —
+o algoritmo é o mesmo, porque em pilha se perde a comparação de área, que é o
+que o treemap tem de melhor.
+
+Tela de LEITURA: nada aqui altera dado.
+
+Acesso: superusuário ou grupo Gerente / Supervisor / RH / Visão total
+(executivo.py:GRUPOS_EXECUTIVO).
+{% endcomment %}
+
+{% block extrastyle %}{{ block.super }}
+<style>
+  /* Prefixo .exx-. Cor só por papel `--md-*` do contrato; a única coisa nova
+     aqui é a RAMPA do treemap, porque magnitude pede uma cor em vários passos
+     e o sistema não tem essa escala pronta. */
+  #content {
+    --exx-serie: var(--md-primary);
+    --exx-trilha: var(--md-surface-variant);
+    /* rampa de concentração: uma cor, claro → escuro, cada passo com a tinta
+       que funciona em cima dele */
+    --exx-t1: #f7e6e4; --exx-i1: #171d19;
+    --exx-t2: #efcac6; --exx-i2: #171d19;
+    --exx-t3: #e2a19b; --exx-i3: #171d19;
+    --exx-t4: #cd6259; --exx-i4: #ffffff;
+    --exx-t5: #ba1a1a; --exx-i5: #ffffff;
+    /* colunas dos gráficos: as mesmas em todos, para as barras começarem no
+       mesmo x e os números baterem na mesma coluna */
+    --exx-rot: 132px;
+    --exx-val: 112px;
+  }
+  .dark #content {
+    /* no escuro a rampa inverte o sentido (escuro → claro sobre preto) e a
+       série fecha um passo: `--md-primary` do escuro tem L 0.86, claro demais
+       para preenchimento de barra */
+    --exx-serie: #35a06a;
+    --exx-t1: #1c1614; --exx-i1: #e6ede8;
+    --exx-t2: #2e1a17; --exx-i2: #e6ede8;
+    --exx-t3: #4d211c; --exx-i3: #f2d8d5;
+    --exx-t4: #8c3830; --exx-i4: #ffe5e2;
+    --exx-t5: #ffb4ab; --exx-i5: #5c0007;
+  }
+
+  /* ---------- BORDA VIVA ----------
+     Uma luz correndo pela moldura: conic-gradient girando, recortado em anel
+     por duas máscaras que se excluem. O ângulo é uma propriedade REGISTRADA —
+     sem `@property` o navegador não interpola um `<angle>` e a animação
+     simplesmente não acontece. Só recebe borda viva o que EXIGE ação. */
+  @property --exx-giro { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+  .exx-viva { position: relative; }
+  .exx-viva::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit;
+    padding: 1.5px; pointer-events: none; z-index: 3;
+    background: conic-gradient(from var(--exx-giro),
+      transparent 0deg 232deg, var(--exx-cor, var(--md-st-crit)) 300deg, transparent 360deg);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    animation: exxGirar 4.2s linear infinite;
+  }
+  @keyframes exxGirar { to { --exx-giro: 360deg; } }
+  .exx-viva--ok { --exx-cor: var(--exx-serie); }
+
+  /* ---------- manchete ---------- */
+  .exx-lei {
+    display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px;
+    background: var(--md-secondary-container); color: var(--md-on-secondary-container);
+    border-radius: var(--md-shape-lg); padding: 20px; margin-bottom: 12px;
+  }
+  .exx-lei__ic {
+    width: 44px; height: 44px; border-radius: var(--md-shape-full);
+    background: var(--md-surface); color: var(--exx-serie);
+    display: grid; place-items: center;
+  }
+  .exx-lei__ic svg { width: 24px; height: 24px; }
+  .exx-lei h2 {
+    margin: 0 0 8px !important; font: 400 22px/29px var(--md-font) !important;
+    letter-spacing: 0 !important; color: inherit !important; text-wrap: balance;
+  }
+  .exx-lei ul { margin: 0; padding-left: 18px; }
+  .exx-lei li { font: 400 14px/21px var(--md-font); margin-bottom: 2px; }
+
+  /* ---------- cartões e KPI ---------- */
+  /* `stretch` com o conteúdo distribuído: só esticar deixa vão morto embaixo
+     do cartão curto, e só encolher deixa a linha com os cartões terminando em
+     alturas diferentes. A saída é esticar E deixar o conteúdo do cartão curto
+     ocupar o que sobra. */
+  .exx-grade { display: grid; gap: 12px; align-items: stretch;
+               grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); }
+  .exx-card {
+    display: flex; flex-direction: column;
+    background: var(--md-surface-container-low, var(--md-surface));
+    border: 1px solid var(--md-outline-variant);
+    border-radius: var(--md-shape-lg); padding: 20px;
+  }
+  .exx-card > .exx-acoes, .exx-card > .exx-duplo, .exx-card > .exx-pend { flex: 1 1 auto; }
+  .exx-acoes { justify-content: space-between; }
+  .exx-card--largo { grid-column: 1 / -1; }
+  .exx-card--dois { grid-column: auto; }
+  @media (min-width: 900px) { .exx-card--dois { grid-column: span 2; } }
+  .exx-card h2 {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin: 0 0 4px !important; font: 500 16px/24px var(--md-font) !important;
+    letter-spacing: .15px !important; color: var(--md-on-surface) !important;
+  }
+  .exx-card .exx-sub {
+    color: var(--md-on-surface-variant); font: 400 13px/18px var(--md-font); margin: 0 0 16px;
+  }
+
+  .exx-kpis { display: grid; gap: 8px; margin-bottom: 12px;
+              grid-template-columns: repeat(auto-fit, minmax(min(158px, 100%), 1fr)); }
+  @media (min-width: 900px) {
+    .exx-kpis { gap: 12px; grid-template-columns: repeat(auto-fit, minmax(206px, 1fr)); }
+  }
+  .exx-kpi {
+    background: var(--md-surface-container-low, var(--md-surface));
+    border: 1px solid var(--md-outline-variant);
+    border-radius: var(--md-shape-lg); padding: 20px; display: flex; flex-direction: column;
+  }
+  .exx-kpi__r { font: 500 11px/16px var(--md-font); letter-spacing: .8px;
+                text-transform: uppercase; color: var(--md-on-surface-variant); margin: 0 0 6px; }
+  .exx-kpi__n { font: 400 34px/38px var(--md-font); letter-spacing: -.5px;
+                font-variant-numeric: tabular-nums; }
+  .exx-kpi__n small { font: 500 15px/20px var(--md-font); color: var(--md-on-surface-variant); }
+  .exx-kpi__d { margin: 4px 0 0; color: var(--md-on-surface-variant);
+                font: 400 12.5px/17px var(--md-font); min-height: 34px; }
+  .exx-kpi--alerta { border-color: var(--md-st-crit); }
+  .exx-kpi--alerta .exx-kpi__n { color: var(--md-st-crit); }
+  /* LINHA DUPLA. O cartão em alerta tinha borda vermelha PRÓPRIA e, 1,5px por
+     dentro dela, o anel da borda viva — dois retângulos vermelhos quase
+     coincidentes, que a 100% de zoom leem como caixa torta. Quando o anel
+     existe, ele é a borda: a estática volta a ser neutra. */
+  .exx-kpi--alerta.exx-viva { border-color: var(--md-outline-variant); }
+
+  /* ---------- barras: uma série, trilha de fundo, marca do esperado ---------- */
+  .exx-barras, .exx-estados { display: grid; gap: 8px; }
+  /* A MESMA grade nos dois gráficos, com a célula de ícone presente nos dois
+     (vazia no de críticas). Com grades diferentes, o gráfico de estado gastava
+     24+12px na coluna do ícone e o outro não: as barras saíam com comprimentos
+     diferentes (302px contra 267px). Lado a lado isso quebra a comparação, que
+     é justamente o que os dois existem para permitir. */
+  .exx-linha, .exx-estado {
+    display: grid; gap: 12px; align-items: center; min-height: 28px;
+    grid-template-columns: 24px minmax(84px, var(--exx-rot)) minmax(0, 1fr) var(--exx-val);
+  }
+  .exx-vazio { width: 24px; }
+  .exx-nome { font: 400 13.5px/18px var(--md-font); color: var(--md-on-surface);
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .exx-trilha { position: relative; height: 20px; border-radius: var(--md-shape-xs);
+                background: var(--exx-trilha); }
+  .exx-barra {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--exx-serie); border-radius: 0 var(--md-shape-xs) var(--md-shape-xs) 0;
+    animation: exxCresce 700ms cubic-bezier(.05,.7,.1,1) both;
+  }
+  @keyframes exxCresce { from { width: 0 !important; } }
+  .exx-barra--crit { background: var(--md-st-crit); }
+  /* SEM MARCA E SEM MULTIPLICADOR.
+     A versão anterior punha um traço no meio da barra (o "esperado") e um
+     `3,9×` ao lado do número. Duas abstrações empilhadas sem uma palavra
+     explicando: o dono leu e perguntou "que porra é essa?" — e a resposta
+     honesta é que ninguém deveria precisar de legenda para ler um número.
+     Agora o comparativo vem em português, e só na linha em que ele diz algo. */
+  .exx-val { font: 500 13.5px/18px var(--md-font); font-variant-numeric: tabular-nums;
+             text-align: right; white-space: nowrap; }
+  .exx-val i { font-style: normal; font-weight: 400; font-size: 12px;
+               color: var(--md-on-surface-variant); }
+
+  .exx-ic { width: 24px; height: 24px; border-radius: var(--md-shape-full);
+            display: grid; place-items: center; }
+  .exx-ic svg { width: 15px; height: 15px; }
+  .exx-crit .exx-ic { background: var(--md-st-crit-cont); color: var(--md-st-crit); }
+  .exx-warn .exx-ic { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+  .exx-ok .exx-ic { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+  .exx-crit .exx-barra { background: var(--md-st-crit); }
+  .exx-warn .exx-barra { background: var(--md-st-warn); }
+  .exx-ok .exx-barra { background: var(--exx-serie); }
+
+  .exx-duplo { display: grid; gap: 20px 24px;
+               grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); }
+  .exx-duplo h3 { margin: 0 0 4px; font: 500 14px/20px var(--md-font); color: var(--md-on-surface); }
+  .exx-duplo p.exx-mini { margin: 0 0 16px; color: var(--md-on-surface-variant);
+                          font: 400 12.5px/17px var(--md-font); }
+
+  /* ---------- treemap ---------- */
+  .exx-tm { position: relative; width: 100%; aspect-ratio: 16 / 9;
+            max-height: 300px; min-height: 220px;
+            border-radius: var(--md-shape-md); overflow: hidden; background: var(--exx-trilha); }
+  .exx-tm__c {
+    position: absolute; overflow: hidden; cursor: pointer;
+    background: var(--c-bg); color: var(--c-ink);
+    border-radius: var(--md-shape-xs); padding: 12px 16px;
+    display: flex; flex-direction: column; justify-content: flex-start; gap: 8px;
+    box-shadow: inset 0 0 0 1px var(--md-outline-variant);
+    animation: exxEntra 520ms cubic-bezier(.05,.7,.1,1) both;
+    animation-delay: calc(var(--i) * 70ms);
+    transition: filter 200ms linear; text-decoration: none;
+  }
+  @keyframes exxEntra { from { opacity: 0; transform: scale(.9); } }
+  .exx-tm__c:hover { filter: brightness(1.06); z-index: 2; }
+  .exx-tm__n { font: 600 15px/20px var(--md-font); }
+  .exx-tm__n span { display: block; font: 400 11.5px/16px var(--md-font); opacity: .8; }
+  .exx-tm__v { display: flex; align-items: baseline; gap: 8px; }
+  .exx-tm__v b { font: 400 26px/28px var(--md-font); font-variant-numeric: tabular-nums; }
+  .exx-tm__v i { font-style: normal; font: 400 11.5px/16px var(--md-font); opacity: .85; }
+  .exx-tm__c--pequena .exx-tm__n span,
+  .exx-tm__c--pequena .exx-tm__v i { display: none; }
+  .exx-tm__c--baixa { flex-direction: row; align-items: center; justify-content: space-between; }
+  .exx-tm__c--baixa .exx-tm__n span { display: none; }
+  .exx-escala { display: flex; align-items: center; gap: 8px; margin: 16px 0 0; flex-wrap: wrap;
+                font: 400 12px/17px var(--md-font); color: var(--md-on-surface-variant); }
+  .exx-escala__r { display: flex; gap: 2px; }
+  .exx-escala__r i { width: 22px; height: 12px; border-radius: 2px; }
+
+  /* ---------- ações ---------- */
+  .exx-acoes { display: grid; gap: 8px; }
+  .exx-acao {
+    display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 16px; align-items: center;
+    padding: 12px 16px; border: 1px solid var(--md-outline-variant);
+    border-radius: var(--md-shape-md); background: var(--md-surface);
+    color: var(--md-on-surface) !important; text-decoration: none !important;
+    transition: border-color 150ms linear, transform 250ms cubic-bezier(.05,.7,.1,1);
+  }
+  .exx-acao:hover { border-color: var(--exx-serie); transform: translateX(3px); }
+  .exx-acao__n { font: 400 26px/28px var(--md-font); color: var(--exx-serie);
+                 font-variant-numeric: tabular-nums; text-align: right; }
+  .exx-acao__t { font: 500 14px/20px var(--md-font); display: block; }
+  .exx-acao__d { font: 400 12.5px/17px var(--md-font); color: var(--md-on-surface-variant); }
+
+  /* ---------- o que falta: barra de preenchimento ---------- */
+  .exx-barra--falta { background: var(--md-st-warn); }
+  /* rótulo mais largo aqui: "Valor e data de compra" não cabe em 132px */
+  .exx-card--falta { --exx-rot: 190px; border-style: dashed; background: transparent; }
+  .exx-nota {
+    margin: 2px 0 10px calc(24px + var(--exx-rot) + 24px);
+    color: var(--md-on-surface-variant); font: 400 12.5px/18px var(--md-font);
+  }
+  @media (max-width: 600px) { .exx-nota { margin-left: 0; } }
+
+  /* ---------- pendências ---------- */
+  .exx-card--falta { border-style: dashed; background: transparent; }
+  .exx-selo { display: inline-flex; align-items: center; height: 22px; padding: 0 8px;
+              border-radius: var(--md-shape-sm); background: var(--md-st-warn-cont);
+              color: var(--md-st-warn); font: 500 11.5px/16px var(--md-font); flex: none; }
+  .exx-pend { display: grid; }
+  .exx-pend__l { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 16px;
+                 align-items: start; padding: 12px 0; border-top: 1px solid var(--md-outline-variant); }
+  .exx-pend__l:first-child { border-top: 0; padding-top: 0; }
+  .exx-pend__n { font: 400 26px/28px var(--md-font); color: var(--md-st-warn);
+                 text-align: right; font-variant-numeric: tabular-nums; }
+  .exx-pend__n span { display: block; font: 400 11px/15px var(--md-font);
+                      color: var(--md-on-surface-variant); }
+  .exx-pend__t { font: 500 14px/20px var(--md-font); display: block; margin-bottom: 2px; }
+  .exx-pend__d { font: 400 12.5px/18px var(--md-font); color: var(--md-on-surface-variant); }
+  .exx-pend__d code { font-family: var(--md-font-mono); font-size: .92em;
+                      background: var(--md-surface-container-high); padding: 1px 5px;
+                      border-radius: var(--md-shape-xs); }
+
+  /* ---------- celular ---------- */
+  @media (max-width: 600px) {
+    #content { --exx-rot: 96px; --exx-val: 96px; }
+    .exx-card, .exx-kpi, .exx-lei { padding: 16px; }
+    .exx-kpi__n { font: 400 28px/32px var(--md-font); }
+    .exx-kpi__d { min-height: 0; font: 400 11.5px/16px var(--md-font); }
+    .exx-lei { grid-template-columns: 36px minmax(0, 1fr); gap: 12px; }
+    .exx-lei__ic { width: 36px; height: 36px; }
+    .exx-lei__ic svg { width: 20px; height: 20px; }
+    .exx-lei h2 { font: 400 19px/25px var(--md-font) !important; }
+    /* a caixa fica EM PÉ: com 16:9 numa largura de 350px os seis retângulos
+       saem com 90px de altura e o nome quebra em duas linhas */
+    .exx-tm { aspect-ratio: 3 / 4; min-height: 400px; max-height: 520px; }
+    .exx-tm__c { padding: 12px; }
+    .exx-tm__n { font: 600 13px/17px var(--md-font); }
+    .exx-tm__v b { font: 400 21px/23px var(--md-font); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .exx-viva::after, .exx-barra, .exx-tm__c {
+      animation-duration: 1ms !important; animation-delay: 0ms !important;
+      animation-iteration-count: 1 !important;
+    }
+    .exx-viva::after { animation: none; background: var(--exx-cor, var(--md-st-crit)); }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="exx">
+
+  {# ---------- 1. a manchete: a tela conclui ---------- #}
+  {% comment %}
+  A BORDA VIVA TEM A COR DO CARTAO QUE ELA CONTORNA. Estava vermelha em cima de
+  um cartao verde: luz de alarme correndo em volta de uma mensagem que nao e'
+  alarme le como defeito de tela. Vermelho fica so' no tom 'crit' — e no KPI de
+  maquinas criticas, que tem a borda vermelha de verdade.
+  {% endcomment %}
+  <div class="exx-lei exx-viva{% if leitura.tom != 'crit' %} exx-viva--ok{% endif %}">
+    <span class="exx-lei__ic" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0-4 10.5V17h8v-3.5A6 6 0 0 0 12 3z"/><path d="M10 20h4M11 17v3M13 17v3"/></svg>
+    </span>
+    <div>
+      <h2>{{ leitura.titulo }}</h2>
+      <ul>{% for l in leitura.linhas %}<li>{{ l|safe }}</li>{% endfor %}</ul>
+    </div>
+  </div>
+
+  {# ---------- 2. a rede numa olhada, e o que fazer ---------- #}
+  <div class="exx-grade" style="margin-bottom: 12px">
+    <div class="exx-card exx-card--dois">
+      <h2>A rede numa olhada</h2>
+      <p class="exx-sub">Cada retângulo é uma loja: o <b>tamanho</b> é o parque dela, o
+        <b>tom</b> é a concentração de críticas por posto.</p>
+      <div class="exx-tm" id="exx-tm" data-foco="{{ leitura.loja_foco|default:'' }}"></div>
+      <p class="exx-escala">
+        <span>menos falha por posto</span>
+        <span class="exx-escala__r">
+          <i style="background:var(--exx-t1)"></i><i style="background:var(--exx-t2)"></i>
+          <i style="background:var(--exx-t3)"></i><i style="background:var(--exx-t4)"></i>
+          <i style="background:var(--exx-t5)"></i>
+        </span>
+        <span>mais · área = postos</span>
+      </p>
+    </div>
+
+    <div class="exx-card">
+      <h2>O que fazer agora</h2>
+      <p class="exx-sub">Só aparece o que é verdade agora.</p>
+      <div class="exx-acoes">
+        {% for a in acoes %}
+          <a class="exx-acao" href="{{ a.url }}">
+            <span class="exx-acao__n">{{ a.n }}</span>
+            <span><span class="exx-acao__t">{{ a.titulo }}</span>
+              <span class="exx-acao__d">{{ a.texto }}</span></span>
+          </a>
+        {% empty %}
+          <p class="exx-sub" style="margin:0">Nada exigindo decisão agora.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {# ---------- 3. os números ---------- #}
+  <div class="exx-kpis">
+    <div class="exx-kpi">
+      <p class="exx-kpi__r">Ativos sob gestão</p>
+      <div class="exx-kpi__n">{{ total_ativos }}</div>
+      <p class="exx-kpi__d">{{ n_computadores }} computadores e {{ n_notebooks }} notebooks</p>
+    </div>
+    <div class="exx-kpi">
+      <p class="exx-kpi__r">Ocupação dos postos</p>
+      <div class="exx-kpi__n">{{ pc_ocupacao }}<small>%</small></div>
+      <p class="exx-kpi__d">{{ ocupados }} de {{ total_postos }} postos com máquina</p>
+    </div>
+    <div class="exx-kpi{% if total_crit %} exx-kpi--alerta exx-viva{% endif %}">
+      <p class="exx-kpi__r">Máquinas críticas</p>
+      <div class="exx-kpi__n">{{ total_crit }}</div>
+      <p class="exx-kpi__d">
+        {% if leitura.loja_foco %}concentradas em {{ leitura.loja_foco }}{% else %}índice na faixa crítica{% endif %}</p>
+    </div>
+    <div class="exx-kpi">
+      <p class="exx-kpi__r">Decisões esperando</p>
+      <div class="exx-kpi__n">{{ orc_pend }}</div>
+      <p class="exx-kpi__d">Orçamentos pendentes de aprovação</p>
+    </div>
+    <div class="exx-kpi">
+      <p class="exx-kpi__r">Índice com leitura real</p>
+      <div class="exx-kpi__n">{{ pc_cobertura }}<small>%</small></div>
+      <p class="exx-kpi__d">{{ tel_vivos }} de {{ total_ativos }} mandam telemetria</p>
+    </div>
+  </div>
+
+  {# ---------- 4. os dois gráficos, num cartão ---------- #}
+  <div class="exx-grade">
+    <div class="exx-card exx-card--largo">
+      <h2>Estado do parque</h2>
+      <p class="exx-sub">Os {{ ocupados }} postos ocupados pelo índice de desempenho.
+        O nome vem escrito ao lado — a cor só reforça.</p>
+      <div class="exx-estados">
+        {% for e in estado %}
+          <div class="exx-estado exx-{{ e.cor }}">
+            <span class="exx-ic" aria-hidden="true">
+              {% if e.cor == 'crit' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3z"/><path d="M12 9v4M12 17h.01"/></svg>
+              {% elif e.cor == 'warn' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              {% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>{% endif %}
+            </span>
+            <span class="exx-nome">{{ e.nome }}</span>
+            <span class="exx-trilha"><span class="exx-barra" style="width: {{ e.pc }}%"></span></span>
+            <span class="exx-val">{{ e.n }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# ---------- 5. o que o sistema ainda não mede ---------- #}
+    {% comment %}
+    Antes eram três blocos de texto com nome de campo de banco na cara de quem
+    lê. Mesma informação, agora na MESMA gramática do resto da tela: a barra
+    diz quanto está preenchido, o número diz de quanto, e sobra uma linha para
+    dizer por que importa.
+    {% endcomment %}
+    <div class="exx-card exx-card--largo exx-card--falta">
+      <h2>O que o sistema ainda não mede <span class="exx-selo">falta dado</span></h2>
+      <p class="exx-sub">A barra é o quanto já está preenchido. Os campos existem no banco —
+        o que falta é caminho para preencher, não migração.</p>
+      <div class="exx-barras">
+        {% for p in pendencias %}
+          <div class="exx-linha">
+            <span class="exx-vazio" aria-hidden="true"></span>
+            <span class="exx-nome" title="{{ p.campo }}">{{ p.titulo }}</span>
+            <span class="exx-trilha">
+              <span class="exx-barra exx-barra--falta" style="width: {{ p.pc }}%"></span>
+            </span>
+            <span class="exx-val">{{ p.n }} <i>de {{ p.de }}</i></span>
+          </div>
+          <p class="exx-nota">{{ p.nota }}</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{{ lojas_js|json_script:"exx-dados" }}
+
+<script>
+(function () {
+  "use strict";
+  var alvo = document.getElementById("exx-tm");
+  var no = document.getElementById("exx-dados");
+  if (!alvo || !no) return;
+  var LOJAS = JSON.parse(no.textContent || "[]");
+  if (!LOJAS.length) return;
+  var FOCO = alvo.getAttribute("data-foco") || "";
+
+  // ==========================================================================
+  // TREEMAP SQUARIFIED (Bruls, Huizing & van Wijk, 1999).
+  //
+  // Não é grade fingindo área: o algoritmo empilha as lojas em faixas e fecha a
+  // faixa quando a razão de aspecto do pior retângulo começa a PIORAR. É o que
+  // faz os retângulos ficarem próximos do quadrado em vez de tiras finas — e o
+  // que torna honesta a comparação de área entre as lojas.
+  // ==========================================================================
+  function squarify(itens, x, y, l, a) {
+    var saida = [];
+    var fila = itens.slice().sort(function (p, q) { return q.v - p.v; });
+    var total = fila.reduce(function (s, o) { return s + o.v; }, 0);
+
+    function pior(faixa, lado, escala) {
+      var soma = faixa.reduce(function (s, o) { return s + o.v; }, 0) * escala;
+      var mx = Math.max.apply(null, faixa.map(function (o) { return o.v * escala; }));
+      var mn = Math.min.apply(null, faixa.map(function (o) { return o.v * escala; }));
+      if (!soma || !lado) return Infinity;
+      return Math.max(lado * lado * mx / (soma * soma), soma * soma / (lado * lado * mn));
+    }
+
+    function passo(fila, x, y, l, a, total) {
+      if (!fila.length || total <= 0) return;
+      var vertical = l >= a;
+      var lado = vertical ? a : l;
+      var escala = (l * a) / total;
+      var faixa = [];
+      while (fila.length) {
+        var tenta = faixa.concat([fila[0]]);
+        if (faixa.length && pior(tenta, lado, escala) > pior(faixa, lado, escala)) break;
+        faixa.push(fila.shift());
+      }
+      var somaF = faixa.reduce(function (s, o) { return s + o.v; }, 0);
+      var espessura = (somaF * escala) / lado;
+      var desloc = 0;
+      faixa.forEach(function (o) {
+        var comp = (o.v * escala) / espessura;
+        if (vertical) saida.push({ o: o, x: x, y: y + desloc, l: espessura, a: comp });
+        else saida.push({ o: o, x: x + desloc, y: y, l: comp, a: espessura });
+        desloc += comp;
+      });
+      if (vertical) passo(fila, x + espessura, y, l - espessura, a, total - somaF);
+      else passo(fila, x, y + espessura, l, a - espessura, total - somaF);
+    }
+    passo(fila, x, y, l, a, total);
+    return saida;
+  }
+
+  // Passo da rampa por FAIXA FIXA, não por ranking: se fosse por posição, um
+  // filtro que tira uma loja repintaria as sobreviventes — e a cor tem de
+  // seguir a entidade, não a colocação dela.
+  function passoCor(c) {
+    if (c <= 0) return 1;
+    if (c < 0.05) return 2;
+    if (c < 0.10) return 3;
+    if (c < 0.20) return 4;
+    return 5;
+  }
+
+  var itens = LOJAS.map(function (o) {
+    return { n: o.nome, v: o.postos, c: o.criticas, k: passoCor(o.conc),
+             u: o.url, d: o.dica };
+  });
+
+  function pintar(cx) {
+    return cx.map(function (r, i) {
+      var o = r.o;
+      // Cada loja leva ao SEU destino. Aqui estava uma URL fixa que nem
+      // existia (/parque/mapa-situacao/critico/ cai em 404): todo retângulo
+      // desta tela era link morto.
+      var url = o.u || "/parque/mapa-criticos/";
+      return '<a class="exx-tm__c' + (o.n === FOCO ? " exx-viva" : "") + '" href="' + url + '"' +
+        ' style="left:' + r.x + "%;top:" + r.y + "%;width:" + r.l + "%;height:" + r.a + "%;" +
+        "--c-bg:var(--exx-t" + o.k + ");--c-ink:var(--exx-i" + o.k + ");--i:" + i + '"' +
+        ' title="' + o.n + ": " + o.v + " postos · " + o.c + " crítica" +
+        (o.c === 1 ? "" : "s") + (o.d ? " — " + o.d : "") + '">' +
+        '<span class="exx-tm__n">' + o.n + "<span>" + o.v + " postos</span></span>" +
+        '<span class="exx-tm__v"><b>' + o.c + "</b><i>crítica" + (o.c === 1 ? "" : "s") + "</i></span>" +
+        "</a>";
+    }).join("");
+  }
+
+  // A forma de cada célula sai do algoritmo, então quem decide o arranjo do
+  // texto é a MEDIDA depois de montar — não uma classe escolhida a dedo.
+  function ajustar() {
+    var largo = alvo.getBoundingClientRect().width;
+    alvo.querySelectorAll(".exx-tm__c").forEach(function (c) {
+      var r = c.getBoundingClientRect();
+      c.classList.toggle("exx-tm__c--baixa", r.height < 84);
+      c.classList.toggle("exx-tm__c--pequena", r.width < (largo < 520 ? 108 : 132) && r.height >= 84);
+    });
+  }
+
+  function montar() {
+    alvo.innerHTML = pintar(squarify(itens, 0, 0, 100, 100));
+    ajustar();
+  }
+  montar();
+
+  var relogio = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(relogio);
+    relogio = setTimeout(montar, 160);
+  });
+
+  // Os números sobem do zero: o olho segue o movimento e para no número.
+  if (!window.matchMedia || !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    setTimeout(function () {
+      document.querySelectorAll(".exx-kpi__n, .exx-acao__n").forEach(function (el) {
+        var m = (el.textContent || "").trim().match(/^(\d+)(.*)$/);
+        if (!m) return;
+        var alvoN = parseInt(m[1], 10);
+        if (!alvoN) return;
+        var small = el.querySelector("small");
+        var ini = null;
+        function passo(t) {
+          if (ini === null) ini = t;
+          var k = Math.min(1, (t - ini) / 900);
+          el.textContent = String(Math.round(alvoN * (1 - Math.pow(1 - k, 3))));
+          if (small) el.appendChild(small);
+          if (k < 1) requestAnimationFrame(passo);
+        }
+        el.textContent = "0";
+        if (small) el.appendChild(small);
+        requestAnimationFrame(passo);
+      });
+    }, 240);
+  }
+})();
+</script>
+{% endblock %}

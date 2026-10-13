@@ -1,0 +1,715 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+{% csrf_token %}
+<style>
+  /* ==========================================================================
+     mapa.html — prefixo .mpa-  ·  Material Design 3 (DESIGN-SYSTEM.md)
+
+     O que o M3 tirou desta tela: a moldura de tudo (setor, cartão, barra de
+     filtro), o filete colorido na lateral do cartão, o degradê do tile de
+     adicionar, o peso 700/800 e as maiúsculas fora de overline.
+     O que o M3 pôs: superfícies tonais (a elevação é TOM: no hover o cartão sobe
+     de surface-container-low para surface-container), chip tonal para status e
+     nota, state layer de 8% na interação e a escala tipográfica do Google.
+
+     A ILUSTRAÇÃO (ícone do dispositivo, fita de manutenção, monitor do zoom, o
+     caminhão) NÃO muda — é identidade do produto.
+
+     `.mpa-skin` mora na raiz `.mapa` só para subir a especificidade acima do
+     make-admin.css sem apagar nada lá.
+     ========================================================================== */
+
+  /* O CABEÇALHO-CARTÃO mudou de casa: virou padrão de tela e mora agora no
+     make-m3.css §19.22. Ficava aqui, no <style> do mapa, e a tela de Registros
+     — que usa o mesmo cabeçalho — abriu com o ícone em tamanho de página
+     inteira, porque não carrega este arquivo. Regra que serve duas telas não
+     pode morar na terceira. */
+
+  /* Botões M3: 40px, pílula, label-large, state layer no hover, SEM sombra.
+     Uma única ação FILLED por tela — aqui é "Novo setor" (.mpa-btn--brand). */
+  .mpa-btn, .mapa__voltar, .mapa__estoque {
+    position: relative; display: inline-flex; align-items: center; gap: 8px;
+    min-height: 40px; padding: 0 24px; box-sizing: border-box;
+    border: 0 !important; border-radius: var(--md-shape-full) !important;
+    background: transparent !important; color: var(--md-primary) !important;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    text-decoration: none; white-space: nowrap; box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  /* "← Voltar" é a alternativa: outlined. Os atalhos de estoque são text buttons. */
+  .mapa__voltar { border: 1px solid var(--md-outline) !important; }
+  .mpa-btn:hover, .mapa__voltar:hover, .mapa__estoque:hover {
+    background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important;
+    color: var(--md-primary) !important;
+  }
+  .mpa-btn:active, .mapa__voltar:active, .mapa__estoque:active {
+    background: color-mix(in srgb, var(--md-primary) 12%, transparent) !important;
+  }
+  .mpa-btn svg, .mapa__estoque svg { width: 18px; height: 18px; flex: none; }
+  .mpa-btn--brand {
+    background: var(--md-action) !important; color: var(--md-on-action) !important;
+  }
+  .mpa-btn--brand:hover, .mpa-btn--brand:active {
+    background: var(--md-action) !important; color: var(--md-on-action) !important;
+  }
+
+  /* Alternador Mapa / Tabela: segmented button do M3 — contorno único, pílula,
+     segmento ativo em secondary-container. Sem sombra e sem fundo por segmento. */
+  .mapa__view {
+    display: inline-flex; gap: 0; height: 40px; padding: 0; box-sizing: border-box;
+    border: 1px solid var(--md-outline); border-radius: var(--md-shape-full);
+    background: transparent; overflow: hidden;
+  }
+  .mapa__view-btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 0 20px;
+    border-radius: var(--md-shape-full);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    color: var(--md-on-surface); text-decoration: none; background: transparent;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .mapa__view-btn svg { width: 18px; height: 18px; }
+  .mapa__view-btn:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); color: var(--md-on-surface); }
+  .mapa__view-btn.is-active {
+    background: var(--md-secondary-container); color: var(--md-on-secondary-container);
+    box-shadow: none;
+  }
+
+  /* ---------- 2. Faixa de comando: filtro, busca e estados numa linha ---------- */
+  .mpa-fbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+    margin: 10px 0 16px;
+    padding: 12px 18px;
+    background: var(--md-surface);
+    border: 1px solid var(--md-outline-variant);
+    border-radius: var(--md-shape-lg);
+  }
+  /* A busca deixa de mandar na altura da faixa: ela era o campo de 56px que
+     obrigava toda a linha a ter 56px, com os chips de 32px sobrando espaço em
+     volta. Aqui ela cede a altura e ganha a largura elástica. */
+  .mpa-fbar .mapa__busca,
+  .mpa-fbar .mapa__busca input { min-height: 40px !important; height: 40px !important; }
+  .mpa-fbar .mapa__busca { flex: 1 1 220px; min-width: 180px; }
+
+  /* Título em title-large com a contagem ao lado — o número saiu do subtítulo
+     e do cartão de resumo, onde aparecia duas vezes. */
+  .mpa-title {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    font-size: 22px !important; line-height: 28px !important;
+  }
+  /* Só no mapa a contagem se lê "N no mapa". */
+  .mpa-head .mpa-count::after { content: " no mapa"; }
+
+  /* ---------- 3. Cores de desempenho ---------- */
+  /* A FAIXA `.mpa-leg` saiu do topo (repetia os chips do resumo sem número e
+     sem clique). As cinco CLASSES DE COR ficam: o diálogo "Como usar o mapa"
+     usa `.mpa-ajuda-dot .mpa-leg__i--*` para os pontinhos (linha ~633), e ele
+     lê `--mpa-lc`. Apagar isto apagaria as bolinhas da ajuda. */
+  .mpa-leg__i--otimo { --mpa-lc: var(--md-st-ok); }
+  .mpa-leg__i--bom { --mpa-lc: var(--md-st-attn); }
+  .mpa-leg__i--baixo { --mpa-lc: var(--md-st-warn); }
+  .mpa-leg__i--critico { --mpa-lc: var(--md-st-crit); }
+  .mpa-leg__i--sempc { --mpa-lc: var(--md-outline); }
+
+  /* ---------- 4. Planta e setores ---------- */
+  /* Setor = seção em superfície tonal, SEM borda. Fica um degrau abaixo do
+     cartão da baia (container-lowest → container-low), que é como o M3 aninha:
+     cada nível sobe um tom, nunca ganha linha. */
+  .mpa-skin .mapa__planta { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 16px; }
+  .mpa-skin .mapa-unidade__titulo {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    font: 500 16px/24px var(--md-font); letter-spacing: .15px;
+    color: var(--md-on-surface); margin: 4px 0 12px; padding: 0;
+    border: 0;
+  }
+  .mpa-skin .mapa-uni-ico { width: 24px; height: 24px; color: var(--md-on-surface-variant); }
+  .mpa-skin .mapa-unidade__setores { gap: 16px; }
+
+  .mpa-skin .mapa-setor {
+    background: var(--md-surface-container-lowest) !important;
+    border: 0 !important;
+    border-radius: var(--md-shape-lg) !important;
+    box-shadow: none !important;
+    padding: 16px;
+  }
+  /* A tinta de risco do setor sai: quem sinaliza é o chip de crítico. */
+  .mpa-skin .mapa-setor::before { display: none !important; }
+  .mpa-skin .mapa-setor__titulo {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    color: var(--md-on-surface); margin: 0 0 12px; padding: 0;
+    border: 0;
+  }
+  .mpa-skin .mapa-setor__titulo .mkpro-chip { width: 24px; height: 24px; }
+  .mpa-skin .mapa-setor__titulo .mkpro-chip svg { width: 14px; height: 14px; }
+  /* Contagem = chip tonal (nunca uma pílula saturada). */
+  .mpa-skin .mapa .mapa-setor__qtd, .mpa-skin .mapa-setor__qtd {
+    margin-left: auto; min-width: 0; height: 24px; padding: 0 8px;
+    display: inline-flex; align-items: center; border: 0;
+    border-radius: var(--md-shape-sm);
+    background: var(--md-surface-container-high) !important; color: var(--md-on-surface-variant) !important;
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; font-variant-numeric: tabular-nums;
+  }
+  /* Crítico = contêiner tonal de erro (como o error-container do M3). */
+  .mpa-skin .mapa-setor__crit {
+    order: 9; margin: 0 0 0 4px; height: 24px; padding: 0 8px;
+    display: inline-flex; align-items: center; gap: 4px;
+    border: 0; border-radius: var(--md-shape-sm); animation: none;
+    background: var(--md-st-crit-cont); color: var(--md-st-crit);
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; font-variant-numeric: tabular-nums;
+  }
+  .mpa-skin .mapa-setor__crit svg { width: 14px; height: 14px; }
+  /* "＋ Baia" / "＋ Setor" dentro do conteúdo: text button. */
+  .mpa-skin .mapa-setor__add, .mpa-skin .mapa-setor--notebooks .mapa-setor__add,
+  .mpa-skin .mapa-unidade__titulo .mapa__add-setor {
+    order: 10; min-height: 32px; padding: 0 12px;
+    display: inline-flex; align-items: center;
+    border-radius: var(--md-shape-full);
+    background: transparent !important; border: 0 !important;
+    color: var(--md-primary) !important;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+  }
+  .mpa-skin .mapa-unidade__titulo .mapa__add-setor { order: 10; margin-left: auto; }
+  .mpa-skin .mapa-setor__add:hover,
+  .mpa-skin .mapa-unidade__titulo .mapa__add-setor:hover {
+    background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important;
+    color: var(--md-primary) !important;
+  }
+
+  /* ---------- 5. Cartão da baia (M3 filled card) ---------- */
+  .mpa-skin .mapa-setor__baias, .mpa-skin .mapa-setor__baias--grid, .mpa-skin .nb-grid {
+    grid-template-columns: repeat(auto-fill, minmax(166px, 1fr)); gap: 8px;
+  }
+  .mpa-skin .mapa-setor__baias > .baia:not(.baia--add):not(.baia--sem_pc),
+  .mpa-skin .nb-grid > .nb-card:not(.nb-card--vazio) { min-height: 118px; }
+  .mpa-skin .baia--add__mais { min-height: 118px; }
+
+  /* Status: sempre o PAR de papéis (texto na cor, fundo no contêiner tonal).
+     `--cor` continua definida porque o make-admin.css histórico a lê. */
+  .mpa-skin .baia, .mpa-skin .nb-card {
+    --mpa-st: var(--md-on-surface-variant); --mpa-stc: var(--md-surface-container-high);
+    --cor: var(--md-outline);
+  }
+  .mpa-skin .baia--cl-otimo, .mpa-skin .nb-cl-otimo, .mpa-skin .nb--ativo {
+    --mpa-st: var(--md-st-ok); --mpa-stc: var(--md-st-ok-cont); --cor: var(--md-st-ok);
+  }
+  .mpa-skin .baia--cl-bom, .mpa-skin .nb-cl-bom {
+    --mpa-st: var(--md-st-attn); --mpa-stc: var(--md-st-attn-cont); --cor: var(--md-st-attn);
+  }
+  .mpa-skin .baia--cl-baixo, .mpa-skin .nb-cl-baixo {
+    --mpa-st: var(--md-st-warn); --mpa-stc: var(--md-st-warn-cont); --cor: var(--md-st-warn);
+  }
+  .mpa-skin .baia--cl-critico, .mpa-skin .nb-cl-critico, .mpa-skin .nb--defeito {
+    --mpa-st: var(--md-st-crit); --mpa-stc: var(--md-st-crit-cont); --cor: var(--md-st-crit);
+  }
+
+  /* Filled card: superfície tonal, raio 12, SEM borda e SEM sombra.
+     Hover = sobe um tom. É assim que o M3 faz elevação. */
+  .mpa-skin .baia:not(.baia--add), .mpa-skin .nb-card {
+    padding: 12px;
+    background: var(--md-surface-container-low) !important;
+    border: 0 !important;
+    border-radius: var(--md-shape-md) !important;
+    box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .mpa-skin .baia:not(.baia--add)::before, .mpa-skin .nb-card::before { display: none; }
+  .mpa-skin .baia:not(.baia--add):hover, .mpa-skin .nb-card:hover {
+    transform: none !important; box-shadow: none !important;
+    background: var(--md-surface-container) !important;
+  }
+  .mpa-skin .baia:focus-visible { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+
+  /* Faixa de sinal (dispositivo · telemetria · nota). */
+  .mpa-skin .baia__top { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; min-height: 20px; }
+  .mpa-skin .baia__icone { color: var(--md-on-surface-variant); font-size: 0; }
+  .mpa-skin .baia__icone svg { width: 18px; height: 18px; }
+  .mpa-skin .baia__tel { margin-left: auto; margin-right: 0; font-size: 0; }
+  .mpa-skin .baia__tel svg { width: 14px; height: 14px; }
+  .mpa-skin .baia__tel--ativo { color: var(--md-st-ok); }
+  .mpa-skin .baia__tel--inativo { color: var(--md-st-warn); }
+  .mpa-skin .baia__tel--sem { color: var(--md-outline-variant); }
+  /* Nota = chip tonal, não pílula sólida saturada. */
+  .mpa-skin .baia__score {
+    min-width: 0; height: 20px; padding: 0 8px;
+    display: inline-flex; align-items: center;
+    border: 0; border-radius: var(--md-shape-sm);
+    background: var(--mpa-stc) !important; color: var(--mpa-st) !important;
+    font: 500 11px/16px var(--md-font) !important; letter-spacing: .5px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Identificação: title-small no número, body-small na pessoa. */
+  .mpa-skin .baia__nome {
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    color: var(--md-on-surface) !important; font-variant-numeric: tabular-nums;
+  }
+  .mpa-skin .baia__ocupante {
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; margin-top: 2px;
+    color: var(--md-on-surface-variant) !important;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mpa-skin .baia__specs {
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; margin-top: 6px;
+    color: var(--md-on-surface-variant) !important;
+  }
+  /* Situação = CHIP TONAL (era filete de cor na borda + texto em maiúscula). */
+  .mpa-skin .baia__classe {
+    display: inline-flex; align-items: center; margin-top: 8px;
+    height: 20px; padding: 0 8px; border-radius: var(--md-shape-sm);
+    background: var(--mpa-stc); color: var(--mpa-st) !important;
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; text-transform: none;
+  }
+  .mpa-skin .baia__prev {
+    margin-top: 8px; font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+  }
+  .mpa-skin .baia__prev--em_dia { color: var(--md-st-ok); }
+  .mpa-skin .baia__prev--proxima { color: var(--md-st-warn); }
+  .mpa-skin .baia__prev--vencida, .mpa-skin .baia__prev--pendente { color: var(--md-st-crit); }
+
+  /* Periféricos: detalhe secundário — só ganha nitidez no hover/foco. */
+  .mpa-skin .baia__perifs { margin-top: 8px; gap: 8px; opacity: .5; transition: opacity var(--md-dur-short) var(--md-ease-standard); }
+  .mpa-skin .baia:hover .baia__perifs,
+  .mpa-skin .baia:focus-visible .baia__perifs,
+  .mpa-skin .nb-card:hover .baia__perifs { opacity: 1; }
+  .mpa-skin .baia__perif { color: var(--md-on-surface-variant); font-size: 0; }
+  .mpa-skin .baia__perif svg { width: 14px; height: 14px; }
+  .mpa-skin .baia__perif.is-defeito { color: var(--md-st-crit); }
+
+  /* Tooltip: flutua, então a sombra é legítima — superfície inversa do M3. */
+  .mpa-skin .baia__tip {
+    background: var(--md-inverse-surface); color: var(--md-inverse-on-surface);
+    border-radius: var(--md-shape-xs); padding: 8px 12px;
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px;
+    box-shadow: var(--md-elev-2);
+  }
+
+  /* Tile "＋ Adicionar": é um alvo selecionável, então o contorno é legítimo
+     (contrato §4) — mas tracejado fino, sem degradê e sem sombra. */
+  .mpa-skin .baia--add__mais {
+    border: 1px dashed var(--md-outline-variant); border-radius: var(--md-shape-md);
+    background: transparent; color: var(--md-on-surface-variant);
+    font-size: 28px; font-weight: 300;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .mpa-skin .baia--add:hover .baia--add__mais {
+    border-color: var(--md-primary); color: var(--md-primary);
+    background: color-mix(in srgb, var(--md-primary) 8%, transparent);
+    box-shadow: none; transform: none;
+  }
+  .mpa-skin .baia--add .baia__nome {
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; text-transform: uppercase;
+    color: var(--md-on-surface-variant) !important; text-align: center; margin-top: 8px;
+  }
+
+  /* Cartão de notebook da loja (mesma família; a ilustração fica intacta). */
+  .mpa-skin .nb-card { align-items: center; }
+  .mpa-skin .nb-card__nome { font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface); }
+  .mpa-skin .nb-card__user { font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); }
+  .mpa-skin .nb-badge {
+    margin-top: 8px; height: 20px; padding: 0 8px;
+    display: inline-flex; align-items: center; border: 0;
+    border-radius: var(--md-shape-sm);
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+  }
+  .mpa-skin .nb-badge svg { width: 14px; height: 14px; vertical-align: -3px; margin-right: 4px; }
+
+  /* ---------- 6. Diálogos (M3): surface-container-high, raio 28, nível 3 ---------- */
+  .baia-colab__card, .mov-modal__card {
+    background: var(--md-surface-container-high) !important;
+    border: 0 !important; border-radius: var(--md-shape-xl) !important;
+    box-shadow: var(--md-elev-3) !important;
+    padding: 24px !important;
+  }
+  .baia-colab__titulo, .mov-modal__title {
+    font: 400 24px/32px var(--md-font) !important; letter-spacing: 0 !important;
+    color: var(--md-on-surface) !important; margin: 0 0 16px !important;
+  }
+  .baia-confirm__msg, .mov-modal__msg {
+    font: 400 14px/20px var(--md-font) !important; letter-spacing: .25px !important;
+    color: var(--md-on-surface-variant) !important;
+  }
+  .baia-colab__fechar { color: var(--md-on-surface-variant) !important; }
+  .baia-colab__busca {
+    min-height: 56px; padding: 16px !important;
+    background: transparent !important;
+    border: 1px solid var(--md-outline) !important;
+    border-radius: var(--md-shape-xs) !important;
+    color: var(--md-on-surface) !important;
+    font: 400 16px/24px var(--md-font) !important; letter-spacing: .5px !important;
+  }
+  .baia-colab__item {
+    background: var(--md-surface-container-low) !important;
+    border: 0 !important; border-radius: var(--md-shape-md) !important;
+    padding: 12px 16px !important; color: var(--md-on-surface) !important;
+  }
+  .baia-colab__item:hover { background: var(--md-surface-container) !important; }
+  .baia-colab__item-nome { font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface); }
+  .baia-colab__item-cargo { font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); }
+  /* Ações do rodapé: cancelar como text button, confirmar como filled. */
+  .mov-btn {
+    min-height: 40px; padding: 0 24px !important;
+    border: 0 !important; border-radius: var(--md-shape-full) !important;
+    font: 500 14px/20px var(--md-font) !important; letter-spacing: .1px !important;
+    box-shadow: none !important; text-transform: none !important;
+  }
+  .mov-btn--cancel { background: transparent !important; color: var(--md-primary) !important; }
+  .mov-btn--cancel:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important; }
+  .mov-btn--ok { background: var(--md-action) !important; color: var(--md-on-action) !important; }
+
+  /* ---------- 7. Miudezas herdadas ---------- */
+  .mpa-crit { display: inline-flex; align-items: center; gap: 4px; }
+  .mpa-dlg-tt, .mpa-help-tt { display: flex; align-items: center; gap: 12px; }
+  .mpa-empty { margin: 24px 0; }
+  .mpa-ajuda-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: var(--md-shape-full);
+    background: var(--mpa-lc, var(--md-outline)); vertical-align: 1px; margin: 0 2px;
+  }
+
+  @media (max-width: 900px) {
+    .mpa-skin .mapa__planta { grid-template-columns: 1fr; }
+    .mpa-head { align-items: flex-start; }
+    /* CELULAR: o balão da baia saía pela esquerda da tela.
+       Medido em 375px: `.baia__tip` com até 347px de largura começando em
+       −28px (o balão é centralizado no cartão, e o cartão da primeira coluna
+       fica a 22px da borda). A primeira linha do balão ficava cortada ao
+       meio. Aqui ele para de crescer e passa a quebrar linha — 200px é a
+       largura do cartão da baia mais folga, então o balão nunca ultrapassa a
+       própria coluna. */
+    .mpa-skin .baia__tip {
+      max-width: 200px;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+  }
+</style>
+<div class="mapa mpa-skin" data-pode-mover="{% if pode_mover %}1{% else %}0{% endif %}"
+     {% if destinos %}data-transferir-url="{% url 'parque_transferir_entre_lojas' %}"{% if unica %} data-origem-unidade="{{ unica.name }}"{% endif %}{% endif %}>
+
+  <header class="mkpro-head mpa-head">
+    {% comment %}
+    Saíram daqui, por decisão do dono ("olha essa quantidade de texto, chega a
+    ser irritante"), três coisas que já eram ditas em outro lugar:
+
+    · o SOBRETÍTULO "Parque de máquinas · Mapa" repetia palavra por palavra o
+      caminho que a barra do topo já mostra;
+    · o SUBTÍTULO tinha "{{ total }} baias" (o mesmo número que os chips de
+      desempenho somam) e duas frases de tutorial reimpressas a cada
+      carregamento — elas já vivem no diálogo "Como usar o mapa" (atrás do "?"),
+      no `cursor: grab` da baia e no aviso do caminhão durante o arraste;
+    · o total virou um chip ao lado do título, onde ocupa a mesma linha.
+
+    Sobrou o que é informação: o nome da tela e a contagem.
+    {% endcomment %}
+    <span class="mpa-head__ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9V5a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v4"/><path d="M3 9h18l-1.2 10.1a1 1 0 0 1-1 .9H5.2a1 1 0 0 1-1-.9z"/><path d="M9 13h6"/></svg>
+    </span>
+    <div class="mpa-head__id">
+      <h1 class="mkpro-head__title mpa-title">
+        {% if unica %}{{ unica.name }}{% else %}{{ titulo|default:"Mapa completo — todas as lojas" }}{% endif %}
+        {% if total %}<span class="mpa-count mkpro-tabular">{{ total }}</span>{% endif %}
+      </h1>
+      {% comment %}
+      O subtítulo VOLTOU, mas mudou de função. O antigo era tutorial — "clique
+      numa máquina", "arraste para transferir" — reimpresso a cada carregamento
+      para quem usa a tela todo dia, e essas dicas já vivem no diálogo "Como
+      usar o mapa". Este diz o que a tela É, uma linha só.
+      {% endcomment %}
+      <p class="mkpro-head__sub mpa-lede">{% if unica %}Desempenho e estoque desta unidade em tempo real.{% else %}Acompanhe o desempenho e o estoque de toda a rede em tempo real.{% endif %}</p>
+    </div>
+    <div class="mkpro-head__actions">
+      <a data-mk-voltar class="mapa__voltar" href="{{ voltar_url }}">← {{ voltar_nome }}</a>
+      {% if view_tabela %}
+        <div class="mapa__view">
+          <a class="mapa__view-btn {% if view_atual == 'mapa' %}is-active{% endif %}" href="{{ view_mapa }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg> Mapa</a>
+          <a class="mapa__view-btn {% if view_atual == 'tabela' %}is-active{% endif %}" href="{{ view_tabela }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18"/></svg> Tabela</a>
+        </div>
+      {% endif %}
+      {% if unica and pode_ver_estoque %}
+        <a class="mapa__estoque" href="{% url 'admin:parque_computador_changelist' %}?status__exact=em_estoque"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg> Disponíveis</a>
+        <a class="mapa__estoque" href="{% url 'admin:parque_computador_changelist' %}?status__exact=desativado"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg> Desativados</a>
+      {% endif %}
+      {% if unica and pode_add_setor %}
+        <a class="mapa__add-setor mpa-btn mpa-btn--brand" href="{% url 'admin:parque_setor_add' %}?unidade={{ unica.id }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Novo setor</a>
+      {% endif %}
+    </div>
+  </header>
+
+  {% comment %}
+  FAIXA DE COMANDO — uma linha só.
+
+  Antes eram TRÊS faixas empilhadas: filtros+busca, o cartão de resumo (136px) e
+  uma legenda de desempenho. A legenda era pura repetição: mostrava os mesmos
+  cinco estados que os chips do resumo, mas SEM os números e SEM ser clicável
+  (os `data-fk` do filtro estão nos chips, não nela) — a tela de notebooks já
+  rodava sem ela. Saiu.
+
+  O resumo entra em `faixa=True`: sem cartão, sem rótulo de seção, sem a barra
+  de proporção, só os chips — que continuam sendo legenda, contador E filtro ao
+  mesmo tempo. A regra de negócio fica de pé: os cinco estados seguem com
+  contagem visível e seguem filtrando.
+
+  Devolve ~236px de altura ao mapa: de 2 fileiras de máquinas visíveis para 5.
+  {% endcomment %}
+  <div class="mpa-fbar">
+    {% if not unica %}{% include "parque/_filtros.html" with uni_lbl="Unidade" setor_lbl="Setor" com_data=True %}{% endif %}
+    {% include "parque/_mapa_cargo.html" %}
+    {% include "parque/_mapa_busca.html" %}
+    {% include "parque/_parque_resumo.html" with faixa=True %}
+  </div>
+
+  <div class="mapa__planta" id="mapa-planta">
+    {% for u in unidades_estrut %}
+      {% if not unica %}
+      <div class="mapa-unidade" data-unidade="{{ u.unidade.name }}">
+        <h2 class="mapa-unidade__titulo"><svg class="mapa-uni-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 9.5 2-5.5h15l2 5.5"/><path d="M4 9.5V20h16V9.5"/><path d="M9.5 20v-6h5v6"/></svg> {{ u.unidade.name }}
+          {% if pode_add_setor %}<a class="mapa__add-setor" href="{% url 'admin:parque_setor_add' %}?unidade={{ u.unidade.id }}">＋ Setor</a>{% endif %}
+        </h2>
+        <div class="mapa-unidade__setores">
+      {% endif %}
+
+      {% for g in u.setores %}
+        <section class="mapa-setor{% if g.qtd_criticas %} mapa-setor--risco{% endif %}" style="--crit:{{ g.nivel_critico|default:0 }}">
+          <header class="mapa-setor__titulo">{{ g.setor.nome }}
+            <span class="mapa-setor__qtd mkpro-tabular">{{ g.baias|length }}</span>
+            {% if g.qtd_criticas %}<span class="mapa-setor__crit mpa-crit mkpro-tabular" title="{{ g.qtd_criticas }} máquina(s) em estado crítico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/></svg>{{ g.qtd_criticas }} crítica{{ g.qtd_criticas|pluralize }}</span>{% endif %}
+            {% if pode_add_baia %}
+              <a class="mapa-setor__add" href="{% url 'admin:parque_baia_add' %}?setor={{ g.setor.id }}"
+                 title="Adicionar baia / computador neste setor">＋ Baia</a>
+            {% endif %}
+          </header>
+          <div class="mapa-setor__baias" data-setor="{{ g.setor.id }}" data-setor-nome="{{ g.setor.nome }}">
+            {% for b in g.baias %}{% include "parque/_baia.html" %}{% endfor %}
+            {% if pode_add_baia %}
+              <a class="baia baia--add" href="{% url 'admin:parque_baia_add' %}?setor={{ g.setor.id }}"
+                 title="Adicionar baia / computador">
+                <span class="baia--add__mais">＋</span>
+                <span class="baia__nome">Adicionar</span>
+              </a>
+            {% endif %}
+          </div>
+        </section>
+      {% empty %}
+        {% if unica %}
+          <div class="mkpro-empty mpa-empty">
+            <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 9.5 2-5.5h15l2 5.5"/><path d="M4 9.5V20h16V9.5"/><path d="M9.5 20v-6h5v6"/></svg></span>
+            <p class="mkpro-empty__title">Nenhum setor cadastrado nesta unidade</p>
+            <p class="mkpro-empty__hint">O mapa da loja é montado por setor. Crie o primeiro setor para começar a posicionar as baias.</p>
+            {% if pode_add_setor %}<a class="mapa__add-setor mpa-btn mpa-btn--brand" href="{% url 'admin:parque_setor_add' %}?unidade={{ unica.id }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Adicionar o primeiro setor</a>{% endif %}
+          </div>
+        {% endif %}
+      {% endfor %}
+
+      {% if u.notebooks %}
+        {# Notebooks da loja: clique no card abre o monitor (dispara o .baia oculto). #}
+        <section class="mapa-setor mapa-setor--notebooks">
+          <header class="mapa-setor__titulo">
+            <span class="mkpro-chip mkpro-chip--sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg></span>
+            Notebooks
+            <span class="mapa-setor__qtd mkpro-tabular">{{ u.notebooks|length }}</span>
+          </header>
+          <div class="nb-grid">
+            {% for b in u.notebooks %}
+              <div class="nb-card nb--{% if b.em_defeito %}defeito{% else %}ativo{% endif %}"
+                   role="button" tabindex="0" data-shelf-nb="{{ forloop.counter0 }}"
+                   {% comment %}
+                   `b.custom.marca` nao existe (Baia nao tem `custom`), e o
+                   Django resolve isso para vazio sem reclamar: a etiqueta do
+                   notebook na prateleira mostrava "?" para todo mundo, e a
+                   marca cadastrada nunca aparecia. Le do dispositivo.
+                   {% endcomment %}
+                   title="{{ b.colaborador|default:b.nome }}{% if b.dispositivo.marca %} · {{ b.dispositivo.marca }}{% endif %} — clique para ver">
+                <svg class="nb-laptop" viewBox="0 0 120 92" aria-hidden="true">
+                  <rect class="nb-screen-frame" x="20" y="6" width="80" height="54" rx="5"/>
+                  <rect class="nb-screen" x="25" y="11" width="70" height="44" rx="3"/>
+                  <text class="nb-marca" x="60" y="36">{{ b.dispositivo.marca|default:"?" }}</text>
+                  <polygon class="nb-base" points="10,60 110,60 118,74 2,74"/>
+                  <rect class="nb-touch" x="50" y="64" width="20" height="5" rx="2"/>
+                </svg>
+                <span class="nb-card__nome">{{ b.nome }}</span>
+                <span class="nb-card__user">{{ b.colaborador|default:"—" }}</span>
+                <span class="nb-badge nb-badge--notebook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>Notebook</span>
+              </div>
+            {% endfor %}
+          </div>
+          {# Notebooks ocultos (dados p/ o monitor — clique do card dispara estes) #}
+          <div class="shelf-baias" data-shelf-list="{{ u.unidade.id }}" hidden>
+            {% for b in u.notebooks %}{% include "parque/_baia.html" %}{% endfor %}
+          </div>
+        </section>
+      {% endif %}
+
+      {% if not unica %}
+        </div>{# .mapa-unidade__setores #}
+      </div>{# .mapa-unidade #}
+      {% endif %}
+    {% empty %}
+      <div class="mkpro-empty mpa-empty">
+        <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+        <p class="mkpro-empty__title">Nenhuma máquina nesta situação</p>
+        <p class="mkpro-empty__hint">Nada a tratar por aqui. Limpe os filtros acima ou troque de unidade para ver outras máquinas.</p>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% include "parque/_zoom.html" %}
+
+{# Modal: atribuir um colaborador à baia (mantém o computador) #}
+<div class="baia-colab" id="baia-colab" aria-hidden="true"
+     data-atribuir-url="{% url 'parque_atribuir_colaborador_baia' %}">
+  <div class="baia-colab__card">
+    <button type="button" class="baia-colab__fechar" id="baia-colab-fechar" aria-label="Fechar">×</button>
+    <h3 class="baia-colab__titulo mpa-dlg-tt"><span class="mkpro-chip mkpro-chip--sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>Atribuir colaborador à baia <span id="baia-colab-baia"></span></h3>
+    <input type="text" id="baia-colab-busca" class="baia-colab__busca" placeholder="Buscar colaborador…" autocomplete="off">
+    <div class="baia-colab__lista" id="baia-colab-lista">
+      {% for c in colaboradores %}
+        <button type="button" class="baia-colab__item" data-colab="{{ c.id }}"
+                data-busca="{{ c.nome|lower }} {{ c.cargo|lower }} {{ c.unidade|lower }}">
+          <span class="baia-colab__item-nome">{{ c.nome }}</span>
+          {% if c.cargo %}<span class="baia-colab__item-cargo">{{ c.cargo }}</span>{% endif %}
+        </button>
+      {% empty %}
+        <div class="mkpro-empty mkpro-empty--slim">
+          <span class="mkpro-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <p class="mkpro-empty__title">Nenhum colaborador cadastrado</p>
+          <p class="mkpro-empty__hint">Cadastre as pessoas da loja para poder atribuir uma baia a cada uma.</p>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{# Modal: alocar um COMPUTADOR do estoque à mesa #}
+<div class="baia-colab" id="baia-pc" aria-hidden="true"
+     data-alocar-url="{% url 'parque_alocar_computador_baia' %}">
+  <div class="baia-colab__card">
+    <button type="button" class="baia-colab__fechar" data-fechar-pc aria-label="Fechar">×</button>
+    <h3 class="baia-colab__titulo mpa-dlg-tt"><span class="mkpro-chip mkpro-chip--sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>Alocar computador à mesa <span id="baia-pc-baia"></span></h3>
+    <input type="text" id="baia-pc-busca" class="baia-colab__busca" placeholder="Buscar patrimônio / specs…" autocomplete="off">
+    <div class="baia-colab__lista" id="baia-pc-lista">
+      {% for c in computadores_estoque %}
+        <button type="button" class="baia-colab__item" data-comp="{{ c.id }}"
+                data-busca="{{ c.nome|lower }} {{ c.resumo|lower }}">
+          <span class="baia-colab__item-nome">{{ c.nome }}</span>
+          {% if c.resumo %}<span class="baia-colab__item-cargo">{{ c.resumo }}</span>{% endif %}
+        </button>
+      {% empty %}
+        <div class="mkpro-empty mkpro-empty--slim">
+          <span class="mkpro-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></span>
+          <p class="mkpro-empty__title">Nenhum computador no estoque</p>
+          <p class="mkpro-empty__hint">Só aparecem aqui as máquinas com status <b>Em estoque</b>. Libere uma máquina ou cadastre a nova.</p>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{# Modal: alocar um NOTEBOOK livre à mesa #}
+<div class="baia-colab" id="baia-nb" aria-hidden="true"
+     data-alocar-url="{% url 'parque_alocar_notebook_baia' %}">
+  <div class="baia-colab__card">
+    <button type="button" class="baia-colab__fechar" data-fechar-nb aria-label="Fechar">×</button>
+    <h3 class="baia-colab__titulo mpa-dlg-tt"><span class="mkpro-chip mkpro-chip--sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg></span>Alocar notebook à mesa <span id="baia-nb-baia"></span></h3>
+    <input type="text" id="baia-nb-busca" class="baia-colab__busca" placeholder="Buscar marca / modelo / specs…" autocomplete="off">
+    <div class="baia-colab__lista" id="baia-nb-lista">
+      {% for n in notebooks_disponiveis %}
+        <button type="button" class="baia-colab__item" data-nb="{{ n.id }}"
+                data-busca="{{ n.nome|lower }} {{ n.resumo|lower }}">
+          <span class="baia-colab__item-nome">{{ n.nome }}</span>
+          {% if n.resumo %}<span class="baia-colab__item-cargo">{{ n.resumo }}</span>{% endif %}
+        </button>
+      {% empty %}
+        <div class="mkpro-empty mkpro-empty--slim">
+          <span class="mkpro-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg></span>
+          <p class="mkpro-empty__title">Nenhum notebook livre no estoque</p>
+          <p class="mkpro-empty__hint">Todos os notebooks estão atribuídos. Retire um de um colaborador ou cadastre um novo.</p>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{# Modal de confirmação do sistema (substitui o confirm() nativo) #}
+<div class="baia-colab" id="baia-confirm" aria-hidden="true">
+  <div class="baia-colab__card baia-confirm__card">
+    <h3 class="baia-colab__titulo" id="baia-confirm-title">Confirmar</h3>
+    <p class="baia-confirm__msg" id="baia-confirm-msg"></p>
+    <div class="baia-confirm__acoes">
+      <button type="button" class="mov-btn mov-btn--cancel" id="baia-confirm-cancel">Cancelar</button>
+      <button type="button" class="mov-btn mov-btn--ok" id="baia-confirm-ok">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+{# Toast simples (mensagens de erro/sucesso sem alert() nativo) #}
+<div class="baia-toast" id="baia-toast" aria-hidden="true"></div>
+
+{# Modal de confirmação de movimentação (arrastar baia) #}
+<div class="mov-modal" id="mov-modal" aria-hidden="true">
+  <div class="mov-modal__card">
+    <h3 class="mov-modal__title" id="mov-modal-title">Mover baia</h3>
+    <p class="mov-modal__msg" id="mov-modal-msg"></p>
+    <div class="mov-modal__acoes">
+      <button type="button" class="mov-btn mov-btn--cancel" id="mov-cancel">Cancelar</button>
+      <button type="button" class="mov-btn mov-btn--ok" id="mov-ok">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+{# Modal de confirmação da troca de computadores entre baias #}
+<div class="mov-modal" id="trocar-modal" aria-hidden="true">
+  <div class="mov-modal__card">
+    <h3 class="mov-modal__title" id="trocar-title">Trocar computadores</h3>
+    <p class="mov-modal__msg" id="trocar-msg"></p>
+    <div class="mov-modal__acoes">
+      <button type="button" class="mov-btn mov-btn--cancel" id="trocar-cancel">Cancelar</button>
+      <button type="button" class="mov-btn mov-btn--ok" id="trocar-ok">Trocar</button>
+    </div>
+  </div>
+</div>
+
+{% if destinos %}
+  {% include "parque/_transfer_overlays.html" %}
+{% endif %}
+
+{# ---------- Ajuda da tela (abre por cima; orientações relativas ao mapa) ---------- #}
+<div class="baia-colab" id="mapa-ajuda" data-page-help aria-hidden="true">
+  <div class="baia-colab__card chd-adv__card">
+    <button type="button" class="baia-colab__fechar" id="mapa-ajuda-close" aria-label="Fechar">×</button>
+    <h3 class="baia-colab__titulo mpa-help-tt"><span class="mkpro-chip mkpro-chip--sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.1 9.5a3 3 0 0 1 5.8 1c0 2-2.9 2.3-2.9 4.2"/><path d="M12 18h.01"/></svg></span>Como usar o mapa</h3>
+    <div class="mapa-ajuda__txt">
+      <p><b>Cada card é uma mesa (baia).</b> O selo de situação e a nota mostram o desempenho da máquina —
+         <span class="mpa-ajuda-dot mpa-leg__i--otimo"></span> Ótimo,
+         <span class="mpa-ajuda-dot mpa-leg__i--bom"></span> Bom,
+         <span class="mpa-ajuda-dot mpa-leg__i--baixo"></span> Baixo,
+         <span class="mpa-ajuda-dot mpa-leg__i--critico"></span> Crítico,
+         <span class="mpa-ajuda-dot mpa-leg__i--sempc"></span> Sem PC.</p>
+      <p><b>Clique numa mesa</b> para ver a máquina e: abrir chamado de reparo, alocar
+         computador/notebook do estoque, ou atribuir/retirar o colaborador.</p>
+      <p><b>Enviar para outra loja:</b> arraste a mesa até o <b>caminhão</b> que aparece no rodapé.</p>
+      <p><b>Mover na mesma loja:</b> arraste a mesa e solte numa <b>vaga</b> de outro setor da mesma loja.</p>
+      <p><b>＋ Setor</b> e <b>＋ Baia</b> criam novos. No <b>celular</b>, segure a mesa e arraste.</p>
+      {% if not unica %}<p>Use os <b>filtros de loja</b> acima para ver só uma unidade por vez.</p>{% endif %}
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  // Abertura vem do "?" do topo (header). Aqui só ligamos fechar/backdrop/esc.
+  var modal = document.getElementById("mapa-ajuda");
+  if (!modal) return;
+  var fechar = document.getElementById("mapa-ajuda-close");
+  function hide() { modal.classList.remove("is-open"); }
+  if (fechar) fechar.addEventListener("click", hide);
+  modal.addEventListener("click", function (e) { if (e.target === modal) hide(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && modal.classList.contains("is-open")) hide();
+  });
+})();
+</script>
+{% include "parque/_setor_novo.html" %}
+
+{% endblock %}

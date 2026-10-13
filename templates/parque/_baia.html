@@ -1,0 +1,139 @@
+{% comment %}Estação de trabalho (baia) — o elemento mais repetido do sistema (dezenas por tela).
+Espera `b`. A ILUSTRAÇÃO (ícone do monitor/notebook, fita de manutenção) é identidade do
+produto e não muda; o que muda por tela é a superfície, o espaço e a tipografia.
+
+Hierarquia do card no Material 3 (cartão FILLED: superfície tonal, SEM borda e SEM
+sombra — o hover sobe um tom, que é como o M3 faz elevação):
+  1. faixa de sinal (dispositivo · telemetria) e a NOTA como chip tonal à direita;
+  2. IDENTIFICAÇÃO: o número em title-small, a pessoa em body-small/on-surface-variant;
+  3. specs em body-small; os periféricos só ganham nitidez no hover/foco;
+  4. a SITUAÇÃO (`.baia__classe`) é um CHIP TONAL — par --md-st-*-cont / --md-st-* —
+     como o M3 faz com error-container. Não há mais filete de cor na borda.
+
+O DOM aqui é deliberadamente estável: este parcial também é usado pelas telas de
+Preventiva, que não fazem parte deste redesign — por isso a pele mora no `<style>`
+de cada tela de mapa (.mpa-/.mpf-/.mps-/.tlp-/.mnb-) e a estrutura aqui não muda.
+
+TODOS os data-* deste botão são hooks de JS (arrastar, transferir, zoom do monitor,
+busca e filtros rápidos do mapa). Nenhum pode sair.{% endcomment %}
+<button type="button"
+  class="baia baia--{{ b.situacao_key }} baia--cl-{{ b.classe_desempenho|slugify }}{% if b.classe_desempenho == 'Crítico' and not b.esta_vazia %} baia--risco{% endif %}"
+  draggable="true"
+  data-baia="{{ b.pk }}"
+  data-setor="{{ b.setor_id }}"
+  data-nome="{{ b.nome }}"
+  data-colaborador="{{ b.colaborador|default:'—' }}"
+  data-cargo="{{ b.colaborador.job_title|default:'' }}"
+  data-patrimonio="{{ b.dispositivo.patrimonio|default:'' }}"
+  data-serial="{{ b.dispositivo.serial|default:'' }}"
+  data-etiqueta="{% if b.computador %}{% url 'parque_etiquetas' %}?ids={{ b.computador.pk }}{% elif b.notebook %}{% url 'parque_etiquetas' %}?nb_ids={{ b.notebook.pk }}{% endif %}"
+  {% comment %}
+  `b.custom.marca` nao existia: `Baia` nao tem atributo `custom` (resto de
+  um modelo antigo). Django resolve atributo inexistente para string vazia,
+  em silencio — entao a marca do equipamento NUNCA chegou a esta tela, e
+  editar a marca no cadastro parecia nao surtir efeito. Agora le do
+  dispositivo vinculado, como os demais campos desta lista.
+  {% endcomment %}
+  data-marca="{{ b.dispositivo.marca|default:'' }}"
+  data-status="{{ b.situacao_label }}"
+  data-so="{{ b.eff_so|default:'—' }}"
+  data-cpu="{{ b.eff_cpu|default:'—' }}"
+  data-placa="{{ b.eff_placa|default:'—' }}"
+  data-ram="{{ b.eff_ram|default:'—' }}"
+  data-disco="{{ b.eff_disco|default:'—' }}"
+  data-gpu="{{ b.eff_gpu|default:'' }}"
+  data-uptime="{{ b.eff_uptime|default:'' }}"
+  data-local="{{ b.eff_local|default:'' }}"
+  {% comment %}Onde o cadastro digitado discorda do que o agente mediu, no
+  formato "Rótulo: cadastro ≠ medido". Desde 21/09/2026 o cadastro é o que
+  aparece na tela (antes a telemetria o sombreava e a edição parecia não
+  funcionar) — e o preço disso é que um erro de digitação passaria a esconder a
+  leitura real da máquina. Em vez de escolher um dos dois em silêncio, a gaveta
+  mostra os dois e quem decide é gente. Vazio = não há conflito.{% endcomment %}
+  data-divergencias="{% for rot, cad, med in b.dispositivo.divergencias_telemetria %}{% if not forloop.first %} · {% endif %}{{ rot }}: {{ cad }} ≠ {{ med }}{% endfor %}"
+  data-mouse="{{ b.get_mouse_display|default:'—' }}"
+  data-teclado="{{ b.get_teclado_display|default:'—' }}"
+  data-webcam="{{ b.get_webcam_display|default:'—' }}"
+  data-headset="{{ b.get_headset_display|default:'—' }}"
+  data-monitor="{{ b.get_monitor_display|default:'—' }}"
+  data-leitor="{{ b.get_leitor_cod_barras_display|default:'—' }}"
+  data-pcstatus="{{ b.situacao_key }}"
+  data-tipo="{{ b.situacao_key }}"
+  data-manutencao="{% if b.manutencao_previsao %}1{% else %}0{% endif %}"
+  data-chamado="{% if b.reparos_abertos %}1{% else %}0{% endif %}"
+  data-desempenho="{{ b.indice_desempenho|default_if_none:'' }}"
+  data-classe="{{ b.classe_desempenho }}"
+  data-tel="{{ b.telemetria_status }}"
+  data-prev="{{ b.preventiva_status }}"
+  data-diag='{{ b.diagnostico_json|safe }}'
+  data-reparo="{% url 'parque_abrir_chamado' b.pk %}?tipo=reparo"
+  data-troca="{% url 'parque_abrir_chamado' b.pk %}?tipo=desativacao&titulo=Desativação para troca"
+  data-edit="{% url 'admin:parque_baia_change' b.pk %}"
+  {% comment %}Para o botão "Excluir baia" da ficha avisar, ANTES de apagar, que
+  existe equipamento nesta mesa (ele volta para o estoque, não é apagado). O id
+  da baia já vem no `data-baia`, lá em cima.{% endcomment %}
+  data-tem-pc="{% if b.computador_id or b.notebook_id %}1{% else %}0{% endif %}">
+
+  {% if b.manutencao_previsao %}
+    <span class="baia__manut" aria-hidden="true"><span class="baia__manut-tape"></span></span>
+    {% comment %}Relógio da manutenção: fica SOBRE a fita zebrada amarelo/preto, que é
+    igual no tema claro e no escuro — por isso o traço é branco fixo (não há par de tema
+    a fazer). A sombra do próprio .baia__manut-clock garante o contraste.{% endcomment %}
+    <span class="baia__manut-clock"
+          title="Em manutenção — previsto p/ {{ b.manutencao_previsao|date:'d/m/Y' }}{% if b.manutencao_dias_restantes == 0 %} • fica pronto hoje{% else %} • faltam {{ b.manutencao_dias_restantes }} dia(s){% endif %}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
+  {% endif %}
+
+  <div class="baia__top">
+    <span class="baia__icone">{% if b.eh_notebook %}<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>{% else %}<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>{% endif %}</span>
+    {% if not b.esta_vazia %}
+      <span class="baia__tel baia__tel--{{ b.telemetria_status }}"
+            title="Telemetria: {% if b.telemetria_status == 'ativo' %}ativa (coleta recente){% elif b.telemetria_status == 'inativo' %}parada (sem coleta recente){% else %}sem agente instalado{% endif %}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><circle cx="12" cy="12" r="2"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2"/></svg></span>
+    {% endif %}
+    {% if b.indice_desempenho is not None %}
+      <span class="baia__score mkpro-tabular" title="Índice de desempenho {{ b.indice_desempenho }} — {{ b.classe_desempenho }}">{{ b.indice_desempenho }}</span>
+    {% endif %}
+  </div>
+
+  {% comment %}Identificação em duas linhas: o número da baia manda (é por ele que a
+  operação fala), a pessoa vem logo abaixo em peso menor.{% endcomment %}
+  <div class="baia__nome">{{ b.numero|default:b.nome }}</div>
+  {% if b.colaborador %}<div class="baia__ocupante">{{ b.colaborador.full_name }}</div>{% endif %}
+  {% if b.eff_cpu or b.eff_so or b.eff_disco %}
+    <div class="baia__specs">{{ b.resumo_pc }}</div>
+  {% endif %}
+  {% if not b.esta_vazia %}
+    <div class="baia__perifs" aria-label="Periféricos">
+      <span class="baia__perif is-{{ b.mouse|default:'nao' }}" title="Mouse: {{ b.get_mouse_display|default:'Não' }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 6v4"/></svg></span>
+      <span class="baia__perif is-{{ b.teclado|default:'nao' }}" title="Teclado: {{ b.get_teclado_display|default:'Não' }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7.5 14h9"/></svg></span>
+      <span class="baia__perif is-{{ b.monitor|default:'nao' }}" title="Monitor: {{ b.get_monitor_display|default:'Não' }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+      <span class="baia__perif is-{{ b.headset|default:'nao' }}" title="Headset: {{ b.get_headset_display|default:'Não' }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><path d="M4 17v-5a8 8 0 0 1 16 0v5"/><path d="M4 15h3v6H5a1 1 0 0 1-1-1zM20 15h-3v6h2a1 1 0 0 0 1-1z"/></svg></span>
+      <span class="baia__perif is-{{ b.webcam|default:'nao' }}" title="Webcam: {{ b.get_webcam_display|default:'Não' }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><path d="m22 8-6 4 6 4z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg></span>
+      <span class="baia__perif is-{{ b.leitor_cod_barras|default:'nao' }}" title="Leitor de cód. barras: {{ b.get_leitor_cod_barras_display|default:'Não' }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><path d="M4 6v12M7.5 6v12M11 6v9M14.5 6v12M18 6v9M20.5 6v12"/></svg></span>
+    </div>
+  {% endif %}
+  <div class="baia__classe">{% if b.esta_vazia %}Sem PC{% elif b.eh_notebook %}Notebook{% if b.classe_desempenho != '—' %} · {{ b.classe_desempenho }}{% endif %}{% else %}PC{% if b.classe_desempenho != '—' %} · {{ b.classe_desempenho }}{% endif %}{% endif %}</div>
+  {% if b.preventiva_status %}
+    <div class="baia__prev baia__prev--{{ b.preventiva_status }}"
+         title="{% if b.preventiva_status == 'pendente' %}Sem preventiva registrada — agende uma (a cada 60 dias).{% else %}Próxima preventiva até {{ b.preventiva_vencimento|date:'d/m/Y' }} (ciclo de 60 dias).{% endif %}">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:none" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      <span class="mkpro-tabular">{% if b.preventiva_status == 'pendente' %}Preventiva pendente · {{ b.dias_sem_preventiva }}d sem manutenção{% elif b.preventiva_status == 'vencida' %}Preventiva vencida · {{ b.dias_sem_preventiva }}d sem manutenção{% else %}Preventiva em {{ b.preventiva_dias_restantes }}d{% endif %}</span>
+    </div>
+  {% endif %}
+
+  <span class="baia__tip">
+    <strong>{{ b.colaborador|default:b.nome }}</strong>
+    {% comment %}
+    Era `get_pc_status_display`, o campo LEGADO `pc_status`, que so e'
+    reescrito no `Baia.save()`. Mudar o status do Computador (para "Com
+    defeito", por exemplo) nao passa pela baia, entao o chip mostrava a
+    situacao nova e este tooltip a antiga, na mesma tela. `situacao_label`
+    deriva ao vivo do dispositivo — a mesma fonte do chip.
+    {% endcomment %}
+    <em>{{ b.situacao_label }}</em>
+    {% if b.eff_so %}<span>{{ b.eff_so }}</span>{% endif %}
+    {% if b.eff_cpu %}<span>{{ b.eff_cpu }}</span>{% endif %}
+    {% if b.manutencao_previsao %}
+      <span class="baia__tip-manut"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> Reparo: pronto em {{ b.manutencao_previsao|date:'d/m/Y' }}{% if b.manutencao_dias_restantes == 0 %} (hoje){% else %} ({{ b.manutencao_dias_restantes }} dia{{ b.manutencao_dias_restantes|pluralize }}){% endif %}</span>
+    {% endif %}
+  </span>
+</button>

@@ -1,0 +1,410 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  /* =========================================================================
+     abrir_chamado — FORMULÁRIO no padrão Material Design 3 (DESIGN-SYSTEM.md
+     §4 "Campo"): campo outlined de 56px e raio 4, rótulo ACIMA em label-medium,
+     ajuda EMBAIXO em body-small/on-surface-variant, erro em error com ícone, e
+     uma única coluna até 640px. À direita, só o contexto da máquina.
+
+     O que SAIU (§5): a borda de todos os painéis, a borda do bloco de compra,
+     a caixa da barra de ações, a borda do quadro de score, as bordas das tags,
+     os filetes de 3px do diagnóstico, o peso 800 no número do score e o peso
+     700 nos rótulos pequenos.
+
+     Botões: sistema global (.pvx-btn + --ok/--soft/--ghost); aqui só o text
+     button, que não tem classe global. Escopado em .abr; cor por var(--md-*).
+     ====================================================================== */
+  .abr { display: flex; flex-direction: column; gap: 16px; }
+  .abr *, .abr *::before, .abr *::after { box-sizing: border-box; }
+  .abr svg { display: block; }
+  .abr-num { font-variant-numeric: tabular-nums; }
+
+  /* --- botões: base de layout do sistema M3 + o text button -------------- */
+  .abr .pvx-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  .abr .pvx-btn svg { width: 18px; height: 18px; flex: none; }
+  /* `#main` na frente vence o `!important` do CSS histórico (§9.2). */
+  #main .abr-txt {
+    background: transparent !important; color: var(--md-primary) !important;
+    padding: 0 12px !important;
+  }
+
+  .abr-cols { display: grid; grid-template-columns: minmax(0, 640px) minmax(0, 340px); gap: 16px; align-items: start; margin: 0; }
+  @media (max-width: 1080px) { .abr-cols { grid-template-columns: minmax(0, 640px); } }
+
+  .abr-form, .abr-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+  /* Painel = cartão filled: tom, sem borda e sem sombra. */
+  .abr-panel {
+    background: var(--md-surface-container-low);
+    border: 0; border-radius: var(--md-shape-lg); box-shadow: none;
+    padding: 16px;
+  }
+  .abr-panel__tit {
+    display: flex; align-items: center; gap: 12px; margin: 0 0 4px;
+    font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface);
+  }
+  .abr-panel__tit svg { width: 20px; height: 20px; flex: none; color: var(--md-on-surface-variant); }
+  .abr-panel__sub {
+    margin: 0 0 20px;
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+  }
+
+  /* --- campos: UMA coluna, outlined 56px/raio 4 ------------------------- */
+  .abr-fields { display: flex; flex-direction: column; gap: 20px; }
+  .abr-field { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+  .abr-lbl { font: 500 12px/16px var(--md-font); letter-spacing: .5px; color: var(--md-on-surface-variant); }
+  .abr-lbl .abr-req { color: var(--md-error); }
+  .abr-help { font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); }
+  .abr-help b { font-weight: 500; }
+  .abr input[type="text"], .abr input[type="date"], .abr select, .abr textarea {
+    width: 100%; min-height: 56px; padding: 16px;
+    border: 1px solid var(--md-outline); border-radius: var(--md-shape-xs);
+    background: transparent; color: var(--md-on-surface);
+    font-family: var(--md-font); font-size: 16px; line-height: 24px; letter-spacing: .5px;
+    box-shadow: none;
+    transition: border-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .abr textarea { min-height: 112px !important; resize: vertical; }
+  .abr input:hover, .abr select:hover, .abr textarea:hover { border-color: var(--md-on-surface); }
+  .abr input:focus, .abr select:focus, .abr textarea:focus {
+    outline: none; border-color: var(--md-primary); box-shadow: inset 0 0 0 1px var(--md-primary);
+  }
+  .abr ::placeholder { color: var(--md-on-surface-variant); opacity: 1; }
+  /* Estado de ERRO do campo: contorno e ajuda em `error`, com ícone (§4).
+     `#main` na frente para vencer o `border: … !important` do campo global. */
+  #main .abr-field input:user-invalid, #main .abr-field textarea:user-invalid {
+    border-color: var(--md-error) !important; box-shadow: inset 0 0 0 1px var(--md-error) !important;
+  }
+  #main .abr-field input:user-invalid ~ .abr-help,
+  #main .abr-field textarea:user-invalid ~ .abr-help {
+    display: flex; align-items: flex-start; gap: 6px; color: var(--md-error);
+  }
+  #main .abr-field input:user-invalid ~ .abr-help::before,
+  #main .abr-field textarea:user-invalid ~ .abr-help::before {
+    content: ""; width: 14px; height: 14px; flex: none; margin-top: 1px;
+    background-color: currentColor;
+    --abr-ico: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>');
+    -webkit-mask: var(--abr-ico) center / 14px 14px no-repeat;
+    mask: var(--abr-ico) center / 14px 14px no-repeat;
+  }
+
+  /* --- chips de peça: chip M3 de 32px, raio 8, seleção secondary-container */
+  .abr .peca-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .abr .peca-chip { position: relative; display: inline-flex; cursor: pointer; }
+  .abr .peca-chip input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .abr .peca-chip__txt {
+    display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px;
+    border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-sm);
+    background: transparent; color: var(--md-on-surface-variant);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard),
+                color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .abr .peca-chip:hover .peca-chip__txt { background: var(--md-surface-container-high); color: var(--md-on-surface); }
+  .abr .peca-chip input:checked + .peca-chip__txt {
+    background: var(--md-secondary-container); border-color: transparent; color: var(--md-on-secondary-container);
+  }
+  .abr .peca-chip input:focus-visible + .peca-chip__txt { outline: 3px solid var(--md-primary); outline-offset: 2px; box-shadow: none; }
+
+  /* Bloco tonal aninhado (era um retângulo com borda). */
+  .abr-check {
+    display: flex; align-items: flex-start; gap: 12px; cursor: pointer;
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container); padding: 16px;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant);
+  }
+  .abr-check input { width: 18px; height: 18px; flex: none; margin-top: 1px; accent-color: var(--md-primary); }
+  .abr-check b { color: var(--md-on-surface); font-weight: 500; }
+
+  /* --- ações: sem caixa em volta (§5.1) --------------------------------- */
+  .abr-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+
+  /* --- lado direito: os fatos da máquina --------------------------------- */
+  .abr-id { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .abr-id__txt { min-width: 0; display: flex; flex-direction: column; }
+  .abr-id__n { font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface); }
+  .abr-id__c { font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); }
+  .abr-score {
+    margin-left: auto; flex: none; min-width: 56px; text-align: center;
+    border: 0; border-radius: var(--md-shape-md); padding: 8px 12px;
+    background: var(--md-surface-container);
+  }
+  /* Número grande em headline-small, PESO 400 — M3 não engorda número (§3). */
+  .abr-score__n {
+    display: block; font: 400 24px/32px var(--md-font); letter-spacing: 0;
+    font-variant-numeric: tabular-nums; color: var(--md-on-surface);
+  }
+  .abr-score__c {
+    display: block; font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: uppercase; color: var(--md-on-surface-variant);
+  }
+  .abr-score--critico .abr-score__n { color: var(--md-st-crit); }
+  .abr-score--baixo .abr-score__n { color: var(--md-st-warn); }
+  .abr-score--bom .abr-score__n { color: var(--md-st-ok); }
+  .abr-score--otimo .abr-score__n { color: var(--md-primary); }
+
+  /* Lista: divisor de 1px em outline-variant (a única linha do M3). */
+  .abr-specs { list-style: none; margin: 0; padding: 0; }
+  .abr-specs li {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+    padding: 10px 0; border-bottom: 1px solid var(--md-outline-variant);
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+  }
+  .abr-specs li:last-child { border-bottom: 0; padding-bottom: 0; }
+  .abr-specs li > b { color: var(--md-on-surface-variant); font-weight: 400; white-space: nowrap; }
+  .abr-specs li > span { color: var(--md-on-surface); text-align: right; min-width: 0; }
+
+  .abr-tags {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 16px;
+    border-top: 1px solid var(--md-outline-variant);
+  }
+  .abr-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: 24px; padding: 0 8px; border: 0; border-radius: var(--md-shape-sm);
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+  }
+  .abr-tag svg { width: 12px; height: 12px; flex: none; }
+  .abr-tag--critico { background: var(--md-st-crit-cont); color: var(--md-st-crit); }
+  .abr-tag--baixo { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+  .abr-tag--bom, .abr-tag--otimo { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+
+  /* Diagnóstico: bloco tonal + marcador de 8px por nível (era filete). */
+  .abr-diag { display: flex; flex-direction: column; gap: 8px; list-style: none; margin: 0; padding: 0; }
+  .abr-diag li {
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container); padding: 12px 16px;
+  }
+  .abr-diag li b {
+    display: flex; align-items: center; gap: 8px;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface);
+  }
+  .abr-diag li b::before {
+    content: ""; width: 8px; height: 8px; flex: none;
+    border-radius: var(--md-shape-full); background: var(--md-on-surface-variant);
+  }
+  .abr-diag li span {
+    display: block; margin-top: 4px; padding-left: 16px;
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+  }
+  .abr-diag li.abr-diag--alto b::before { background: var(--md-st-crit); }
+  .abr-diag li.abr-diag--medio b::before { background: var(--md-st-warn); }
+  .abr-diag li.abr-diag--baixo b::before { background: var(--md-st-ok); }
+</style>
+
+<div class="abr">
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · {{ maq.crumb }}</p>
+    <h1 class="mkpro-head__title">Abrir chamado</h1>
+    <p class="mkpro-head__sub">{{ maq.titulo }}{% if maq.patrimonio %} · {{ maq.patrimonio }}{% endif %} — descreva o problema e defina o atendimento.</p>
+    <div class="mkpro-head__actions">
+      <a data-mk-voltar class="pvx-btn abr-txt" href="{{ voltar_url }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg> {{ voltar_nome }}
+      </a>
+    </div>
+  </header>
+
+  <form method="post" class="abr-cols">
+    {% csrf_token %}
+
+    {# ---------- Coluna do formulário: uma coluna, no máximo 640px ---------- #}
+    <div class="abr-form">
+
+      <section class="abr-panel">
+        <h2 class="abr-panel__tit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg>
+          O problema
+        </h2>
+        <p class="abr-panel__sub">Um resumo curto no título e os detalhes na descrição.</p>
+
+        <div class="abr-fields">
+          <label class="abr-field">
+            <span class="abr-lbl">Título do chamado <span class="abr-req">*</span></span>
+            <input type="text" name="titulo" value="{{ titulo_inicial }}" maxlength="160" required
+                   placeholder="Ex.: Troca de fonte, Formatação, Problemas no monitor" autofocus>
+            <span class="abr-help">Aparece no quadro de chamados — seja específico, até 160 caracteres.</span>
+          </label>
+
+          <label class="abr-field">
+            <span class="abr-lbl">Descrição</span>
+            <textarea name="descricao" rows="5" placeholder="Detalhe o problema, o que foi observado, etc."></textarea>
+            <span class="abr-help">O que o usuário relatou, quando começou e o que já foi tentado.</span>
+          </label>
+
+          <label class="abr-field">
+            <span class="abr-lbl">Tipo de atendimento</span>
+            <select name="tipo">
+              {% for val, label in tipos %}<option value="{{ val }}" {% if val == tipo_inicial %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+            <span class="abr-help">Troca de periférico não afeta o desempenho da máquina no cálculo do score.</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="abr-panel">
+        <h2 class="abr-panel__tit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          O atendimento
+        </h2>
+        <p class="abr-panel__sub">Quem executa e até quando. Pode ficar em branco e ser definido depois.</p>
+
+        <div class="abr-fields">
+          <label class="abr-field">
+            <span class="abr-lbl">Responsável (técnico)</span>
+            <select name="tecnico">
+              <option value="">— a definir —</option>
+              {% for t in tecnicos %}<option value="{{ t.pk }}">{{ t.get_full_name|default:t.username }}</option>{% endfor %}
+            </select>
+            <span class="abr-help">Sem responsável, o chamado nasce na coluna <b>Abertos</b>.</span>
+          </label>
+
+          <label class="abr-field">
+            <span class="abr-lbl">Prazo (previsão de conclusão)</span>
+            <input type="date" name="previsao_conclusao">
+            <span class="abr-help">Com técnico e prazo definidos, o chamado vai para <b>Em manutenção</b>.</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="abr-panel">
+        <h2 class="abr-panel__tit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>
+          Peças
+        </h2>
+        <p class="abr-panel__sub">Só preencha se o atendimento envolver troca de peça.</p>
+
+        <div class="abr-fields">
+          <div class="abr-field">
+            <span class="abr-lbl">Peças a trocar</span>
+            <div class="peca-chips" id="ch-pecas">
+              {% for val, label in pecas %}{% if val != 'nenhuma' %}
+                <label class="peca-chip">
+                  <input type="checkbox" name="pecas" value="{{ val }}">
+                  <span class="peca-chip__txt">{{ label }}</span>
+                </label>
+              {% endif %}{% endfor %}
+            </div>
+            <span class="abr-help">Selecione uma ou mais.</span>
+          </div>
+
+          <label class="abr-field" id="ch-peca-outro-wrap" hidden>
+            <span class="abr-lbl">Qual peça (outra)</span>
+            <input type="text" name="peca_outro" maxlength="120" placeholder="Descreva a peça">
+          </label>
+
+          <label class="abr-field" id="ch-nova-spec-wrap" hidden>
+            <span class="abr-lbl">Nova especificação (upgrade)</span>
+            <input type="text" name="nova_especificacao" maxlength="120" placeholder="Ex.: SSD NVMe 480GB">
+            <span class="abr-help">Aparece só quando o tipo é <b>upgrade</b> e a peça afeta o desempenho.</span>
+          </label>
+
+          <label class="abr-check">
+            <input type="checkbox" name="realizar_cotacao" value="1">
+            <span>Precisa <b>comprar</b> a peça — abre um orçamento para aprovação e o chamado fica em <b>Aguardando peça</b>.</span>
+          </label>
+        </div>
+      </section>
+
+      {# A ÚNICA ação filled da tela; cancelar como text button. #}
+      <div class="abr-actions">
+        <a class="pvx-btn abr-txt" href="{{ voltar_url }}">Cancelar</a>
+        <button type="submit" class="pvx-btn pvx-btn--ok">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg> Abrir chamado
+        </button>
+      </div>
+    </div>
+
+    {# ---------- Coluna dos fatos: a máquina ---------- #}
+    <aside class="abr-side">
+      <section class="abr-panel">
+        <h2 class="abr-panel__tit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          A máquina
+        </h2>
+
+        <div class="abr-id">
+          <span class="mkpro-chip">{% if maq.eh_notebook %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>{% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8"/></svg>{% endif %}</span>
+          <span class="abr-id__txt">
+            <span class="abr-id__n">{{ maq.titulo }}</span>
+            <span class="abr-id__c">{{ maq.crumb }}</span>
+          </span>
+          {% if maq.indice is not None %}
+            <span class="abr-score abr-score--{{ maq.classe|slugify }}">
+              <span class="abr-score__n">{{ maq.indice }}</span>
+              <span class="abr-score__c">{{ maq.classe }}</span>
+            </span>
+          {% endif %}
+        </div>
+
+        <ul class="abr-specs">
+          <li><b>Colaborador</b><span>{{ maq.colaborador|default:'—' }}</span></li>
+          {% if maq.patrimonio %}<li><b>Patrimônio</b><span class="abr-num">{{ maq.patrimonio }}</span></li>{% endif %}
+          <li><b>S.O</b><span>{{ maq.so|default:'—' }}</span></li>
+          <li><b>Processador</b><span>{{ maq.cpu|default:'—' }}</span></li>
+          <li><b>Placa-mãe</b><span>{{ maq.placa|default:'—' }}</span></li>
+          <li><b>Memória RAM</b><span>{{ maq.ram|default:'—' }}</span></li>
+          <li><b>Armazenamento</b><span>{{ maq.disco|default:'—' }}</span></li>
+        </ul>
+
+        <div class="abr-tags">
+          {% if maq.unidade %}<span class="abr-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg> {{ maq.unidade }}</span>{% endif %}
+          {% if maq.setor %}<span class="abr-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg> {{ maq.setor }}</span>{% endif %}
+          <span class="abr-tag">{% if maq.eh_notebook %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg> Notebook{% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8"/></svg> Estação de Trabalho - PC{% endif %}</span>
+          {% if maq.classe and maq.classe != '—' %}<span class="abr-tag abr-tag--{{ maq.classe|slugify }}">{{ maq.classe }}</span>{% endif %}
+        </div>
+      </section>
+
+      {% if maq.diagnostico %}
+        <section class="abr-panel">
+          <h2 class="abr-panel__tit">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/><path d="m8 11 2 2 4-4"/></svg>
+            Diagnóstico
+          </h2>
+          <ul class="abr-diag">
+            {% for d in maq.diagnostico %}
+              <li class="abr-diag--{{ d.nivel }}">
+                <b>{{ d.causa }}</b>
+                <span>{{ d.solucao }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        </section>
+      {% endif %}
+    </aside>
+  </form>
+</div>
+
+<script>
+(function () {
+  // Peças por CHIPS (várias). Mostra "outra peça" / "nova especificação" conforme a seleção.
+  var grupo = document.getElementById("ch-pecas");
+  var outro = document.getElementById("ch-peca-outro-wrap");
+  var spec = document.getElementById("ch-nova-spec-wrap");
+  var tipo = document.querySelector('select[name="tipo"]');
+  var SPEC_PECAS = ["processador", "memoria_ram", "armazenamento"];
+  function marcadas() {
+    if (!grupo) return [];
+    return Array.prototype.slice
+      .call(grupo.querySelectorAll('input[name="pecas"]:checked'))
+      .map(function (c) { return c.value; });
+  }
+  function atualizar() {
+    var sel = marcadas();
+    if (outro) outro.hidden = sel.indexOf("outro") === -1;
+    var ehUpgrade = tipo && tipo.value === "upgrade";
+    var temSpec = sel.some(function (v) { return SPEC_PECAS.indexOf(v) !== -1; });
+    if (spec) spec.hidden = !(ehUpgrade && temSpec);
+  }
+  if (grupo) grupo.addEventListener("change", atualizar);
+  if (tipo) tipo.addEventListener("change", atualizar);
+  atualizar();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% comment %}
+Avatar do usuário — agora com FOTO do colaborador.
+
+Sobrescreve o do unfold, que lia `user.avatar_url` (propriedade que este projeto
+nunca teve, então caía sempre na inicial). Aqui a foto vem do lugar onde ela
+existe de verdade: `Person.foto`, alcançada pelo `related_name="colaborador"`
+(apps/orgs/models.py). Cada colaborador tem a sua; sem foto, mostra a inicial.
+
+Acessar um OneToOne reverso inexistente levanta `ObjectDoesNotExist`, que tem
+`silent_variable_failure = True` — o template resolve para vazio em vez de
+estourar. Então usuário sem colaborador vinculado cai na inicial sem erro.
+
+A ESTRUTURA é contrato: `make-m3.css` §3 e o `make-admin.css` histórico miram
+este bloco como `> div:first-child` dentro do cartão de usuário. Continua sendo
+uma única <div>, na mesma posição.
+{% endcomment %}
+{% with foto=user.colaborador.foto %}
+    <div class="mkav bg-base-200 bg-cover bg-no-repeat bg-center font-semibold flex items-center justify-center relative select-none text-important dark:bg-base-700
+                {% if size == "md" %}
+                    h-[34px] min-w-[34px] w-[34px]
+                {% elif size == "sm" %}
+                    h-[30px] min-w-[30px] w-[30px]
+                {% elif size == "xs" %}
+                    h-[26px] min-w-[26px] w-[26px] text-xs
+                {% else %}
+                    h-[38px] min-w-[38px] w-[38px]
+                {% endif %}
+                {% if circle %}rounded-full{% else %}rounded-default{% endif %}
+                {% if foto %}mkav--foto{% endif %}"
+         {% if foto %}style="background-image: url('{{ foto.url }}');"{% endif %}
+         {% if foto %}title="{{ user.colaborador.full_name|default:user.get_username }}"{% endif %}>
+        {% if not foto %}
+            {% comment %}
+            `slice`, e nao `.0`.
+
+            Isto era `user.get_full_name.0|default:user.get_username.0`. Com
+            visitante anonimo os dois metodos devolvem STRING VAZIA, e `.0` em
+            string vazia levanta `VariableDoesNotExist` — que o Django silencia
+            quando e' a variavel principal, mas NAO quando e' argumento de
+            filtro: a excecao sobe e derruba a pagina inteira com 500.
+
+            Apareceu na /ajuda/, a unica tela do sistema que abre sem login
+            (o resto redireciona antes de chegar a montar o cabecalho). Com
+            `slice:":1"` a string vazia continua vazia e o resultado e' o
+            mesmo para quem esta logado.
+            {% endcomment %}
+            {{ user.get_full_name|default:user.get_username|slice:":1"|upper }}
+        {% endif %}
+    </div>
+{% endwith %}

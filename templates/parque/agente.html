@@ -1,0 +1,605 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  {% comment %}
+    agente.html — MATERIAL DESIGN 3 (DESIGN-SYSTEM.md §4 e §5).
+
+    Tela técnica: telemetria. Migrado de `--ui-*` para `--md-*`. O que SAIU:
+      · o cartão com bordas divisórias da faixa de sinais: cada sinal virou um
+        CHIP TONAL independente (par `--md-st-*-cont` + `--md-st-*`, ou
+        `error-container` quando a coleta está desligada) e o círculo atrás do
+        ícone, que era enfeite;
+      · a moldura âmbar e o fundo em color-mix do bloco de divergências — virou
+        cartão filled com o título em `st-warn` e a contagem em chip tonal;
+      · as bordas de 1px dos cartões, da tabela e do `code`;
+      · o peso 800 do número do anel e os 650/700 em texto pequeno;
+      · o hex das legendas de cobertura, que agora usam `primary` e
+        `outline-variant`.
+
+    A tabela de coletas é a data table DENSA do M3 (célula de 12px, divisor
+    `outline-variant`, sem zebra, hover em state layer de 8%) e o estado de
+    cada coleta é chip tonal.
+  {% endcomment %}
+  .ag { display: grid; gap: 16px; }
+
+  .ag-back {
+    justify-self: start; display: inline-flex; align-items: center; gap: 8px;
+    height: 40px; padding: 0 16px 0 12px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; text-decoration: none;
+  }
+  .ag-back:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .ag-back svg { width: 18px; height: 18px; flex: none; }
+
+  .agx-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 40px; padding: 0 24px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: var(--md-secondary-container); color: var(--md-on-secondary-container);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    text-decoration: none; cursor: pointer; white-space: nowrap;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .agx-btn:hover { background: color-mix(in srgb, var(--md-on-secondary-container) 8%, var(--md-secondary-container)); }
+  .agx-btn svg { width: 18px; height: 18px; flex: none; }
+  .agx-btn--ok { background: var(--md-action); color: var(--md-on-action); }
+  .agx-btn--ok:hover { background: color-mix(in srgb, var(--md-on-action) 8%, var(--md-action)); }
+  .agx-btn--sm { padding: 0 16px; }
+
+  /* ---------- Faixa de sinais: um chip tonal por sinal ---------- */
+  .agx-sinais { display: flex; flex-wrap: wrap; gap: 8px; }
+  .agx-sinal {
+    display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: center;
+    flex: 1 1 200px; min-width: 0;
+    padding: 12px 16px; border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+  }
+  .agx-sinal--ok { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+  .agx-sinal--warn { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+  .agx-sinal--off { background: var(--md-error-container); color: var(--md-on-error-container); }
+  .agx-sinal__ico {
+    width: 24px; height: 24px; display: grid; place-items: center;
+    color: inherit; background: transparent; border-radius: 0;
+  }
+  .agx-sinal__ico svg { width: 20px; height: 20px; display: block; }
+  .agx-sinal__lbl {
+    display: block; font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: uppercase; color: inherit;
+  }
+  .agx-sinal__val {
+    display: block; font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: inherit;
+  }
+
+  /* ---------- Divergências ---------- */
+  .agx-div {
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-low); padding: 24px;
+  }
+  .agx-div__tit {
+    display: flex; align-items: center; gap: 12px; margin: 0 0 8px;
+    font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface);
+  }
+  .agx-div__tit svg { width: 20px; height: 20px; flex: none; color: var(--md-st-warn); }
+  .agx-div__intro {
+    margin: 0 0 16px; font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+    color: var(--md-on-surface-variant); max-width: 78ch;
+  }
+  .agx-div__item {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 0; border-top: 1px solid var(--md-outline-variant);
+  }
+  .agx-div__info { display: grid; gap: 2px; min-width: 0; }
+  .agx-div__info b { font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface); }
+  .agx-div__rota {
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+  }
+  .agx-div__errado { color: var(--md-error); font-weight: 500; }
+  .agx-div__certo { color: var(--md-st-ok); font-weight: 500; }
+  .agx-div__acoes { display: flex; gap: 8px; }
+  .agx-div__acoes form { margin: 0; }
+
+  /* ---------- Instalação + cobertura ---------- */
+  .agx-topo { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, .85fr); gap: 16px; align-items: start; }
+  @media (max-width: 980px) { .agx-topo { grid-template-columns: 1fr; } }
+
+  .agx-card {
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-low); padding: 24px;
+  }
+  .agx-card__tit {
+    display: flex; align-items: center; gap: 12px; margin: 0 0 16px;
+    font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface);
+  }
+  .agx-intro {
+    margin: 0 0 16px; font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+    color: var(--md-on-surface-variant); max-width: 72ch;
+  }
+  .agx-baixar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+
+  .agx-guia { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; }
+  .agx-guia__tit {
+    display: flex; align-items: center; gap: 8px; margin: 0 0 8px;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface);
+  }
+  .agx-guia__tit svg { width: 18px; height: 18px; flex: none; color: var(--md-on-surface-variant); }
+  .agx-guia__resumo {
+    margin: 0 0 8px; font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+    color: var(--md-on-surface-variant);
+  }
+  .agx-det summary {
+    cursor: pointer; padding: 4px 0; list-style: none;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-primary);
+  }
+  .agx-det summary::-webkit-details-marker { display: none; }
+  .agx-det summary::before { content: "\25B8  "; }
+  .agx-det[open] summary::before { content: "\25BE  "; }
+  .agx-passos { margin: 8px 0 0; padding-left: 20px; }
+  .agx-passos li {
+    margin-bottom: 8px; font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+    color: var(--md-on-surface-variant);
+  }
+  .agx-alt { font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); margin-top: 4px; }
+  .agx-nota {
+    margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--md-outline-variant);
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+  }
+  .ag code, .agx-card code {
+    font: 400 12px/16px var(--md-font-mono); border: 0; border-radius: var(--md-shape-xs);
+    background: var(--md-surface-container-high); color: var(--md-on-surface); padding: 2px 6px;
+  }
+
+  /* Cobertura */
+  .agx-cob__head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .agx-cob__ic {
+    width: 40px; height: 40px; border-radius: var(--md-shape-full); flex: none;
+    display: grid; place-items: center;
+    background: var(--md-primary-container); color: var(--md-on-primary-container);
+  }
+  .agx-cob__ic svg { width: 20px; height: 20px; display: block; }
+  .agx-cob__tt { font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface); }
+  .agx-cob__sub { font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); }
+  .agx-cob__top { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+  .agx-ring { width: 108px; height: 108px; flex: none; }
+  .agx-ring .bg { fill: none; stroke: var(--md-surface-container-highest); stroke-width: 12; }
+  .agx-ring .fg {
+    fill: none; stroke: var(--md-primary); stroke-width: 12; stroke-linecap: round;
+    transform: rotate(-90deg); transform-origin: 60px 60px;
+  }
+  .agx-ring .n { font-size: 22px; font-weight: 400; fill: var(--md-on-surface); }
+  .agx-ring .l { font-size: 11px; font-weight: 500; fill: var(--md-on-surface-variant); }
+  .agx-ring text { font-variant-numeric: tabular-nums; font-family: var(--md-font); }
+  .agx-cob__rz { display: grid; gap: 8px; }
+  .agx-cob__rz > div {
+    display: flex; align-items: center; gap: 8px;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant);
+  }
+  .agx-cob__rz i { width: 10px; height: 10px; border-radius: var(--md-shape-xs); display: inline-block; flex: none; }
+  .agx-cob__rz b { font-weight: 400; color: var(--md-on-surface); }
+  .agx-cob__unt {
+    margin: 0 0 12px; padding-top: 16px; border-top: 1px solid var(--md-outline-variant);
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: uppercase; color: var(--md-on-surface-variant);
+  }
+  .agx-ubar {
+    display: grid; grid-template-columns: 84px 1fr 46px; align-items: center; gap: 12px; margin-bottom: 8px;
+  }
+  .agx-ubar .un {
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .agx-ubar .tk {
+    height: 8px; border-radius: var(--md-shape-full);
+    background: var(--md-surface-container-highest); overflow: hidden;
+  }
+  .agx-ubar .fl { display: block; height: 100%; border-radius: var(--md-shape-full); background: var(--md-primary); }
+  .agx-ubar .vv {
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+    text-align: right;
+  }
+  .agx-ubar.is-zero .un, .agx-ubar.is-zero .vv { color: var(--md-error); }
+
+  /* ---------- Tabela de coletas: data table densa ---------- */
+  .agx-tel { display: grid; gap: 12px; }
+  .agx-tel__head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .agx-tel__head h2 {
+    display: flex; align-items: center; gap: 12px; margin: 0;
+    font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface);
+  }
+  /* Filtro das coletas: A MESMA barra das outras listas. As três fichas
+     `.agx-tab` (Todas / Vinculadas / Pendentes) viraram um GRUPO do popup, com
+     a contagem no rótulo da opção; a unidade detectada entrou como 2º grupo.
+     `.agx-filtros` é o host (o `initFiltrarPopup` monta no pai da `.flt-bar`). */
+  .agx-filtros {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end;
+    gap: 8px; flex: 1 1 300px; min-width: 0; margin-left: auto;
+  }
+  /* Os chips do que está aplicado tomam a linha de baixo do host (daí o
+     `flex: 1 1 300px` acima — host do tamanho do botão não caberia). */
+  .agx-filtros .fltx-active {
+    flex: 1 0 100%; order: 99; justify-content: flex-end; margin: 4px 0 0 !important;
+  }
+  .agx-busca {
+    flex: 1 1 300px; min-width: 0; max-width: 420px;
+    display: flex; align-items: center; gap: 8px;
+    height: 42px; padding: 0 6px 0 14px;
+    background: var(--md-surface-container);
+    border-radius: var(--md-shape-full);
+  }
+  .agx-busca svg { width: 19px; height: 19px; flex: none; color: var(--md-on-surface-variant); }
+  /* Botão de Buscar: sem ele, só o Enter dispara — e campo que não parece
+     fazer nada é campo que a pessoa conclui que está quebrado. */
+  #main .agx-busca .agx-busca__ok {
+    flex: none; height: 32px; padding: 0 14px;
+    background: var(--md-primary); color: var(--md-on-primary);
+    border: 0; border-radius: var(--md-shape-full);
+    font: 600 12.5px/32px var(--md-font); cursor: pointer;
+  }
+  #main .agx-busca .agx-busca__ok:hover { filter: brightness(1.08); }
+  /* × para tirar SÓ a busca: o "Limpar" do popup de filtros não a remove. */
+  #main .agx-busca .agx-busca__x {
+    flex: none; width: 28px; height: 28px; margin-right: 2px;
+    display: grid; place-items: center;
+    border-radius: 50%; text-decoration: none;
+    font: 400 18px/1 var(--md-font); color: var(--md-on-surface-variant);
+  }
+  #main .agx-busca .agx-busca__x:hover {
+    background: var(--md-surface-container-highest); color: var(--md-on-surface);
+  }
+  #main .agx-busca input[type="search"] {
+    flex: 1 1 auto; min-width: 0; width: auto;
+    height: 42px !important; min-height: 42px !important; padding: 0 !important;
+    background: transparent !important;
+    border: 0 !important; border-radius: 0 !important;
+    box-shadow: none !important; outline: none !important;
+    font: 400 13.5px/42px var(--md-font) !important;
+    color: var(--md-on-surface) !important;
+  }
+
+  .agx-tbl {
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-low); overflow: auto; max-width: 100%;
+  }
+  .agx-tbl table { width: 100%; min-width: 1180px; }
+  /* Variante densa: 12px de célula em vez de 16px. */
+  .agx-tbl thead th, .agx-tbl tbody td { padding: 10px 12px !important; }
+  .agx-tbl td {
+    vertical-align: top; font: 400 12px/16px var(--md-font); letter-spacing: .4px;
+    color: var(--md-on-surface-variant) !important;
+  }
+  .agx-tbl td b { color: var(--md-on-surface); font-weight: 500; }
+  .agx-tbl td small {
+    display: block; font: 400 11px/16px var(--md-font); color: var(--md-on-surface-variant);
+  }
+  .agx-tbl tr.is-pend td { background: color-mix(in srgb, var(--md-st-warn) 10%, transparent); }
+  .agx-tbl td.agx-visto { text-align: right; white-space: nowrap; }
+  .agx-tbl td.agx-acao { text-align: right; white-space: nowrap; width: 1%; }
+  .agx-cell { display: inline-flex; align-items: center; gap: 6px; }
+  .agx-cell svg { width: 14px; height: 14px; flex: none; color: var(--md-on-surface-variant); }
+
+  /* Estado da coleta: chip tonal do M3. */
+  .agx-st {
+    display: inline-flex; align-items: center; height: 24px; padding: 0 8px;
+    border: 0; border-radius: var(--md-shape-sm); white-space: nowrap;
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px;
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+  }
+  .agx-st--on { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+  .agx-st--pend { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+  .agx-st--diverg { background: var(--md-error-container); color: var(--md-on-error-container); }
+  .agx-link {
+    color: var(--md-primary); text-decoration: none;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+  }
+  .agx-link:hover { text-decoration: underline; }
+  .agx-vazio-cel { padding: 16px !important; }
+  .agx-rodape {
+    margin: 0; font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+  }
+</style>
+
+<div class="ag">
+  <a data-mk-voltar class="ag-back" href="{{ voltar_url }}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+    {{ voltar_nome }}
+  </a>
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · Telemetria</p>
+    <h1 class="mkpro-head__title">Agente de coleta</h1>
+    <p class="mkpro-head__sub">Instalado na máquina, o agente lê o hardware real a cada 30 min — é o que faz o score deixar de ser estimativa.</p>
+  </header>
+
+  {# ---------- Faixa de sinais ---------- #}
+  <div class="agx-sinais">
+    <div class="agx-sinal {% if token_ok %}agx-sinal--ok{% else %}agx-sinal--off{% endif %}">
+      <span class="agx-sinal__ico" aria-hidden="true">
+        {% if token_ok %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>{% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>{% endif %}
+      </span>
+      <span>
+        <span class="agx-sinal__lbl">Coleta</span>
+        <span class="agx-sinal__val">{% if token_ok %}Ligada{% else %}Desligada — defina o token{% endif %}</span>
+      </span>
+    </div>
+
+    <div class="agx-sinal {% if e2ee %}agx-sinal--ok{% else %}agx-sinal--warn{% endif %}">
+      <span class="agx-sinal__ico" aria-hidden="true">
+        {% if e2ee %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>{% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/></svg>{% endif %}
+      </span>
+      <span>
+        <span class="agx-sinal__lbl">Criptografia</span>
+        <span class="agx-sinal__val">{% if e2ee %}E2EE ativo{% else %}Sem criptografia{% endif %}</span>
+      </span>
+    </div>
+
+    <div class="agx-sinal">
+      <span class="agx-sinal__ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><path d="M12 20h.01"/></svg></span>
+      <span>
+        <span class="agx-sinal__lbl">Reportando</span>
+        <span class="agx-sinal__val">{{ total_coletas }} máquina(s)</span>
+      </span>
+    </div>
+
+    <div class="agx-sinal agx-sinal--ok">
+      <span class="agx-sinal__ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+      <span>
+        <span class="agx-sinal__lbl">Vinculadas</span>
+        <span class="agx-sinal__val">{{ vinculadas }}</span>
+      </span>
+    </div>
+
+    {% if pendentes %}
+    <div class="agx-sinal agx-sinal--warn">
+      <span class="agx-sinal__ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
+      <span>
+        <span class="agx-sinal__lbl">Pendentes de vínculo</span>
+        <span class="agx-sinal__val">{{ pendentes }}</span>
+      </span>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if divergencias %}
+  <div class="agx-div" id="divergencias">
+    <h2 class="agx-div__tit">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      Localização divergente <span class="agx-st agx-st--pend">{{ divergencias|length }}</span>
+    </h2>
+    <p class="agx-div__intro">
+      Estas máquinas reportam de um IP público que pertence a uma unidade <b>diferente</b>
+      da cadastrada — provavelmente foram movidas de loja sem atualizar o sistema.
+      Confira e <b>corrija</b>, ou <b>ignore</b> se for uma exceção legítima.
+    </p>
+    {% for d in divergencias %}
+    <div class="agx-div__item">
+      <div class="agx-div__info">
+        <b>{{ d.alvo }}</b>
+        <span class="agx-div__rota">
+          cadastrado em <span class="agx-div__errado">{{ d.cadastrada }}</span>
+          → detectado em <span class="agx-div__certo">{{ d.detectada }}</span>
+        </span>
+      </div>
+      <div class="agx-div__acoes">
+        <form method="post" action="{% url 'parque_local_ignorar' d.tel.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="agx-btn agx-btn--sm">Ignorar</button>
+        </form>
+        <a class="agx-btn agx-btn--ok agx-btn--sm" href="{{ d.corrigir_url }}">Corrigir</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="agx-topo">
+    <div class="agx-card">
+      <h2 class="agx-card__tit"><span class="mkpro-chip mkpro-chip--sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/></svg></span> Instalar o agente</h2>
+      <p class="agx-intro">
+        O agente lê CPU, RAM, disco, S.O., vídeo, tempo ligada e localização, e envia
+        <b>cifrado</b> ao sistema a cada 30 min. Instale uma vez em cada computador.
+      </p>
+      <div class="agx-baixar">
+        <a class="agx-btn agx-btn--ok" href="{% url 'parque_agente_baixar' %}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/></svg>
+          Windows (.zip)
+        </a>
+        <a class="agx-btn" href="{% url 'parque_agente_baixar_linux' %}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/></svg>
+          Linux Mint (.zip)
+        </a>
+      </div>
+
+      <div class="agx-guia">
+        <div>
+          <h3 class="agx-guia__tit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> Windows</h3>
+          <p class="agx-guia__resumo">
+            Baixe o <b>Windows (.zip)</b> → extraia tudo → <b>Win+R</b> → <code>shell:startup</code> →
+            cole os arquivos → 2 cliques em <code>iniciar_agente.vbs</code>. Não aparece janela: é normal.
+          </p>
+          <details class="agx-det">
+            <summary>Ver passo a passo detalhado</summary>
+            <ol class="agx-passos">
+              <li>Clique no botão <b>Windows (.zip)</b> aqui em cima. O arquivo cai na pasta <b>Downloads</b>.</li>
+              <li>Abra a pasta <b>Downloads</b> e ache o arquivo terminado em <b>.zip</b>.</li>
+              <li><b>Antes de abrir:</b> botão direito no .zip → <b>Propriedades</b>. Se houver <b>“Desbloquear”</b> lá embaixo, marque → <b>OK</b>. (Se não tiver, siga.)</li>
+              <li>Botão direito no .zip → <b>Extrair Tudo…</b> → <b>Extrair</b>. Abre uma pasta com vários arquivos.</li>
+              <li>Dentro dela: <code>Ctrl+A</code> (selecionar tudo) e <code>Ctrl+C</code> (copiar).</li>
+              <li>Segure a tecla <b>Windows</b> (a do logo) e aperte <b>R</b> → digite <code>shell:startup</code> → <b>Enter</b>.</li>
+              <li>Clique na pasta que abriu e aperte <code>Ctrl+V</code> (colar).</li>
+              <li>Dê <b>dois cliques</b> em <code>iniciar_agente.vbs</code>. Não aparece nada na tela — é normal, já enviou.</li>
+            </ol>
+          </details>
+          <p class="agx-nota">
+            <b>Não aparece na lista, ou conta limitada?</b> Botão direito em <code>instalar_tarefa.bat</code> → <b>Executar como administrador</b>.
+            <b>Conferir:</b> dois cliques em <code>diagnostico.bat</code>.
+          </p>
+        </div>
+
+        <div>
+          <h3 class="agx-guia__tit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m7 10 3 3-3 3M13 16h4"/></svg> Linux Mint / Ubuntu</h3>
+          <p class="agx-guia__resumo">
+            Baixe o <b>Linux Mint (.zip)</b> → extraia → abra o <b>Terminal</b> na pasta →
+            digite <code>bash instalar.sh</code> e Enter. Agenda sozinho, sem root.
+          </p>
+          <details class="agx-det">
+            <summary>Ver passo a passo detalhado</summary>
+            <ol class="agx-passos">
+              <li>Clique no botão <b>Linux Mint (.zip)</b> aqui em cima. O arquivo cai em <b>Transferências</b>.</li>
+              <li>Abra o gerenciador de arquivos (ícone de <b>pasta amarela</b>) e entre em <b>Transferências</b>.</li>
+              <li>Botão direito no <b>.zip</b> → <b>Extrair aqui</b>. Entre na pasta criada (dois cliques).</li>
+              <li>Botão direito num <b>espaço vazio</b> dentro da pasta → <b>“Abrir no Terminal”</b> (janelinha preta).
+                <div class="agx-alt">Não achou? Abra o <b>Menu</b>, digite <b>Terminal</b>, e depois <code>cd</code> até a pasta.</div>
+              </li>
+              <li>Digite <code>bash instalar.sh</code> e aperte <b>Enter</b> (colar = <code>Ctrl+Shift+V</code>).</li>
+              <li>Espere a mensagem de sucesso. Pronto. Roda sozinho a cada 30 min, sem root.</li>
+            </ol>
+          </details>
+          <p class="agx-nota">
+            <b>Conferir:</b> no Terminal, na mesma pasta, rode <code>bash coletar_score.sh --diag</code>.
+          </p>
+        </div>
+      </div>
+
+      <p class="agx-nota">
+        As máquinas casam pelo <b>nº de série / MAC</b>. As pendentes você vincula ao patrimônio
+        pelo botão “Vincular” na tabela abaixo. Uma coleta é <b>ativa</b> quando chegou nas
+        últimas {{ ativa_horas }}h.
+      </p>
+    </div>
+
+    <aside class="agx-card">
+      <div class="agx-cob__head">
+        <span class="agx-cob__ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17V9M9 17V5M14 17v-6M19 17v-9"/><path d="M3 21h18"/></svg></span>
+        <div>
+          <div class="agx-cob__tt">Cobertura do agente</div>
+          <div class="agx-cob__sub">máquinas com o agente vinculado</div>
+        </div>
+      </div>
+      <div class="agx-cob__top">
+        <svg class="agx-ring" viewBox="0 0 120 120" role="img" aria-label="Cobertura de {{ cobertura.pct }}%">
+          <circle class="bg" cx="60" cy="60" r="47" pathLength="100"/>
+          <circle class="fg" cx="60" cy="60" r="47" pathLength="100" stroke-dasharray="{{ cobertura.pct }} 100"/>
+          <text class="n" x="60" y="58" text-anchor="middle">{{ cobertura.pct }}%</text>
+          <text class="l" x="60" y="74" text-anchor="middle">{{ cobertura.vinc }} / {{ cobertura.total }}</text>
+        </svg>
+        <div class="agx-cob__rz">
+          <div><i style="background:var(--md-primary)"></i><b>{{ cobertura.vinc }}</b> vinculadas</div>
+          <div><i style="background:var(--md-outline-variant)"></i><b>{{ cobertura.faltam }}</b> faltam instalar</div>
+          <div><i style="background:transparent"></i>de <b>{{ cobertura.total }}</b> no total</div>
+        </div>
+      </div>
+      <p class="agx-cob__unt">Por unidade (vinculadas / total)</p>
+      {% for u in cobertura.por_unidade %}
+      <div class="agx-ubar{% if u.vinc == 0 %} is-zero{% endif %}">
+        <span class="un" title="{{ u.nome }}">{{ u.nome }}</span>
+        <span class="tk"><span class="fl" style="width:{{ u.pct }}%"></span></span>
+        <span class="vv">{{ u.vinc }}/{{ u.total }}</span>
+      </div>
+      {% endfor %}
+    </aside>
+  </div>
+
+  <div class="agx-tel">
+    <div class="agx-tel__head">
+      <h2><span class="mkpro-chip mkpro-chip--sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><path d="M12 20h.01"/></svg></span> Coletas recebidas</h2>
+      {% comment %}Host do popup: DIV, nunca <form> — o parcial traz dentro dele
+      o formulário do "Aplicar", e form dentro de form o parser descarta.{% endcomment %}
+      <div class="agx-filtros">
+        {% include "parque/_filtros.html" %}
+        {% comment %}A busca vai por GET nesta mesma URL (não é filtro de
+        JavaScript: procura no banco inteiro, não só no que está na tela).
+
+        Tem botão de Buscar porque só-Enter esconde que o campo faz algo, e
+        tem o × porque `q` é parâmetro `keep` — o "Limpar" do popup de filtros
+        NÃO tira a busca, então sem este × a pessoa limpava tudo, a lista
+        continuava curta e a tela parecia travada.{% endcomment %}
+        <form class="agx-busca" method="get" role="search">
+          {% if filtro %}<input type="hidden" name="filtro" value="{{ filtro }}">{% endif %}
+          {% if request.GET.unidade %}<input type="hidden" name="unidade" value="{{ request.GET.unidade }}">{% endif %}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="search" name="q" value="{{ busca }}" placeholder="Patrimônio, colaborador, loja, serial, host, IP…" aria-label="Buscar coleta">
+          <button type="submit" class="agx-busca__ok">Buscar</button>
+          {% if busca %}<a class="agx-busca__x" href="?{% if filtro %}filtro={{ filtro }}&amp;{% endif %}{% if request.GET.unidade %}unidade={{ request.GET.unidade }}{% endif %}" title="Limpar a busca" aria-label="Limpar a busca">×</a>{% endif %}
+        </form>
+      </div>
+    </div>
+
+    <div class="agx-tbl">
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th><th>Máquina</th><th>Serial / Host</th><th>CPU</th>
+            <th>RAM</th><th>Disco</th><th>Vídeo</th><th>S.O.</th>
+            <th>Ligada há</th><th>IP (local / público)</th><th>Localização</th>
+            <th class="agx-visto">Visto em</th><th class="agx-acao">Ação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in coletas %}
+          <tr class="{% if t.pendente %}is-pend{% endif %}">
+            <td><span class="agx-st{% if t.ativa %} agx-st--on{% endif %}">{% if t.ativa %}Ativa{% else %}Inativa{% endif %}</span></td>
+            <td>
+              {% if t.pendente %}
+                <span class="agx-st agx-st--pend">Pendente</span>
+              {% else %}
+                <b>{{ t.alvo }}</b>
+                {% if t.local_divergente %}<br><span class="agx-st agx-st--diverg" title="Localização divergente">Local errado</span>{% endif %}
+              {% endif %}
+            </td>
+            <td><code>{{ t.serial }}</code><small>{{ t.hostname }}</small>{% if t.mac_label %}<small title="Endereço MAC">MAC {{ t.mac_label }}</small>{% endif %}</td>
+            <td>{{ t.cpu_modelo|default:"—" }}{% if t.cpu_nucleos %} · {{ t.cpu_nucleos }}c{% endif %}{% if t.cpu_ghz %} · {{ t.cpu_ghz }}GHz{% endif %}</td>
+            <td>{% if t.ram_gb %}{{ t.ram_gb }}GB{% if t.ram_tipo %} {{ t.ram_tipo }}{% endif %}{% else %}—{% endif %}</td>
+            <td>{% if t.disco_total_gb %}{{ t.disco_tipo }} {{ t.disco_total_gb }}GB{% if t.particao %} · {{ t.particao }}{% endif %}{% else %}—{% endif %}</td>
+            <td>{% if t.gpu %}{{ t.gpu_tipo|capfirst }}<small>{{ t.gpu }}</small>{% else %}—{% endif %}</td>
+            <td>{{ t.so|default:"—" }}</td>
+            <td>{{ t.uptime_humano }}</td>
+            <td>
+              <span class="agx-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> {{ t.ip_local|default:"—" }}</span><br>
+              <span class="agx-cell"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></svg> {{ t.ip_publico|default:"—" }}</span>
+            </td>
+            <td>{{ t.geo_label }}</td>
+            <td class="agx-visto">{{ t.visto_em|date:"d/m H:i" }}</td>
+            <td class="agx-acao">
+              {% if t.pendente %}
+                <a class="agx-link" href="{% url 'parque_telemetria_vincular' t.pk %}">Vincular</a>
+              {% else %}
+                <a class="agx-link" href="/admin/parque/telemetriamaquina/{{ t.pk }}/change/">Ver</a>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="13" class="agx-vazio-cel">
+            <div class="mkpro-empty mkpro-empty--slim">
+              <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><path d="M12 20h.01"/></svg></span>
+              {% comment %}Vazio por BUSCA é diferente de vazio por não ter
+              coleta. Antes os dois casos mostravam "Nenhuma coleta recebida
+              ainda — baixe o agente", o que dizia à pessoa que a tela estava
+              sem dado quando o que houve foi a busca não casar.{% endcomment %}
+              {% if busca %}
+                <p class="mkpro-empty__title">Nenhuma coleta encontrada para “{{ busca }}”</p>
+                <p class="mkpro-empty__hint">A busca procura por patrimônio, colaborador, loja, setor, serial, host, CPU, S.O., IP, MAC e cidade. <a class="agx-link" href="?{% if filtro %}filtro={{ filtro }}{% endif %}">Limpar a busca</a> para ver todas as {{ total_coletas }}.</p>
+              {% elif filtro or request.GET.unidade %}
+                <p class="mkpro-empty__title">Nenhuma coleta neste filtro</p>
+                <p class="mkpro-empty__hint">Existem {{ total_coletas }} coleta{{ total_coletas|pluralize }} no total. Limpe o filtro para vê-las.</p>
+              {% else %}
+                <p class="mkpro-empty__title">Nenhuma coleta recebida ainda</p>
+                <p class="mkpro-empty__hint">Baixe o agente acima e instale numa máquina — a primeira coleta chega em poucos minutos.</p>
+              {% endif %}
+            </div>
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% comment %}Os cartões do topo contam o parque inteiro e não se movem com
+    a busca. Esta linha é a única confirmação na tela de que a busca rodou.{% endcomment %}
+    {% if busca or filtro or request.GET.unidade %}
+      <p class="agx-rodape">{{ achados }} de {{ total_coletas }} coleta{{ total_coletas|pluralize }}{% if busca %} para “{{ busca }}”{% endif %}{% if coletas|length == 300 %} · exibindo as 300 mais recentes{% endif %}.</p>
+    {% elif coletas|length == 300 %}
+      <p class="agx-rodape">Exibindo as 300 coletas mais recentes, de {{ total_coletas }}.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,115 @@
+{% comment %}
+GRÁFICO DO TOPO DA PREVENTIVA — cópia do modelo que o dono mandou (áreas macias
+empilhadas, sem eixo, sem grade, rótulos de data discretos e um título com
+número grande + variação), na paleta do sistema.
+
+Duas séries: verde = preventiva concluída, coral = corretiva. Os `path` já vêm
+prontos de `_grafico_preventiva()` em apps/parque/views.py — nada de JS e nada
+de biblioteca de gráfico: o desenho está certo no primeiro quadro.
+
+CSS com prefixo próprio (`pvg-`) e nada de regra solta em `svg`: o tamanho do
+ícone de cada tela é escopado no bloco dela, e regra global aqui estouraria a
+tela toda.
+{% endcomment %}
+<style>
+  .pvg {
+    margin: 0 0 16px;
+    padding: 16px 0 4px;
+    background: var(--md-surface);
+    border: 1px solid var(--md-outline-variant);
+    border-radius: var(--md-shape-lg);
+    overflow: hidden;
+  }
+  .pvg__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 0 18px 2px; }
+  .pvg__num { font: 700 20px/1.2 var(--md-font); color: var(--md-on-surface); letter-spacing: -.2px; }
+  .pvg__lbl { font: 400 14px/1.3 var(--md-font); color: var(--md-on-surface-variant); }
+  .pvg__dot { color: var(--md-outline); }
+  .pvg__var {
+    display: inline-flex; align-items: center; gap: 3px;
+    font: 600 12.5px/1 var(--md-font);
+    color: var(--md-primary);
+  }
+  .pvg__var--desce { color: #b3261e; }
+  .pvg__var svg { width: 14px; height: 14px; flex: none; }
+  .pvg__leg { display: flex; align-items: center; gap: 14px; margin-left: auto; }
+  .pvg__leg-i {
+    display: inline-flex; align-items: center; gap: 6px;
+    font: 500 12px/1 var(--md-font); color: var(--md-on-surface-variant);
+  }
+  .pvg__leg-i::before {
+    content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--md-primary);
+  }
+  .pvg__leg-i--corr::before { background: #d97757; }
+  .pvg__chart { display: block; width: 100%; height: 224px; margin-top: 6px; }
+  .pvg__eixo { font: 500 11px/1 var(--md-font); fill: var(--md-on-surface-variant); }
+  .pvg__vazio {
+    margin: 4px 18px 12px; padding: 22px 18px;
+    background: var(--md-surface-container-low, var(--md-surface-container));
+    border-radius: var(--md-shape-md);
+    font: 400 13.5px/1.5 var(--md-font); color: var(--md-on-surface-variant);
+  }
+  @media (max-width: 700px) {
+    .pvg__chart { height: 176px; }
+    .pvg__leg { margin-left: 0; }
+  }
+</style>
+
+<section class="pvg" aria-label="Preventivas concluídas por semana">
+  <div class="pvg__head">
+    <span class="pvg__num">{{ pvg.no_mes }}</span>
+    <span class="pvg__lbl">preventiva{{ pvg.no_mes|pluralize }} em {{ pvg.mes_nome }}</span>
+    <span class="pvg__dot">·</span>
+    <span class="pvg__lbl">{{ pvg.no_ano }} em {{ pvg.ano }}</span>
+    {% if pvg.variacao != None %}
+      <span class="pvg__var{% if not pvg.sobe %} pvg__var--desce{% endif %}"
+            title="Comparado com o mês anterior">
+        {% if pvg.sobe %}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>
+        {% else %}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7l10 10M17 9v8H9"/></svg>
+        {% endif %}
+        {{ pvg.variacao }}%
+      </span>
+    {% endif %}
+    <span class="pvg__leg">
+      <span class="pvg__leg-i">Preventivas</span>
+      <span class="pvg__leg-i pvg__leg-i--corr">Corretivas</span>
+    </span>
+  </div>
+
+  {% if pvg.tem_dados %}
+    <svg class="pvg__chart" viewBox="0 0 1000 224" preserveAspectRatio="none" role="img"
+         aria-label="{{ pvg.no_ano }} preventivas e {{ pvg.corretivas }} corretivas registradas em {{ pvg.ano }}, mês a mês.">
+      <defs>
+        <linearGradient id="pvgPrev" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#00a651" stop-opacity=".42"/>
+          <stop offset="100%" stop-color="#00a651" stop-opacity=".03"/>
+        </linearGradient>
+        <linearGradient id="pvgCorr" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#d97757" stop-opacity=".46"/>
+          <stop offset="100%" stop-color="#d97757" stop-opacity=".04"/>
+        </linearGradient>
+      </defs>
+
+      {# Base: a linha do zero, discreta — o modelo não tem grade. #}
+      <line x1="0" y1="190" x2="1000" y2="190" stroke="var(--md-outline-variant)" stroke-width="1"/>
+
+      {% comment %}A ordem vem do servidor: a área de maior volume é desenhada
+      primeiro, para não cobrir a menor.{% endcomment %}
+      {% for c in pvg.camadas %}
+        <path d="{{ c.area }}" fill="url(#{{ c.grad }})"/>
+        <path d="{{ c.linha }}" fill="none" stroke="{{ c.cor }}" stroke-width="2.5" stroke-linecap="round"/>
+      {% endfor %}
+
+      {% for r in pvg.rotulos %}
+        <text class="pvg__eixo" x="{{ r.x }}" y="214" text-anchor="{{ r.anchor }}">{{ r.txt }}</text>
+      {% endfor %}
+    </svg>
+  {% else %}
+    <p class="pvg__vazio">
+      Nenhum serviço registrado em {{ pvg.ano }} ainda. O gráfico começa a desenhar no
+      primeiro lançamento — a fonte é a data do serviço, a mesma do painel
+      "Manutenção preventiva por mês" do Dashboard.
+    </p>
+  {% endif %}
+</section>

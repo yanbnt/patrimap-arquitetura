@@ -1,0 +1,163 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  /* ==========================================================================
+     grupos_lista.html — prefixo .grpl-  ·  Material Design 3
+     As abas viraram TABS do M3: sem caixa em volta, sem fundo por segmento — só
+     o indicador de 3px em primary sob a aba ativa, sobre um divisor
+     outline-variant. Seções e cartões são FILLED (superfície tonal, sem borda e
+     sem sombra; hover sobe um tom) e os campos usam o outlined field global.
+     ========================================================================== */
+  .grpl { display: flex; flex-direction: column; gap: 24px; }
+  .grpl * { box-sizing: border-box; }
+  .grpl svg { display: block; }
+
+  /* Abas de visão da Preventiva: primary tabs do M3. */
+  .grpl-tabs {
+    display: flex; flex-wrap: wrap; align-items: stretch; gap: 0;
+    padding: 0; border: 0; border-bottom: 1px solid var(--md-outline-variant);
+    border-radius: 0; background: transparent;
+  }
+  .grpl-tab {
+    position: relative;
+    display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 16px;
+    border-radius: 0;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    color: var(--md-on-surface-variant); text-decoration: none; white-space: nowrap;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .grpl-tab svg { width: 18px; height: 18px; flex: none; }
+  .grpl-tab:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); color: var(--md-on-surface); }
+  .grpl-tab.is-active { background: transparent; color: var(--md-primary); box-shadow: none; }
+  .grpl-tab.is-active::after {
+    content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 3px;
+    background: var(--md-primary); border-radius: var(--md-shape-xs) var(--md-shape-xs) 0 0;
+  }
+  .grpl-tab--home { margin-right: auto; color: var(--md-on-surface-variant); }
+
+  .grpl-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+  .grpl-head__id { flex: 1 1 340px; min-width: 0; display: grid; gap: 4px; }
+  .grpl-intro { font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant); margin: 0; }
+  .grpl-intro b { color: var(--md-on-surface); font-weight: 500; }
+
+  /* Seções: cartão filled do M3. */
+  .grpl-sec {
+    background: var(--md-surface-container-low); border: 0;
+    border-radius: var(--md-shape-md); box-shadow: none; padding: 16px;
+  }
+  .grpl-sec__tt {
+    display: flex; align-items: center; gap: 12px; margin: 0 0 16px;
+    font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface);
+  }
+  .grpl-sec__tt svg { width: 24px; height: 24px; color: var(--md-on-surface-variant); }
+
+  /* Formulário: o campo outlined de 56px vem do sistema (make-m3.css §7); aqui
+     só resta o layout. Uma coluna de leitura, ação preenchida à direita. */
+  .grpl-form { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .grpl-input { flex: 1; min-width: 240px; }
+  .grpl-select { flex: 0 1 280px; }
+  .grpl-uni { font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant); }
+  .grpl-uni b { color: var(--md-on-surface); font-weight: 500; }
+  /* A única ação filled da tela. */
+  .grpl-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 40px; padding: 0 24px !important; border: 0 !important;
+    border-radius: var(--md-shape-full) !important; cursor: pointer; text-decoration: none;
+    font: 500 14px/20px var(--md-font) !important; letter-spacing: .1px !important;
+    background: var(--md-action) !important; color: var(--md-on-action) !important;
+    box-shadow: none !important;
+  }
+  .grpl-btn:hover { background: var(--md-primary) !important; }
+  .grpl-btn svg { width: 18px; height: 18px; }
+
+  /* Grade de grupos: cartões filled, hover sobe um tom. */
+  .grpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
+  .grpl-card {
+    display: flex; align-items: center; gap: 16px; padding: 12px;
+    background: var(--md-surface-container-low); border: 0;
+    border-radius: var(--md-shape-md); box-shadow: none; text-decoration: none;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .grpl-card:hover { transform: none; background: var(--md-surface-container); }
+  .grpl-card__ic {
+    width: 40px; height: 40px; border-radius: var(--md-shape-full); flex: none;
+    display: grid; place-items: center;
+    background: var(--md-primary-container); color: var(--md-on-primary-container);
+  }
+  .grpl-card__ic svg { width: 20px; height: 20px; }
+  .grpl-card__body { flex: 1; min-width: 0; }
+  .grpl-card__nome {
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .grpl-card__uni { font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); }
+  .grpl-card__total {
+    flex: none; height: 24px; padding: 0 8px;
+    display: inline-flex; align-items: center; border-radius: var(--md-shape-sm);
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; font-variant-numeric: tabular-nums;
+  }
+
+  @media (max-width: 900px) { .grpl-head { align-items: flex-start; } }
+</style>
+
+<div class="grpl">
+
+  <div class="grpl-tabs">
+    <a data-mk-voltar class="grpl-tab grpl-tab--home" href="{{ voltar_url }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg> {{ voltar_nome }}</a>
+    <a class="grpl-tab" href="?vista=tarefas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Tarefas</a>
+    <a class="grpl-tab" href="?vista=calendario"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/></svg> Calendário</a>
+    <a class="grpl-tab" href="?vista=tabela"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg> Tabela</a>
+    <a class="grpl-tab is-active" href="?vista=grupos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="8" r="3"/><circle cx="17" cy="8" r="3"/><path d="M2 20a5 5 0 0 1 10 0M12 20a5 5 0 0 1 10 0"/></svg> Grupos</a>
+    <a class="grpl-tab" href="?vista=ranking"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg> Ranking</a>
+  </div>
+
+  <header class="mkpro-head grpl-head">
+    <div class="grpl-head__id">
+      <p class="mkpro-head__eyebrow">Preventiva · Grupos</p>
+      <h1 class="mkpro-head__title">Grupos de preventiva</h1>
+      <p class="grpl-intro mkpro-head__sub">Agrupe máquinas para <b>antecipar</b> a preventiva em lote, sem esperar vencer. Concluir a preventiva do grupo <b>zera os dias</b> de cada máquina e rende pontos.</p>
+    </div>
+  </header>
+
+  <div class="grpl-sec">
+    <h2 class="grpl-sec__tt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> Novo grupo</h2>
+    <form method="post" action="{% url 'parque_grupo_criar' %}" class="grpl-form">
+      {% csrf_token %}
+      <input type="text" name="nome" class="grpl-input" placeholder="Nome do grupo (ex.: Caixas — Bonsucesso)" required>
+      {% if gestao %}
+        <select name="unidade_id" class="grpl-input grpl-select" required>
+          <option value="">— unidade —</option>
+          {% for u in unidades_novo %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+        </select>
+      {% elif minha_unidade %}
+        <span class="grpl-uni">Unidade: <b>{{ minha_unidade.name }}</b></span>
+      {% endif %}
+      <button type="submit" class="grpl-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> Criar grupo</button>
+    </form>
+  </div>
+
+  {% if grupos %}
+  <div class="grpl-grid">
+    {% for g in grupos %}
+    <a class="grpl-card" href="{% url 'parque_grupo_detalhe' g.obj.pk %}">
+      <span class="grpl-card__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8V6a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h4"/><rect x="9" y="11" width="12" height="9" rx="2"/></svg></span>
+      <div class="grpl-card__body">
+        <div class="grpl-card__nome">{{ g.nome }}</div>
+        <div class="grpl-card__uni">{{ g.unidade }}</div>
+      </div>
+      <span class="grpl-card__total mkpro-tabular">{{ g.total }} máq.</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="mkpro-empty">
+    <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8V6a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h4"/><rect x="9" y="11" width="12" height="9" rx="2"/></svg></span>
+    <p class="mkpro-empty__title">Nenhum grupo criado ainda</p>
+    <p class="mkpro-empty__hint">Use o campo <b>Novo grupo</b> acima para criar o primeiro — depois é só adicionar as máquinas que fazem preventiva juntas.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

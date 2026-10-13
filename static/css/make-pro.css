@@ -1,0 +1,359 @@
+/* =============================================================================
+   make-pro.css — Camada de ACABAMENTO PROFISSIONAL do ITAM Make.
+
+   Carregada DEPOIS de make-admin.css (ver UNFOLD["STYLES"] em
+   config/settings/base.py). Contrato completo: DESIGN-PRO.md.
+
+   O que este arquivo faz:
+     1. publica os tokens da marca como variáveis usáveis em qualquer tela;
+     2. entrega os componentes padrão (cabeçalho, chip, alerta, empty-state, KPI);
+     3. faz correções globais de acabamento (números tabulares, foco visível,
+        papel de parede de doodles fora do caminho).
+
+   O que este arquivo NÃO faz: mudar layout, navegação, kanban, mapa ou as
+   ilustrações do parque. Remover a linha do STYLES desfaz tudo daqui.
+   ========================================================================== */
+
+/* ------------------------------------------------------------- 1. Tokens */
+
+:root {
+  --mkp-s: #ffffff;
+  --mkp-s2: #f5f9f6;
+  --mkp-ink: #16241b;
+  --mkp-muted: #5f6f66;
+  --mkp-faint: #93a19a;
+  --mkp-edge: rgba(16, 40, 27, .12);
+  --mkp-edge-strong: rgba(16, 40, 27, .20);
+
+  --mkp-grn: #00a651;
+  --mkp-grn-hover: #00913f;
+  --mkp-grn7: #067a38;
+  --mkp-lima: #cbf542;
+  --mkp-brand-deep: #0c2a1a;
+
+  --mkp-pendente: #e0533f;
+  --mkp-vencida: #ef8f3c;
+  --mkp-proxima: #e6b32e;
+  --mkp-emdia: #00a651;
+
+  --mkp-danger: #b42318;
+  --mkp-danger-bg: #fef3f2;
+  --mkp-danger-edge: #fda29b;
+  --mkp-warn: #93500b;
+  --mkp-warn-bg: #fffaeb;
+  --mkp-warn-edge: #fec84b;
+  --mkp-ok: #067a38;
+  --mkp-ok-bg: #ecfdf3;
+  --mkp-ok-edge: #6ce9a6;
+  --mkp-info: #0f5132;
+  --mkp-info-bg: #f0f9f3;
+  --mkp-info-edge: rgba(0, 166, 81, .28);
+
+  --mkp-r-field: 10px;
+  --mkp-r-card: 12px;
+  --mkp-r-panel: 14px;
+  --mkp-gap: 14px;
+  --mkp-sh: 0 1px 2px rgba(16, 40, 27, .05);
+  --mkp-sh-lg: 0 1px 2px rgba(16, 40, 27, .05), 0 10px 24px -14px rgba(16, 40, 27, .16);
+}
+
+.dark {
+  --mkp-s: #151d19;
+  --mkp-s2: #111713;
+  --mkp-ink: #e6efe9;
+  --mkp-muted: #9db0a5;
+  --mkp-faint: #6f8478;
+  --mkp-edge: rgba(255, 255, 255, .10);
+  --mkp-edge-strong: rgba(255, 255, 255, .18);
+  --mkp-grn7: #5fe08d;
+
+  --mkp-danger: #fda29b;
+  --mkp-danger-bg: rgba(180, 35, 24, .14);
+  --mkp-danger-edge: rgba(253, 162, 155, .38);
+  --mkp-warn: #fec84b;
+  --mkp-warn-bg: rgba(147, 80, 11, .16);
+  --mkp-warn-edge: rgba(254, 200, 75, .34);
+  --mkp-ok: #6ce9a6;
+  --mkp-ok-bg: rgba(6, 122, 56, .16);
+  --mkp-ok-edge: rgba(108, 233, 166, .34);
+  --mkp-info: #b9e8cd;
+  --mkp-info-bg: rgba(0, 166, 81, .12);
+  --mkp-info-edge: rgba(0, 166, 81, .26);
+
+  --mkp-sh: 0 1px 2px rgba(0, 0, 0, .34);
+  --mkp-sh-lg: 0 1px 2px rgba(0, 0, 0, .34), 0 14px 30px -16px rgba(0, 0, 0, .6);
+}
+
+/* --------------------------------------------- 2. Cabeçalho padrão de tela */
+
+.mkpro-head {
+  display: grid;
+  gap: 4px;
+  margin-bottom: var(--mkp-gap);
+}
+.mkpro-head__eyebrow {
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--mkp-grn7);
+}
+.mkpro-head__title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  line-height: 1.2;
+  color: var(--mkp-ink);
+}
+.mkpro-head__sub {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--mkp-muted);
+}
+.mkpro-head__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* ---------------------------------------------------- 3. Chip de ícone SVG */
+
+.mkpro-chip {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  background: rgba(0, 166, 81, .14);
+  color: var(--mkp-grn);
+}
+.dark .mkpro-chip { background: rgba(0, 166, 81, .22); color: #35c46f; }
+
+.mkpro-chip svg { width: 16px; height: 16px; display: block; }
+.mkpro-chip--sm { width: 26px; height: 26px; }
+.mkpro-chip--sm svg { width: 14px; height: 14px; }
+.mkpro-chip--lg { width: 36px; height: 36px; }
+.mkpro-chip--lg svg { width: 19px; height: 19px; }
+
+/* Ativo / destaque: degradê verde→lima, ícone escuro (DESIGN.md §4). */
+.mkpro-chip--on {
+  background: linear-gradient(135deg, #00a651, #cbf542);
+  color: #0b2e18;
+  box-shadow: 0 1px 3px rgba(6, 61, 30, .28);
+}
+.dark .mkpro-chip--on { color: #0b2e18; }
+
+/* Sobre o degradê do hero o ícone é branco. */
+.mkpro-chip--onbrand { background: rgba(255, 255, 255, .18); color: #fff; }
+
+/* ------------------------------------------------------------ 4. Alertas */
+
+.mkpro-alert {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 10px;
+  align-items: start;
+  font-size: 12.5px;
+  line-height: 1.55;
+  border: 1px solid var(--mkp-info-edge);
+  border-radius: var(--mkp-r-card);
+  padding: 11px 13px;
+  background: var(--mkp-info-bg);
+  color: var(--mkp-info);
+}
+.mkpro-alert + .mkpro-alert { margin-top: 8px; }
+.mkpro-alert strong { font-weight: 700; }
+.mkpro-alert__icon { display: grid; place-items: center; }
+.mkpro-alert__icon svg { width: 18px; height: 18px; }
+.mkpro-alert ul { margin: 4px 0 0; padding-left: 17px; }
+
+.mkpro-alert--ok { background: var(--mkp-ok-bg); border-color: var(--mkp-ok-edge); color: var(--mkp-ok); }
+.mkpro-alert--warn { background: var(--mkp-warn-bg); border-color: var(--mkp-warn-edge); color: var(--mkp-warn); }
+.mkpro-alert--error { background: var(--mkp-danger-bg); border-color: var(--mkp-danger-edge); color: var(--mkp-danger); }
+
+/* --------------------------------------------------------- 5. Empty-state */
+
+.mkpro-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+  padding: 26px 18px;
+  border: 1px dashed var(--mkp-edge-strong);
+  border-radius: var(--mkp-r-panel);
+  background: var(--mkp-s2);
+}
+.mkpro-empty__title {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--mkp-ink);
+}
+.mkpro-empty__hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--mkp-muted);
+  max-width: 46ch;
+}
+.mkpro-empty--slim { padding: 16px 14px; }
+
+/* ---------------------------------------------------------- 6. Números KPI */
+
+.mkpro-num {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--mkp-ink);
+}
+.mkpro-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--mkp-muted);
+}
+
+/* Toda coluna de número em tabela alinha pelos dígitos. */
+table td, table th, .mkpro-tabular { font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------- 7. Correções globais */
+
+/* Papel de parede de doodles atrás do conteúdo: sai do caminho.
+   O bloco continua no HTML (reversível) — só deixa de ser visível. */
+.make-dash-bg { display: none !important; }
+
+/* Foco sempre visível — navegação por teclado é requisito, não enfeite. */
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--mkp-grn);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Faixa de mensagens do admin: componente, não texto solto. */
+.mkpro-msgs { display: grid; gap: 8px; margin-bottom: var(--mkp-gap); }
+
+@media (prefers-reduced-motion: reduce) {
+  .mkpro-chip, .mkpro-alert { transition: none !important; }
+}
+
+/* ------------------------------------------------------- 8. Impressão */
+
+@media print {
+  .mkpro-head__actions, .mkpro-alert { display: none !important; }
+  .mkpro-chip { box-shadow: none; }
+}
+
+/* =============================================================================
+   9. VIDRO → SUPERFÍCIE SÓLIDA
+
+   O make-admin.css aplica glassmorphism no sistema inteiro (bloco "TEMA MAKE —
+   VIDRO"), dirigido pelos tokens `--g-*`. Em vez de reescrever as dezenas de
+   regras que os consomem, redefinimos os tokens: painel translúcido vira
+   superfície sólida, brilho vira nada, sombra em camadas vira sombra sutil.
+
+   Reverter = apagar esta seção. O bloco original continua intacto.
+   ========================================================================== */
+
+:root {
+  --g-radius: 14px;
+  /* Superfície sólida no lugar do vidro fosco */
+  --g-glass: #ffffff;
+  --g-panel: #ffffff;
+  --g-edge: rgba(16, 40, 27, .12);
+  /* Sem brilho diagonal (o `::before` dos cards passa a não pintar nada) */
+  --g-gloss: none;
+  /* Sombra sutil, uma camada por elemento */
+  --g-elev: 0 1px 2px rgba(16, 40, 27, .05), 0 8px 20px -14px rgba(16, 40, 27, .14);
+  --g-elev-h: 0 1px 2px rgba(16, 40, 27, .06), 0 14px 28px -16px rgba(16, 40, 27, .22);
+  /* Fim do papel de parede de rabiscos */
+  --g-doodle: none;
+}
+
+.dark {
+  --g-glass: #151d19;
+  --g-panel: #151d19;
+  --g-edge: rgba(255, 255, 255, .11);
+  --g-gloss: none;
+  --g-elev: 0 1px 2px rgba(0, 0, 0, .34), 0 10px 24px -16px rgba(0, 0, 0, .6);
+  --g-elev-h: 0 1px 2px rgba(0, 0, 0, .4), 0 16px 32px -18px rgba(0, 0, 0, .7);
+  --g-doodle: none;
+}
+
+/* Fundo do app: superfície limpa, sem rabisco e sem atmosfera em degradê. */
+#page {
+  background-color: var(--mkp-s2) !important;
+  background-image: none !important;
+}
+body.login #page { background: var(--mkp-s2) !important; }
+
+/* As regras do make-admin.css que cravaram a borda branca do vidro em literal
+   (o token não alcança) — passam a hairline. */
+.make-card, .make-score,
+#main .module, #main .results, #main #changelist-filter,
+.chamado__main, .chamado__side-card,
+body.delete-confirmation #content > div:last-child {
+  border: 1px solid var(--g-edge) !important;
+  box-shadow: var(--g-elev) !important;
+}
+
+#nav-sidebar {
+  background: var(--g-panel) !important;
+  border: 1px solid var(--g-edge) !important;
+  box-shadow: var(--g-elev) !important;
+}
+div:has(> #nav-filter) {
+  background: var(--mkp-s2) !important;
+  border: 1px solid var(--g-edge) !important;
+  box-shadow: none !important;
+}
+
+/* Logo da sidebar: sem varredura de luz animada nem brilho diagonal. */
+.make-sidebar-logo::before,
+.make-sidebar-logo::after { display: none !important; }
+.make-sidebar-logo { box-shadow: none !important; }
+
+/* Cards: o pseudo-elemento do brilho deixa de ocupar espaço. */
+.make-card::before, .make-score::before,
+.make-kpi::before, .make-loja::before,
+.estoque-card::before, .kanban-card::before { display: none !important; }
+
+/* Card não sobe no hover — movimento gratuito em lista longa. */
+.estoque-card:hover, .kanban-card:hover {
+  transform: none !important;
+  box-shadow: var(--g-elev-h) !important;
+}
+
+/* Faixa lateral do kanban de chamados na escala de status do DESIGN.md
+   (o base tinha azul `#3b6fe0` em "Abertos" e laranja `#ea580c` em "Em
+   manutenção" — mesma correção que a tela já faz no próprio `<style>`). */
+.kanban-card--abertos { box-shadow: inset 4px 0 0 #e0533f, var(--g-elev) !important; }
+.kanban-card--cotacao { box-shadow: inset 4px 0 0 #ef8f3c, var(--g-elev) !important; }
+.kanban-card--manutencao { box-shadow: inset 4px 0 0 #e6b32e, var(--g-elev) !important; }
+.kanban-card--finalizados { box-shadow: inset 4px 0 0 #00a651, var(--g-elev) !important; }
+
+/* -------------------------------------- 10. Ícones injetados pelo JavaScript */
+
+/* `mkIco()` em static/js/make-admin.js monta os SVG da barra flutuante, dos
+   toasts e dos modais (antes eram emoji). Acompanham o tamanho e a cor do
+   texto onde estão. */
+.mk-ico {
+  width: 1.05em;
+  height: 1.05em;
+  flex: none;
+  vertical-align: -.16em;
+  display: inline-block;
+}
+.make-fab .mk-ico { margin-right: 1px; }
+.make-toast__icon .mk-ico { width: 18px; height: 18px; vertical-align: -.2em; }

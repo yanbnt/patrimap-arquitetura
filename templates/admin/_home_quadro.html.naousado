@@ -1,0 +1,175 @@
+{% comment %}
+QUADRO DA TELA INICIAL — três colunas por urgência.
+
+Implementa o protótipo aprovado pelo dono: “precisa de você · em andamento ·
+feito hoje”, com o cartão em quatro camadas de leitura — etiqueta, título,
+descrição e rodapé de metadados (avatar, registros, patrimônio).
+
+Não confundir com o kanban de Chamados: lá as colunas são o ciclo de vida de um
+chamado e a tela é ferramenta de trabalho. Aqui as colunas são URGÊNCIA e o
+cartão vem de qualquer domínio — chamado, preventiva, movimentação, orçamento.
+
+Dados: `apps/dashboard.py:_quadro_inicio()`. Prefixo de classe `.hq-`.
+Cor SÓ por papel `--md-*` / `--md-st-*` (DESIGN-SYSTEM.md §1).
+{% endcomment %}
+
+<style>
+  .hq { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 1080px) { .hq { grid-template-columns: 1fr; } }
+  .hq * { box-sizing: border-box; }
+
+  /* POR QUE ESTAS DUAS COISAS SÃO DO JEITO QUE SÃO — leia antes de "arrumar".
+     Na primeira versão a coluna era `surface-container-low` (#eff5ee) e o
+     cartão `surface` (#f5fbf4): SEIS pontos de diferença. O cartão desapareceu
+     dentro da coluna e a tela ficou uma mancha — o dono viu na hora.
+     No protótipo o que dá a leitura é cartão BRANCO com sombra sobre coluna
+     TINGIDA. Então: coluna sobe dois degraus de tom, cartão vai a branco puro
+     no claro (e a `surface-container-low` no escuro, onde branco cegaria), com
+     fio de 1px e sombra curta. É contraste de VALOR, não de matiz. */
+  .hq-col {
+    background: var(--md-surface-container);
+    border-radius: var(--md-shape-lg);
+    padding: 12px;
+    min-width: 0;
+  }
+  .hq-col__cab { display: flex; align-items: center; gap: 8px; padding: 2px 4px 10px; }
+  .hq-col__pt { width: 8px; height: 8px; border-radius: var(--md-shape-full); background: var(--hq-c); flex: 0 0 auto; }
+  .hq-col__t { font: 600 13.5px/1 var(--md-font); letter-spacing: .1px; }
+  .hq-col__n {
+    min-width: 19px; height: 19px; padding: 0 6px;
+    display: inline-grid; place-items: center; border-radius: var(--md-shape-full);
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+    font: 700 10.5px/1 var(--md-font); font-variant-numeric: tabular-nums;
+  }
+  /* A régua colorida no topo da coluna: é o que dá a leitura de "faixa" no
+     protótipo, e custa 3px. */
+  .hq-col__reg { height: 3.5px; border-radius: var(--md-shape-full); background: var(--hq-c); margin: 0 4px 12px; }
+  .hq-col--crit { --hq-c: var(--md-st-crit); }
+  .hq-col--attn { --hq-c: var(--md-st-attn); }
+  .hq-col--ok   { --hq-c: var(--md-st-ok); }
+
+  .hq-cd {
+    display: block;
+    background: #fff;
+    border: 1px solid color-mix(in srgb, var(--md-outline-variant) 60%, transparent);
+    border-radius: 14px;
+    padding: 13px 14px;
+    margin-bottom: 10px;
+    color: inherit;
+    text-decoration: none !important;
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--md-shadow, #000) 5%, transparent);
+    transition: box-shadow 140ms var(--md-ease-standard),
+                transform 140ms var(--md-ease-standard),
+                border-color 140ms var(--md-ease-standard);
+  }
+  .dark .hq-cd { background: var(--md-surface-container-low); border-color: var(--md-outline-variant); }
+  .hq-cd:last-child { margin-bottom: 0; }
+  .hq-cd:hover {
+    border-color: var(--hq-c);
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--md-shadow, #000) 7%, transparent),
+                0 10px 22px -14px color-mix(in srgb, var(--md-shadow, #000) 30%, transparent);
+    transform: translateY(-1px);
+  }
+  .hq-cd:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+
+  .hq-cd__l1 { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+  .hq-tag {
+    padding: 3px 9px; border-radius: var(--md-shape-xs);
+    font: 600 10px/14px var(--md-font); letter-spacing: .4px;
+    white-space: nowrap;
+  }
+  .hq-tag--crit { background: var(--md-st-crit-cont); color: var(--md-st-crit); }
+  .hq-tag--warn { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+  .hq-tag--attn { background: var(--md-st-attn-cont); color: var(--md-st-attn); }
+  .hq-tag--ok   { background: var(--md-st-ok-cont);   color: var(--md-st-ok); }
+  .hq-tag--info { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+
+  .hq-cd__t { font: 600 14.5px/19px var(--md-font); letter-spacing: -.1px; margin: 0 0 5px; }
+  .hq-cd__d { font: 400 12px/17px var(--md-font); color: var(--md-on-surface-variant); margin: 0 0 10px; }
+
+  .hq-barra { height: 5px; border-radius: var(--md-shape-full); background: var(--md-surface-container-high); overflow: hidden; display: flex; margin: 2px 0 10px; }
+  .hq-barra i { display: block; }
+
+  .hq-cd__l2 { display: flex; align-items: center; gap: 12px; }
+  .hq-pilha { display: flex; flex: 0 0 auto; }
+  .hq-av {
+    display: grid; place-items: center;
+    width: 24px; height: 24px; border-radius: var(--md-shape-full);
+    background: var(--md-primary-container); color: var(--md-on-primary-container);
+    font: 700 9.5px/1 var(--md-font);
+    border: 2px solid var(--md-surface);
+  }
+  .hq-pilha .hq-av + .hq-av { margin-left: -8px; }
+  .hq-meta { display: inline-flex; align-items: center; gap: 5px; font: 500 11px/1 var(--md-font); color: var(--md-on-surface-variant); }
+  .hq-meta svg { width: 13px; height: 13px; }
+  .hq-meta b { color: var(--md-on-surface); font-variant-numeric: tabular-nums; }
+  .hq-pat {
+    margin-left: auto; padding: 3px 8px; border-radius: var(--md-shape-xs);
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+    font: 600 10.5px/14px ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: nowrap;
+  }
+  .hq-vazio {
+    padding: 26px 10px; text-align: center;
+    font: 400 12.5px/18px var(--md-font); color: var(--md-on-surface-variant);
+  }
+</style>
+
+<div class="hq">
+  {% for col in quadro %}
+    <section class="hq-col hq-col--{{ col.cor }}" aria-label="{{ col.titulo }}">
+      <div class="hq-col__cab">
+        <i class="hq-col__pt" aria-hidden="true"></i>
+        <span class="hq-col__t">{{ col.titulo }}</span>
+        <span class="hq-col__n">{{ col.itens|length }}</span>
+      </div>
+      <div class="hq-col__reg" aria-hidden="true"></div>
+
+      {% for it in col.itens %}
+        <a class="hq-cd" href="{{ it.url|default:'#' }}">
+          <div class="hq-cd__l1">
+            <span class="hq-tag hq-tag--{{ it.tag_cor }}">{{ it.tag }}</span>
+            {% comment %}
+            O "···" do protótipo saiu: ali ele era desenho, e aqui não teria menu
+            nenhum atrás. Affordance que não faz nada é mentira de interface.
+            {% endcomment %}
+          </div>
+          <h3 class="hq-cd__t">{{ it.titulo }}</h3>
+          <p class="hq-cd__d">{{ it.desc }}</p>
+
+          {% if it.barra %}
+            <span class="hq-barra" aria-hidden="true">
+              <i style="width: {{ it.barra }}%; background: var(--md-st-{{ it.barra_cor }})"></i>
+            </span>
+          {% endif %}
+
+          <div class="hq-cd__l2">
+            {% if it.quem or it.quem2 %}
+              <span class="hq-pilha">
+                {% if it.quem %}<span class="hq-av" title="{{ it.quem.nome }}">{{ it.quem.ini }}</span>{% endif %}
+                {% if it.quem2 %}<span class="hq-av" title="{{ it.quem2.nome }}">{{ it.quem2.ini }}</span>{% endif %}
+              </span>
+            {% endif %}
+
+            {% if it.registros %}
+              <span class="hq-meta">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <b>{{ it.registros }}</b> registro{{ it.registros|pluralize }}
+              </span>
+            {% elif it.meta %}
+              <span class="hq-meta">{{ it.meta }}</span>
+            {% endif %}
+
+            {% if it.pat %}<span class="hq-pat">{{ it.pat }}</span>{% endif %}
+          </div>
+        </a>
+      {% empty %}
+        <p class="hq-vazio">
+          {% if col.key == "precisa" %}Nada esperando por você.
+          {% elif col.key == "andando" %}Nenhum chamado em andamento.
+          {% else %}Nada concluído hoje ainda.{% endif %}
+        </p>
+      {% endfor %}
+    </section>
+  {% endfor %}
+</div>

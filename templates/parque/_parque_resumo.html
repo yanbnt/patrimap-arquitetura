@@ -1,0 +1,270 @@
+{% comment %}
+Leitura de 2 segundos do parque — faixa de resumo no topo dos mapas.
+Espera `resumo` = {total, classes:[{key,label,cor,n}], acao:[{key,label,cor,n}]}.
+
+Ordem de leitura (é o que muda em relação à barra empilhada antiga):
+  1) TOTAL em destaque — quantas máquinas estão no mapa agora;
+  2) PRECISAM DE AÇÃO puxado para a frente — crítico / sem telemetria / preventiva;
+  3) DISTRIBUIÇÃO por desempenho — barra proporcional + contagem por classe.
+
+As pílulas continuam sendo filtros rápidos client-side (data-fk casado com
+data-classe/data-tipo/data-tel/data-prev dos cards) — ver initMapaBusca().
+
+HOOKS (não remover): `.pq-chip[data-fk]`, a classe `is-active` que o JS alterna e
+`#pq-clear` (ligado/desligado por `hidden`).
+COR: a `cor` que vem da view não é usada aqui — cada chave vira uma classe
+`.pqx-k-*` que resolve o PAR de papéis do M3 (`--md-st-*` + `--md-st-*-cont`,
+contrato §2), com contraste garantido no claro e no escuro.
+{% endcomment %}
+{% if resumo %}
+<style>
+  /* _parque_resumo.html — prefixo .pqx-. Faixa de leitura rápida em Material 3:
+     cartão FILLED (surface-container-low, raio 16, sem borda e sem sombra), número
+     grande em headline-medium com peso 400 (M3 não usa 800: o destaque vem do
+     tamanho), rótulo em label-small e SEPARAÇÃO POR TOM — a linha vertical entre
+     os blocos saiu; "Precisam de ação" fica num contêiner tonal de status. */
+  .pq-resumo {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 16px 32px;
+    margin: 0 0 24px !important; padding: 16px !important;
+    background: var(--md-surface-container-low) !important;
+    border: 0 !important;
+    border-radius: var(--md-shape-lg) !important;
+    box-shadow: none !important;
+  }
+
+  .pqx-block { flex: 0 0 auto; min-width: 0; }
+  .pqx-block--dist { flex: 1 1 340px; }
+  /* Sem borda entre blocos: quem separa é o espaço e, na ação, o tom. */
+  .pqx-block--acao {
+    padding: 12px; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container);
+  }
+  .pqx-cap {
+    display: block; margin: 0 0 8px;
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: uppercase; color: var(--md-on-surface-variant);
+  }
+
+  /* 1) Total: headline-medium, peso 400 (contrato §3). */
+  .pqx-total { display: flex; align-items: baseline; gap: 8px; margin: 0; }
+  .pqx-total__n {
+    font: 400 28px/36px var(--md-font); letter-spacing: 0;
+    font-variant-numeric: tabular-nums; color: var(--md-on-surface);
+  }
+  .pqx-total__l { font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant); }
+
+  /* 2 e 3) Linhas de chips M3 (filter chip: 32px, raio 8px, outline-variant) */
+  .pqx-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+  .pq-chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 32px; padding: 0 12px; cursor: pointer;
+    font: 500 14px/20px var(--md-font) !important; letter-spacing: .1px;
+    color: var(--md-on-surface-variant) !important;
+    background: transparent !important;
+    border: 1px solid var(--md-outline-variant) !important;
+    border-radius: var(--md-shape-sm) !important;
+    box-shadow: none !important; transform: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .pq-chip:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent) !important; }
+  .pq-chip:active { background: color-mix(in srgb, var(--md-on-surface) 12%, transparent) !important; }
+  .pq-chip b { font-variant-numeric: tabular-nums; font-weight: 500; color: inherit; }
+  .pq-dot {
+    width: 8px; height: 8px; flex: none; border-radius: var(--md-shape-full);
+    background: var(--pqx-c, var(--md-outline));
+  }
+  /* Chip ativo = seleção do M3 (secondary-container). O JS alterna .is-active. */
+  .pq-chip.is-active {
+    color: var(--md-on-secondary-container) !important;
+    background: var(--md-secondary-container) !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+
+  /* "Precisam de ação": contêiner tonal de status (par --md-st-*-cont/--md-st-*),
+     como o M3 faz com error-container — nada de moldura saturada. */
+  .pqx-chip-acao {
+    color: var(--pqx-c) !important;
+    background: var(--pqx-cc) !important;
+    border-color: transparent !important;
+  }
+  .pqx-chip-acao:hover { background: color-mix(in srgb, var(--pqx-c) 12%, var(--pqx-cc)) !important; }
+  .pqx-chip-acao.is-active {
+    color: var(--pqx-c) !important; background: var(--pqx-cc) !important;
+    border-color: var(--pqx-c) !important; box-shadow: none !important;
+  }
+
+  /* Barra proporcional: faixa fina sobre surface-container-high, sem moldura. */
+  .pq-bar {
+    display: flex; gap: 2px; height: 4px; margin: 0 0 12px;
+    border-radius: var(--md-shape-full); overflow: hidden;
+    background: var(--md-surface-container-high);
+  }
+  .pqx-seg { display: block; min-width: 4px; background: var(--pqx-c, var(--md-outline)); }
+
+  /* Limpar filtro: text button (sem contêiner, texto primary, state layer). */
+  .pq-clear {
+    flex: 0 0 auto; margin-left: auto; align-self: center;
+    display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px;
+    border: 0; background: transparent; cursor: pointer;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    color: var(--md-primary); border-radius: var(--md-shape-full);
+  }
+  .pq-clear:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); text-decoration: none; }
+  .pq-clear[hidden] { display: none !important; }
+
+  /* Mapa de cor por chave (view → classe → par de papéis do M3). */
+  .pqx-k-clotimo   { --pqx-c: var(--md-st-ok);   --pqx-cc: var(--md-st-ok-cont); }
+  .pqx-k-clbom     { --pqx-c: var(--md-st-attn); --pqx-cc: var(--md-st-attn-cont); }
+  .pqx-k-clbaixo   { --pqx-c: var(--md-st-warn); --pqx-cc: var(--md-st-warn-cont); }
+  .pqx-k-clcritico { --pqx-c: var(--md-st-crit); --pqx-cc: var(--md-st-crit-cont); }
+  .pqx-k-tpsem_pc  { --pqx-c: var(--md-on-surface-variant); --pqx-cc: var(--md-surface-container-high); }
+  .pqx-k-atcritico { --pqx-c: var(--md-st-crit); --pqx-cc: var(--md-st-crit-cont); }
+  .pqx-k-atsem_tel { --pqx-c: var(--md-st-warn); --pqx-cc: var(--md-st-warn-cont); }
+  .pqx-k-atprev    { --pqx-c: var(--md-st-attn); --pqx-cc: var(--md-st-attn-cont); }
+
+  @media (max-width: 1100px) {
+    .pqx-block { flex: 1 1 100%; }
+    .pq-clear { margin-left: 0; }
+  }
+
+  /* ---------- modo FAIXA ---------- */
+  /* Sem cartão, sem tom, sem padding: os chips passam a viver na mesma linha da
+     barra de filtro da tela. Leva `!important` porque as regras de `.pq-resumo`
+     acima também levam, e as duas têm a mesma especificidade (uma classe). */
+  .pq-resumo--faixa {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    gap: 8px 12px !important;
+  }
+  .pq-resumo--faixa .pqx-block--acao {
+    padding: 0 !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+  }
+  .pq-resumo--faixa .pqx-block--dist { flex: 0 1 auto; }
+  .pq-resumo--faixa .pqx-row { gap: 8px; }
+
+  /* ---------- modo faixa: cada estado é um CARTÃO de número ---------- */
+  /* Referência que o dono mandou: rótulo com o ponto de cor em cima, número
+     grande embaixo, moldura de 1px e fundo levemente tingido do próprio
+     estado. Ele pediu explicitamente "algo mais leve" — então o tingimento vem
+     dos papéis `-cont` (container tonal), nunca da cor cheia: verde saturado
+     preenchendo um cartão é o que ele chamou de "verdão brilhante". */
+  .pq-resumo--faixa .pq-chip {
+    display: grid !important;
+    grid-template-columns: auto 1fr;
+    grid-template-areas: "ponto rotulo" "numero numero";
+    align-items: center;
+    gap: 2px 6px;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 8px 12px 7px !important;
+    border: 1px solid var(--md-outline-variant) !important;
+    border-radius: var(--md-shape-md) !important;
+    background: var(--md-surface) !important;
+    text-align: left;
+  }
+  .pq-resumo--faixa .pq-chip .pq-dot { grid-area: ponto; }
+  .pq-resumo--faixa .pq-chip .pq-lbl {
+    grid-area: rotulo;
+    font: 500 11.5px/16px var(--md-font);
+    letter-spacing: .3px;
+    color: var(--md-on-surface-variant);
+  }
+  .pq-resumo--faixa .pq-chip b {
+    grid-area: numero;
+    font: 600 20px/24px var(--md-font);
+    letter-spacing: -.2px;
+    font-variant-numeric: tabular-nums;
+    color: var(--md-on-surface);
+  }
+  /* O tom de cada estado, sempre no container claro. */
+  .pq-resumo--faixa .pq-chip.pqx-k-otimo   { background: color-mix(in srgb, var(--md-st-ok-cont) 42%, var(--md-surface)) !important; }
+  .pq-resumo--faixa .pq-chip.pqx-k-bom     { background: color-mix(in srgb, var(--md-st-attn-cont) 34%, var(--md-surface)) !important; }
+  .pq-resumo--faixa .pq-chip.pqx-k-baixo   { background: color-mix(in srgb, var(--md-st-warn-cont) 34%, var(--md-surface)) !important; }
+  .pq-resumo--faixa .pq-chip.pqx-k-critico { background: color-mix(in srgb, var(--md-st-crit-cont) 38%, var(--md-surface)) !important; }
+  .pq-resumo--faixa .pqx-chip-acao {
+    background: color-mix(in srgb, var(--md-st-warn-cont) 46%, var(--md-surface)) !important;
+    border-color: color-mix(in srgb, var(--md-st-warn) 26%, transparent) !important;
+  }
+  .pq-resumo--faixa .pqx-chip-acao .pq-lbl { color: var(--md-st-warn); }
+  .pq-resumo--faixa .pqx-chip-acao b { color: var(--md-st-warn); }
+  /* Selecionado: a moldura ganha a cor da marca — não o preenchimento. */
+  .pq-resumo--faixa .pq-chip.is-active {
+    border-color: var(--md-primary) !important;
+    box-shadow: inset 0 0 0 1px var(--md-primary) !important;
+  }
+</style>
+{% comment %}
+MODO FAIXA (`{% include ... with faixa=True %}`).
+
+O mapa completo pedia um topo enxuto: o cartão deste parcial custava 136px de
+altura para dizer três coisas que já estavam ditas em outro lugar da tela — o
+total ("25 no mapa" é a soma dos chips ao lado), os rótulos de seção, e a barra
+de proporção. Em `faixa`, o parcial vira uma LINHA: só os chips, sem cartão, sem
+rótulo, sem barra.
+
+Por que um parâmetro e não um arquivo novo: este parcial também é incluído por
+`mapa_notebooks.html`. Duas cópias do mesmo arquivo é exatamente como se chega a
+duas legendas na mesma tela — o problema que estamos consertando.
+
+O que NÃO muda em nenhum dos dois modos: `#pq-resumo`, `.pq-chip`, `data-fk`,
+`is-active` e `#pq-clear`. São os ganchos do filtro em make-admin.js.
+{% endcomment %}
+<div class="pq-resumo {% if faixa %}pq-resumo--faixa{% endif %}" id="pq-resumo" role="region" aria-label="Saúde do parque">
+
+  {% if not faixa %}
+    <div class="pqx-block">
+      <span class="pqx-cap">No mapa</span>
+      <p class="pqx-total">
+        <span class="pqx-total__n">{{ resumo.total }}</span>
+        <span class="pqx-total__l">máquinas</span>
+      </p>
+    </div>
+  {% endif %}
+
+  {% if resumo.acao %}
+    <div class="pqx-block pqx-block--acao">
+      {% if not faixa %}<span class="pqx-cap">Precisam de ação</span>{% endif %}
+      <div class="pqx-row">
+        {% for a in resumo.acao %}
+          <button type="button" class="pq-chip pqx-chip-acao pqx-k-{{ a.key|slugify }}"
+                  data-fk="{{ a.key }}" title="Ver só as máquinas: {{ a.label }}">
+            <b>{{ a.n }}</b> <span class="pq-lbl">{{ a.label }}</span>
+          </button>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="pqx-block pqx-block--dist">
+    {% if not faixa %}
+      <span class="pqx-cap">Distribuição por desempenho</span>
+      <div class="pq-bar" aria-hidden="true">
+        {% for c in resumo.classes %}{% if c.n %}<span class="pqx-seg pqx-k-{{ c.key|slugify }}" style="flex:{{ c.n }}" title="{{ c.label }}: {{ c.n }}"></span>{% endif %}{% endfor %}
+      </div>
+    {% endif %}
+    <div class="pqx-row">
+      {% for c in resumo.classes %}
+        {% comment %}
+        O rótulo virou <span class="pq-lbl">. Antes era um nó de texto solto, e
+        nó de texto não se posiciona: no modo faixa cada chip é um CARTÃO com o
+        rótulo em cima e o número embaixo, e para isso o rótulo precisa ser um
+        elemento. `.pq-chip` e `data-fk` seguem intactos — são o gancho do
+        filtro em make-admin.js.
+        {% endcomment %}
+        <button type="button" class="pq-chip pqx-k-{{ c.key|slugify }}"
+                data-fk="{{ c.key }}" title="Ver só as máquinas: {{ c.label }}">
+          <i class="pq-dot"></i><span class="pq-lbl">{{ c.label }}</span> <b>{{ c.n }}</b>
+        </button>
+      {% endfor %}
+    </div>
+  </div>
+
+  <button type="button" class="pq-clear" id="pq-clear" hidden>× limpar filtro</button>
+</div>
+{% endif %}

@@ -1,0 +1,64 @@
+{% load i18n %}
+{% comment %}
+AGENDA DO TOPO — o objeto pequeno de calendário que fica sempre visível, e o
+painel que abre com os avisos à esquerda e o mês à direita.
+
+Pedido do dono, com a central do GNOME como referência: "uma área de
+notificação top com calendário e as notificações de eventos e solicitações.
+Mas o que precisa ser exibido o tempo todo na parte superior é só o objeto
+pequeno do calendário".
+
+A grade do mês e as listas são preenchidas pelo `initAgendaTopo()`
+(make-admin.js) a partir de `/agenda/eventos/`. O bloco de avisos vem de
+`_avisos.html` — o mesmo do antigo sino — e é ADOTADO para a coluna da
+esquerda. Nada de dado calculado aqui: o topo aparece em toda tela e não pode
+custar consulta nenhuma antes de alguém abrir o painel.
+{% endcomment %}
+<div class="mkag" id="mk-agenda">
+  {% comment %}
+  O objeto é o da referência que o dono mandou (central do GNOME): uma pílula
+  pequena, centralizada no alto, com data e hora NUMA LINHA — nada de folhinha
+  grande nem contador vermelho. Aviso não lido aparece como um ponto discreto.
+  {% endcomment %}
+  <button type="button" class="mkag__btn" id="mk-agenda-btn"
+          aria-haspopup="dialog" aria-expanded="false"
+          title="{% trans 'Agenda e avisos' %}">
+    <span class="mkag__data" id="mk-agenda-data"></span>
+    <span class="mkag__hora" id="mk-agenda-hora"></span>
+    <span class="mkag__ponto" id="mk-agenda-n" hidden aria-label="{% trans 'Há avisos não lidos' %}"></span>
+    <span class="mkag__dia" id="mk-agenda-dia" hidden></span>
+  </button>
+
+  <div class="mkag__pop" id="mk-agenda-pop" role="dialog"
+       aria-label="{% trans 'Agenda e avisos' %}" hidden>
+    <div class="mkag__col mkag__col--avisos">
+      <div class="mkag__cab">
+        <span class="mkag__cab-t">{% trans 'Avisos e solicitações' %}</span>
+      </div>
+      <div class="mkag__avisos" id="mk-agenda-avisos"></div>
+    </div>
+
+    <div class="mkag__col mkag__col--cal">
+      <p class="mkag__hoje-lbl" id="mk-agenda-hoje-lbl"></p>
+      <p class="mkag__hoje-data" id="mk-agenda-hoje-data"></p>
+
+      <div class="mkag__nav">
+        <button type="button" class="mkag__nav-b" id="mk-agenda-ant" aria-label="{% trans 'Mês anterior' %}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <span class="mkag__mes" id="mk-agenda-mes"></span>
+        <button type="button" class="mkag__nav-b" id="mk-agenda-prox" aria-label="{% trans 'Próximo mês' %}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      </div>
+
+      <div class="mkag__sem"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div>
+      <div class="mkag__grade" id="mk-agenda-grade"></div>
+
+      <div class="mkag__dia-box">
+        <p class="mkag__dia-t" id="mk-agenda-dia-t">{% trans 'Hoje' %}</p>
+        <div class="mkag__dia-lista" id="mk-agenda-dia-lista"></div>
+      </div>
+    </div>
+  </div>
+</div>

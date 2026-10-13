@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.Python
+
+# Ambiente virtual
+.venv/
+venv/
+env/
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+db.sqlite3-wal
+db.sqlite3-shm
+*.onedrive-bak
+/media/
+/staticfiles/
+
+# Segredos
+.env
+
+# IDE / SO
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Backups do banco (locais)
+backups/
+
+# Logs do LOGGING (arquivo rotativo: itam.log, itam.log.1 ... itam.log.5)
+logs/

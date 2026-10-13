@@ -1,0 +1,23 @@
+{% load i18n %}
+{% comment %}
+MENSAGENS DO SISTEMA — override Make.
+
+Regra do dono, dita duas vezes e agora sem exceção: "garanta que TODAS as
+notificações de ações de usuários vão aparecer na parte superior que criamos".
+Então NADA é desenhado dentro da página — tudo sai escondido em
+`#mk-msgs-fonte` e o `initAgendaTopo()` adota para a coluna de avisos do painel
+do topo.
+
+O que sobrou do cuidado com erro: o nível vai no `data-nivel`, e o painel do
+topo ABRE SOZINHO quando chega erro ou aviso. Assim a pessoa não precisa
+descobrir que existe um painel para saber que o envio falhou — e a regra dele
+continua valendo: o lugar da notificação é lá em cima.
+{% endcomment %}
+{% if messages %}
+  <div id="mk-msgs-fonte" hidden data-n="{{ messages|length }}">
+    {% for message in messages %}
+      <div class="mkmsg mkmsg--{{ message.level_tag|default:'info' }}"
+           data-nivel="{{ message.level_tag|default:'info' }}">{{ message }}</div>
+    {% endfor %}
+  </div>
+{% endif %}

@@ -1,0 +1,410 @@
+{% load i18n admin_urls unfold %}
+
+{% comment %}
+REMODELAGEM 09/2026 — contrato: DESIGN-SYSTEM.md §1 e §4.
+
+O topo é a SMALL TOP APP BAR do M3: 64px de altura, cor `surface` (a mesma da
+página — no M3 a barra não se separa por linha nem por sombra), título da tela em
+`title-large` e, à direita, ícones de 24px em botão circular de 40px com state
+layer. À esquerda, sobre o título, a trilha de navegação em overline.
+
+MIGRAÇÃO PARA M3 (§5 — a essência é REMOVER):
+  · os tokens `--ui-*` deram lugar aos papéis `--md-*`;
+  · saiu a hairline embaixo da barra: a barra é `surface`, o conteúdo é
+    `surface`, e o que separa é o TOM dos painéis, não uma linha;
+  · saiu o vidro, o degradê de brilho (`.make-header::after`) e a sombra;
+  · o botão de ícone deixou de ser um quadradinho de 34px com troca de fundo:
+    virou o alvo circular de 40px do M3, com state layer de 8% / 12%;
+  · o painel do sino perdeu a borda (agora é `surface-container-high` — um tom
+    acima da barra) e manteve a ÚNICA sombra que o contrato permite: a de coisa
+    que flutua de verdade (menu);
+  · Aprovar/Negar do sino viraram botões M3 (filled `primary` e tonal
+    `error-container`), sem o raio de 9px nem o peso 800 do CSS histórico;
+  · o aviso do agente perdeu o degradê, a borda e a sombra: virou contêiner
+    tonal de status (`st-warn-cont` / `st-warn`).
+
+NADA de comportamento mudou: `welcomemsg` (toggle da sidebar, voltar, contagem
+de resultados) e `userlinks` (action_list, ambiente) continuam incluídos, os
+formulários POST do sino mantêm csrf/next/confirm, e todos os ids/onclick/x-data
+seguem iguais.
+{% endcomment %}
+
+<style>
+  /* ---- Small top app bar (prefixo .mkhdr). Cor SÓ por papel --md-*. ---- */
+  /* O make-admin.css fixa .make-header com !important (vidro + margem + raio).
+     Estes seletores levam #main na frente — uma especificidade acima, sem
+     apagar nada lá (DESIGN-SYSTEM.md §7.2). */
+  #main > header.make-header {
+    margin: 0 !important;
+    padding: 0 !important;
+    /* SEM FUNDO. O dono pediu isso várias vezes: a barra não é uma faixa
+       escura atravessando o topo, é só o lugar onde ficam o objeto da agenda e
+       o "voltar" das subtelas. Fundo próprio aqui pintava uma tarja mais
+       escura que a página inteira. É esta linha que manda — a de make-m3.css
+       tem a mesma força e vem antes no documento, então perdia. */
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  /* O brilho em degradê da barra de vidro. */
+  #main > header.make-header::after { content: none !important; }
+  #main > header.make-header .mkhdr__in {
+    display: flex; align-items: center; gap: 12px;
+    height: 64px; padding: 0 16px; margin: 0 auto; min-width: 0;
+  }
+  .mkhdr__row { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; }
+
+  /* --- Esquerda: trilha em overline, título da tela em title-large. --- */
+  .mkhdr__lead { display: flex; flex-direction: column; justify-content: center; min-width: 0; flex: 1 1 auto; }
+  .mkhdr__lead > div { order: 2; flex: 0 0 auto; margin-right: 0 !important; }
+  .mkhdr__trail {
+    order: 1; display: flex; align-items: center; gap: 8px; min-width: 0;
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; text-transform: uppercase;
+    color: var(--md-on-surface-variant);
+  }
+  .mkhdr__trail a { color: var(--md-on-surface-variant); text-decoration: none; }
+  .mkhdr__trail a:hover { color: var(--md-primary); }
+  .mkhdr__trail span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mkhdr__trail i { font-style: normal; color: var(--md-outline); }
+  /* Título da barra: title-large (22/28/400). Peso 400 — §5, item 4. */
+  #main > header.make-header h1 {
+    font: 400 22px/28px var(--md-font) !important;
+    letter-spacing: 0 !important;
+    color: var(--md-on-surface) !important; min-width: 0;
+  }
+  #main > header.make-header h1 .text-subtle,
+  #main > header.make-header h1 span {
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+    color: var(--md-on-surface-variant);
+  }
+  /* Ícone de 24px, como todo ícone de ação da barra. */
+  #main > header.make-header .material-symbols-outlined {
+    font-size: 24px; color: var(--md-on-surface-variant);
+  }
+
+  /* --- Direita: ações do admin · ajuda · sino. --- */
+  .mkhdr__side { display: flex; align-items: center; gap: 4px; margin-left: auto; flex: 0 0 auto; }
+  .mkhdr__side > div { margin-left: 0 !important; }
+  /* Icon button do M3: alvo circular de 40px, ícone de 24px, state layer. */
+  .mkhdr__btn {
+    display: inline-flex; align-items: center; justify-content: center; position: relative;
+    width: 40px; height: 40px; flex: none; cursor: pointer; overflow: visible;
+    border: 0; background: transparent; border-radius: var(--md-shape-full);
+    color: var(--md-on-surface-variant);
+  }
+  .mkhdr__btn::before {
+    content: ""; position: absolute; inset: 0; border-radius: inherit;
+    background: currentColor; opacity: 0;
+    transition: opacity var(--md-dur-short) var(--md-ease-standard);
+  }
+  .mkhdr__btn:hover::before { opacity: .08; }
+  .mkhdr__btn:active::before { opacity: .12; }
+  .mkhdr-ic { width: 24px; height: 24px; display: block; position: relative; }
+  /* Badge do M3: contêiner `error` com o seu par `on-error`, em label-small. */
+  .mkhdr__dot {
+    position: absolute; top: 0; right: 0; min-width: 16px; height: 16px; padding: 0 4px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: var(--md-shape-full);
+    background: var(--md-error); color: var(--md-on-error);
+    font: 500 11px/16px var(--md-font); letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* --- Painel do sino: um MENU (logo, pode ter sombra), sem borda. --- */
+  #main > header.make-header .make-notif-drop {
+    top: 52px; width: 360px; max-height: 72vh;
+    background: var(--md-surface-container-high) !important;
+    border: 0 !important;
+    border-radius: var(--md-shape-md) !important;
+    box-shadow: var(--md-elev-2) !important;
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  #main > header.make-header .make-notif-drop__head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 16px; border-bottom: 1px solid var(--md-outline-variant);
+  }
+  .mkhdr__droptt {
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    text-transform: none; color: var(--md-on-surface);
+  }
+  /* Botão de texto (§4): sem contêiner, tinta `primary`. */
+  .mkhdr__droplink {
+    border: 0; background: transparent; cursor: pointer; font-family: var(--md-font);
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px;
+    color: var(--md-primary); padding: 0;
+  }
+  .mkhdr__droplink:hover { text-decoration: underline; }
+  .mkhdr__droplink--del { color: var(--md-on-surface-variant); }
+  .mkhdr__droplink--del:hover { color: var(--md-error); }
+  /* Divisor das linhas de aviso: outline-variant (é lista de verdade). */
+  #main > header.make-header .make-notif-drop .make-notif-item,
+  #main > header.make-header .make-notif-drop .make-notif-fixa {
+    border-color: var(--md-outline-variant) !important;
+  }
+  /* Não lido = SELEÇÃO no M3: `secondary-container` com o seu par on-. */
+  #main > header.make-header .make-notif-drop .make-notif-item.is-unread {
+    background: var(--md-secondary-container) !important;
+  }
+  #main > header.make-header .make-notif-drop .make-notif-item.is-unread * {
+    color: var(--md-on-secondary-container) !important;
+  }
+  /* State layer de 8% — depois da seleção, para valer nos dois estados. */
+  #main > header.make-header .make-notif-drop .make-notif-item:hover {
+    background: color-mix(in srgb, var(--md-on-surface) 8%, transparent) !important;
+  }
+  #main > header.make-header .make-notif-drop .make-notif-item.is-unread:hover {
+    background: color-mix(in srgb, var(--md-on-secondary-container) 8%, var(--md-secondary-container)) !important;
+  }
+  /* A linha de aprovação "sobe" um nível de tom, em vez de ganhar um tingido. */
+  #main > header.make-header .make-notif-fixa {
+    background: var(--md-surface-container-highest) !important;
+  }
+
+  /* O primeiro aviso da tela encostava na barra. Este respiro só existe quando
+     há aviso — nunca empurra a tela vazia. */
+  #main > header.make-header + div .mkpro-msgs,
+  #main > header.make-header + div > div > ul { padding-top: 14px; }
+
+  @media (max-width: 720px) {
+    #main > header.make-header .mkhdr__in { gap: 8px; }
+    .mkhdr__trail { display: none; }
+    #main > header.make-header h1 { font-size: 18px !important; line-height: 24px !important; }
+    #main > header.make-header .make-notif-drop { width: 300px; }
+  }
+
+  {% comment %}
+  Badge da trilha de navegação (unfold/helpers/_make_badge_span.html). Mora aqui
+  porque aquele arquivo é incluído uma vez POR ITEM de menu — um <style> lá
+  sairia repetido N vezes. O header sai uma vez por página e vem sempre junto da
+  trilha, então a folha está garantida.
+
+  M3: badge é sempre um PAR de papéis (X + on-X) em label-small, nunca uma cor
+  solta — daí o par explícito em cada variante. Peso 700 → 500 (§5, item 4).
+  {% endcomment %}
+  #page .mkbadge {
+    display: inline-block; min-width: 16px; margin-left: 8px; padding: 0 5px;
+    border-radius: var(--md-shape-full); text-align: center; white-space: nowrap;
+    font: 500 11px/16px var(--md-font); letter-spacing: 0;
+    background: var(--md-error); color: var(--md-on-error);
+  }
+  #page .mkbadge--ok { background: var(--md-primary); color: var(--md-on-primary); }
+  #page .mkbadge--warn { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+  #page .mkbadge--marca { background: var(--md-primary); color: var(--md-on-primary); }
+  #page .mkbadge--crit { background: var(--md-error); color: var(--md-on-error); }
+
+  /* Aprovar / Negar: botões M3 (filled + tonal de erro). O make-admin.css dá a
+     eles raio 9px, peso 800 e cores fixas — dois níveis de especificidade a
+     mais vencem isso sem editar aquele arquivo. */
+  #main > header.make-header .make-notif-fixa .make-notif-ok,
+  #main > header.make-header .make-notif-fixa .make-notif-no {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 40px; padding: 0 16px;
+    border: 0; border-radius: var(--md-shape-full);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    text-decoration: none; box-shadow: none;
+  }
+  #main > header.make-header .make-notif-fixa .make-notif-ok {
+    background: var(--md-primary); color: var(--md-on-primary);
+  }
+  #main > header.make-header .make-notif-fixa .make-notif-no {
+    background: var(--md-error-container); color: var(--md-on-error-container);
+  }
+  /* State layer de 8% sobre o próprio contêiner (não troca de cor). */
+  #main > header.make-header .make-notif-fixa .make-notif-ok:hover {
+    background: color-mix(in srgb, var(--md-on-primary) 8%, var(--md-primary));
+  }
+  #main > header.make-header .make-notif-fixa .make-notif-no:hover {
+    background: color-mix(in srgb, var(--md-on-error-container) 8%, var(--md-error-container));
+  }
+  .make-notif-fixa .make-notif-ok svg,
+  .make-notif-fixa .make-notif-no svg { width: 18px; height: 18px; flex: 0 0 auto; }
+  {% comment %}
+    Auditoria 4.2: Aprovar/Negar do sino eram links (GET mudando estado).
+    Viraram formulário POST, então quem ocupa o lugar do antigo link na linha
+    flex passa a ser o FORM (herda o "flex: 1" que era do link, definido no
+    make-admin.css) e o botão herda a aparência exata do link — sem a borda e o
+    appearance que o navegador dá a um button. Rótulo, ícone e classe iguais.
+  {% endcomment %}
+  .make-notif-fixa .make-notif-acao { flex: 1; display: flex; margin: 0; min-width: 0; }
+  .make-notif-fixa .make-notif-ok,
+  .make-notif-fixa .make-notif-no { width: 100%; border: 0; font-family: inherit; -webkit-appearance: none; appearance: none; }
+  /* "×" de excluir um aviso: tinta do M3 no lugar do slate do CSS histórico. */
+  #main > header.make-header .make-notif-del { color: var(--md-on-surface-variant); }
+  #main > header.make-header .make-notif-del:hover {
+    background: color-mix(in srgb, var(--md-error) 12%, transparent);
+    color: var(--md-error);
+  }
+  .make-notif-del .mkhdr-x { width: 18px; height: 18px; }
+  .mkhdr-nic { width: 24px; height: 24px; display: block; flex: 0 0 auto; }
+  .make-notif-drop .mkpro-empty { border: 0; background: transparent; }
+
+  {% comment %}
+  Aviso do agente de coleta: o make-admin.css o desenha com degradê de fundo,
+  borda âmbar, sombra e um botão em degradê verde→lima com peso 800. No M3 isso
+  é um CONTÊINER TONAL de status: `st-warn-cont` com a sua tinta `st-warn`,
+  chapado, sem borda e sem sombra, raio 12. Dois níveis de especificidade a mais
+  (o id `#main`) vencem aquele arquivo sem editá-lo.
+  {% endcomment %}
+  #main .agente-aviso {
+    background: var(--md-st-warn-cont); color: var(--md-st-warn);
+    border: 0; border-radius: var(--md-shape-md); box-shadow: none;
+    padding: 12px 16px; gap: 12px;
+  }
+  #main .agente-aviso__ico { color: inherit; }
+  #main .agente-aviso__txt {
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+  }
+  #main .agente-aviso__txt b { font-weight: 500; }
+  #main .agente-aviso__txt code {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    border-radius: var(--md-shape-xs); font-weight: 400; padding: 1px 6px;
+  }
+  /* Botão do aviso: par invertido do contêiner (tinta vira fundo), pílula 40px. */
+  #main .agente-aviso__btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 40px; padding: 0 24px;
+    background: var(--md-st-warn); color: var(--md-st-warn-cont);
+    border: 0; border-radius: var(--md-shape-full);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; text-decoration: none;
+  }
+  #main .agente-aviso__btn:hover {
+    background: color-mix(in srgb, var(--md-st-warn-cont) 8%, var(--md-st-warn));
+  }
+  .agente-aviso .agente-aviso__ico svg { width: 24px; height: 24px; display: block; }
+  .agente-aviso .agente-aviso__btn svg { width: 18px; height: 18px; flex: 0 0 auto; }
+</style>
+
+<header class="make-header {% element_classes 'header' %}">
+    <div class="mkhdr__in {% if not cl.model_admin.list_fullwidth and is_fullwidth != "1" %}container{% endif %} {% element_classes 'header_inner' %}">
+        <div id="header-inner" class="mkhdr__row">
+                {% block usertools %}
+                    {% if has_permission %}
+                        <div class="mkhdr__lead">
+                            {% comment %}
+                            Trilha: diz ONDE o usuário está. Nas telas de modelo sai do
+                            `opts` (app + modelo); nas telas próprias (parque, orçamentos,
+                            ajuda) sai do caminho. `{% url ... as %}` NÃO estoura quando a
+                            rota não existe — por isso todo link é resolvido assim.
+                            {% endcomment %}
+                            {% url 'admin:index' as mkhdr_home %}
+                            <nav class="mkhdr__trail" aria-label="{% trans 'Trilha de navegação' %}">
+                                {% if mkhdr_home %}<a href="{{ mkhdr_home }}">{% trans 'Início' %}</a>{% else %}<span>{% trans 'Início' %}</span>{% endif %}
+                                {% if opts %}
+                                    <i aria-hidden="true">·</i><span>{{ opts.app_config.verbose_name }}</span>
+                                    {% if not cl %}
+                                        {% url opts|admin_urlname:'changelist' as mkhdr_cl %}
+                                        <i aria-hidden="true">·</i>
+                                        {% if mkhdr_cl %}<a href="{{ mkhdr_cl }}">{{ opts.verbose_name_plural|capfirst }}</a>{% else %}<span>{{ opts.verbose_name_plural|capfirst }}</span>{% endif %}
+                                    {% endif %}
+                                {% elif '/parque/' in request.path %}
+                                    <i aria-hidden="true">·</i><span>{% trans 'Parque de máquinas' %}</span>
+                                {% elif '/orcamentos/' in request.path %}
+                                    <i aria-hidden="true">·</i><span>{% trans 'Orçamentos' %}</span>
+                                {% elif '/dashboard/' in request.path %}
+                                    <i aria-hidden="true">·</i><span>{% trans 'Análise' %}</span>
+                                {% endif %}
+                            </nav>
+
+                            {% block welcome-msg %}
+                                {% include 'unfold/helpers/welcomemsg.html' %}
+                            {% endblock %}
+                        </div>
+                    {% endif %}
+                {% endblock %}
+
+                {% if has_permission %}
+                <div class="mkhdr__side">
+                    {% block userlinks %}
+                        {% include 'unfold/helpers/userlinks.html' %}
+                    {% endblock %}
+
+                    {% comment %}A barra do topo tem UM controle: a agenda —
+                    objeto pequeno de calendário sempre visível que abre os avisos e
+                    o mês (pedido do dono, referência da central do GNOME). O "?" da
+                    ajuda saiu (está tudo no Assistente) e o sino virou a coluna de
+                    avisos deste painel.{% endcomment %}
+                    {% include "unfold/helpers/_agenda_topo.html" %}
+
+                    <form id="notif-marcar-todas-form" method="post" action="{% url 'notif_marcar_todas' %}" class="hidden">{% csrf_token %}</form>
+
+                </div>{# /mkhdr__side #}
+                {% endif %}
+        </div>{# /#header-inner #}
+    </div>{# /mkhdr__in #}
+
+{# Fonte dos avisos: escondida aqui, adotada pelo Assistente. #}
+{% include "unfold/helpers/_avisos.html" %}
+
+</header>
+
+{% if agente_aviso %}
+{% comment %}
+NASCE ESCONDIDA — de propósito.
+
+Este aviso é o único que ainda era DESENHADO na página: ficava fora do
+</header> e fora do #main, sem `hidden`, então entre o carregamento e o
+momento em que o `initAgendaTopo()` o move para o painel do topo ele
+aparecia solto no alto do documento, colado na borda esquerda (margem de
+16px, nenhum container) — o dono viu isso e disse "notificações
+aparecendo em lugar aleatório". Escondido, ele só pinta depois de ser
+adotado pelo painel, que é a regra desta versão: notificação só lá em cima.
+{% endcomment %}
+<div class="agente-aviso" id="agente-aviso" role="status" hidden>
+  <span class="agente-aviso__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg></span>
+  <span class="agente-aviso__txt">
+    <b>Coleta de desempenho não detectada nesta máquina.</b>
+    Para o score real, o Técnico deve instalar o agente: baixe e cole na Inicialização
+    (Win+R → <code>shell:startup</code>).
+  </span>
+  <a class="agente-aviso__btn" href="{{ agente_baixar_url }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg> Baixar agente</a>
+  <button type="button" class="agente-aviso__x" id="agente-aviso-x" aria-label="Dispensar" title="Dispensar">×</button>
+</div>
+{% endif %}
+
+<script>
+// Banner do agente: dispensar por sessão.
+(function () {
+  var b = document.getElementById("agente-aviso");
+  if (!b) return;
+  try { if (sessionStorage.getItem("agenteAvisoOff") === "1") { b.style.display = "none"; } } catch (e) {}
+  var x = document.getElementById("agente-aviso-x");
+  if (x) x.addEventListener("click", function () {
+    b.style.display = "none";
+    try { sessionStorage.setItem("agenteAvisoOff", "1"); } catch (e) {}
+  });
+})();
+// O "?" da barra abre o ASSISTENTE (static/js/make-assistente.js toma o clique
+// para si, com captura). Aqui havia um mapa de tela -> ancora da Central de
+// Ajuda e um window.location para /ajuda/#secao: codigo morto desde que o menu
+// Ajuda saiu, e que voltaria a levar para um 404 se o JS do assistente falhasse
+// ao carregar. A Central de Ajuda nao existe mais.
+function notifCsrf() {
+    var form = document.getElementById('notif-marcar-todas-form');
+    return form.querySelector('[name=csrfmiddlewaretoken]').value;
+}
+function notifMarcarTodas(btn) {
+    var form = document.getElementById('notif-marcar-todas-form');
+    fetch(form.action, {
+        method: 'POST',
+        headers: {'X-CSRFToken': notifCsrf(), 'X-Requested-With': 'XMLHttpRequest'},
+    }).then(function () { window.location.reload(); });
+}
+function notifExcluir(pk, btn) {
+    fetch('/notificacoes/' + pk + '/excluir/', {
+        method: 'POST',
+        headers: {'X-CSRFToken': notifCsrf(), 'X-Requested-With': 'XMLHttpRequest'},
+    }).then(function (r) {
+        if (!r.ok) return;
+        var row = btn.closest('.make-notif-row');
+        if (row) row.remove();
+    });
+}
+function notifLimpar(btn) {
+    fetch('/notificacoes/limpar/', {
+        method: 'POST',
+        headers: {'X-CSRFToken': notifCsrf(), 'X-Requested-With': 'XMLHttpRequest'},
+    }).then(function () { window.location.reload(); });
+}
+</script>

@@ -1,0 +1,539 @@
+{% comment %}
+O MIOLO DA PLACA — incluído dentro do <script> de orgs/acessos.html.
+
+Está em arquivo separado só por tamanho: é o desenho do circuito (medição,
+trilha, pad, pino, energia), o anel de poder e as duas gravações. Não tem
+nenhuma variável de template aqui de propósito — URLs e csrf ficam no arquivo
+de cima, onde é óbvio que existem.
+
+REGRA QUE VALE PARA TUDO ABAIXO: atualizar em vez de redesenhar. O HTML nasce
+uma vez por pessoa (ou por grupo); o clique mexe só no que mudou. A primeira
+versão refazia o innerHTML a cada clique — e aí a animação de entrada rodava
+de novo, os fios piscavam e o cartão pulava.
+{% endcomment %}
+  function balao(idTela, comEco) {
+    var t = TELA[idTela];
+    if (!t) return "";
+    return '<span class="balao' + (comEco ? " eco" : "") + '" data-tela="' + t.id + '">' +
+      ico(t.ic) + esc(t.nome) + "</span>";
+  }
+
+  // o cartao esta diferente do que esta GRAVADO?
+  function emRascunho(nomeGrupo) {
+    var u = usuario();
+    if (!u) return false;
+    var salvo = u.grupos.indexOf(nomeGrupo) >= 0;
+    return ligado(nomeGrupo) !== salvo;
+  }
+
+  function nivel(frac) {
+    if (frac >= 1) return { txt: "poder máximo", max: true };
+    if (frac >= 0.7) return { txt: "acesso amplo", max: false };
+    if (frac >= 0.5) return { txt: "acesso médio", max: false };
+    return { txt: "acesso básico", max: false };
+  }
+
+  // ------------------------------------------------------------ modo PESSOA
+  function pintarPessoa(entrada) {
+    var u = usuario();
+    if (!u) { palco.innerHTML = ""; return; }
+    var telas = telasDaPessoa();
+    var frac = telas.length / D.telas.length, niv = nivel(frac);
+
+    var cartaoEu =
+      '<div class="eu">' +
+      '<span class="eu__av' + (u.su ? " eu__av--su" : "") + (niv.max ? " eu__av--max" : "") +
+      '" style="--ax-poder:' + Math.round(frac * 100) + '">' + esc(u.inicial) +
+      (niv.max ? '<span class="eu__raio" title="vê todas as telas">' + ico("raio") +
+                 "</span>" : "") + "</span>" +
+      '<span class="eu__n">' + esc(u.nome) + "</span>" +
+      '<span class="eu__d">' + esc(u.user) + (u.email ? " · " + esc(u.email) : "") + "</span>" +
+      '<span class="eu__c">' + (u.su
+        ? 'vê <b id="eu-n">' + telas.length + "</b> telas — todas"
+        : 'vê <b id="eu-n">' + telas.length + "</b> de " + D.telas.length + " telas") +
+      "</span>" +
+      '<span class="eu__nivel' + (niv.max ? " eu__nivel--max" : "") + '" id="eu-nivel">' +
+      esc(niv.txt) + "</span>" +
+      // O SUPERUSUARIO NAO RECEBE PELA TRILHA. Sem esta faixa, "poder maximo"
+      // ao lado de cartoes apagados le como dado errado — e a pergunta certa
+      // ("era pra tar tudo preenchido") nao tem resposta na tela.
+      (u.su
+        ? '<span class="eu__su">' + ico("raio") +
+          "<span><b>Superusuário</b>Vê todas as telas por definição. Os grupos abaixo " +
+          "não mudam o que ele vê — mudam só o grupo.</span></span>"
+        : "") +
+      "</div>";
+
+    var cartoes = D.grupos.slice(0, 8).map(function (g, i) {
+      var on = ligado(g.nome);
+      var corpo = g.telas.length
+        ? '<span class="baloes">' + g.telas.map(function (id) {
+            return balao(id, on && quantosDao(id) > 1);
+          }).join("") + "</span>"
+        : '<span class="gr__nada">' + ico("alerta") + "não destrava tela restrita</span>";
+      var rasc = emRascunho(g.nome);
+      return '<button type="button" class="gr gr--' + (i + 1) +
+        (rasc ? " gr--rascunho" : "") + '" data-grupo="' + esc(g.nome) +
+        '" aria-pressed="' + on + '" style="--i:' + i + '">' +
+        (rasc ? '<span class="gr__tag">não salvo</span>' : "") +
+        '<span class="gr__t"><span class="gr__esc">' +
+        ico(on ? "check" : "shield_person") + "</span><b>" + esc(g.nome) + "</b><i>" +
+        (g.membros ? pessoas(g.membros) : "ninguém") + "</i></span>" + corpo +
+        "</button>";
+    }).join("");
+
+    palco.innerHTML =
+      '<div class="palco__topo">' +
+      '<button type="button" class="bt bt--s voltar-mob" data-voltar="1">← Pessoas</button>' +
+      "<div><h2>" + esc(u.nome) + "</h2>" +
+      "<p>Clique num grupo para ligar ou desligar o fio.</p></div>" +
+      '<div class="palco__acao">' +
+      '<button type="button" class="bt bt--s" id="bt-desfazer" disabled>Desfazer</button>' +
+      '<button type="button" class="bt bt--p" id="bt-salvar" disabled>Salvar</button>' +
+      "</div></div>" +
+      '<div class="anel' + (entrada ? " anel--entra" : "") + '" id="anel">' +
+      '<svg class="fios" id="fios" aria-hidden="true"></svg>' + cartaoEu + cartoes + "</div>" +
+      '<div class="base"><p>Toda a equipe já vê, sem depender de grupo:</p>' +
+      '<span class="baloes">' + ABERTAS.map(function (t) { return balao(t.id); }).join("") +
+      "</span></div>" +
+      '<div id="caixa-diff"></div>';
+
+    palco.querySelectorAll("[data-grupo]").forEach(function (b) {
+      b.addEventListener("click", function () { alternar(b); });
+      b.addEventListener("mouseenter", function () {
+        realcar(b.getAttribute("data-grupo"), true);
+      });
+      b.addEventListener("mouseleave", function () {
+        realcar(b.getAttribute("data-grupo"), false);
+      });
+    });
+    document.getElementById("bt-desfazer")
+      .addEventListener("click", function () { est.rascunho = {}; pintar(false); });
+    document.getElementById("bt-salvar").addEventListener("click", salvarPessoa);
+
+    palco.querySelectorAll("[data-voltar]").forEach(function (b) {
+      b.addEventListener("click", function () { mostrarDetalhe(false); });
+    });
+    ligarEco();
+    atualizarDiff();
+    caminhos = {}; pecas = {};
+    requestAnimationFrame(function () { desenharFios(); });
+  }
+
+  function alternar(card) {
+    var nome = card.getAttribute("data-grupo");
+    var ligar = !ligado(nome);
+    est.rascunho[nome] = ligar;
+    card.setAttribute("aria-pressed", ligar);
+    var e = card.querySelector(".gr__esc");
+    if (e) e.innerHTML = ico(ligar ? "check" : "shield_person");
+
+    var rasc = emRascunho(nome);
+    card.classList.toggle("gr--rascunho", rasc);
+    var tag = card.querySelector(".gr__tag");
+    if (rasc && !tag) {
+      tag = document.createElement("span");
+      tag.className = "gr__tag";
+      tag.textContent = "não salvo";
+      card.insertBefore(tag, card.firstChild);
+    } else if (!rasc && tag) {
+      tag.remove();
+    }
+    atualizarEco();
+    atualizarPoder(ligar);
+    atualizarDiff();
+    desenharFios({ animar: nome, ligou: ligar });
+  }
+
+  function atualizarEco() {
+    palco.querySelectorAll("[data-grupo]").forEach(function (card) {
+      var on = card.getAttribute("aria-pressed") === "true";
+      card.querySelectorAll(".balao").forEach(function (b) {
+        var eco = on && quantosDao(b.getAttribute("data-tela")) > 1;
+        if (eco && !b.classList.contains("eco")) b.classList.add("eco");
+        else if (!eco) b.classList.remove("eco");
+      });
+    });
+  }
+
+  function atualizarPoder(ligou) {
+    var u = usuario(), av = palco.querySelector(".eu__av");
+    if (!u || !av) return;
+    var telas = telasDaPessoa(), frac = telas.length / D.telas.length, niv = nivel(frac);
+    av.style.setProperty("--ax-poder", Math.round(frac * 100));
+    av.classList.toggle("eu__av--max", niv.max);
+    if (niv.max && !av.querySelector(".eu__raio")) {
+      var r = document.createElement("span");
+      r.className = "eu__raio"; r.title = "vê todas as telas";
+      r.innerHTML = ico("raio");
+      av.appendChild(r);
+    } else if (!niv.max) {
+      var velho = av.querySelector(".eu__raio");
+      if (velho) velho.remove();
+    }
+    var chip = document.getElementById("eu-nivel");
+    if (chip) { chip.textContent = niv.txt; chip.classList.toggle("eu__nivel--max", niv.max); }
+    contar(document.getElementById("eu-n"), telas.length);
+    if (ligou) { av.classList.remove("brilha"); void av.offsetWidth; av.classList.add("brilha"); }
+  }
+
+  // conta subindo: número que troca sem transição parece defeito de render
+  function contar(el, ate) {
+    if (!el) return;
+    var de = parseInt(el.textContent, 10) || 0;
+    if (de === ate) return;
+    var t0 = performance.now(), dur = 380;
+    (function passo(t) {
+      var k = Math.min(1, (t - t0) / dur);
+      el.textContent = Math.round(de + (ate - de) * (1 - Math.pow(1 - k, 3)));
+      if (k < 1) requestAnimationFrame(passo);
+    })(t0);
+  }
+
+  function atualizarDiff() {
+    var caixa = document.getElementById("caixa-diff");
+    if (!caixa) return;
+    var u = usuario(), mud = mudancas(), telas = telasDaPessoa();
+    var bd = document.getElementById("bt-desfazer"), bs = document.getElementById("bt-salvar");
+    if (bd) bd.disabled = !mud.length;
+    if (bs) {
+      bs.disabled = !mud.length;
+      bs.textContent = mud.length ? "Salvar (" + mud.length + ")" : "Salvar";
+    }
+    caixa.innerHTML = mud.length
+      ? '<div class="diff"><span class="diff__t">O que muda ao salvar:</span>' +
+        '<span class="diff__l">' + mud.map(function (m) {
+          return '<span class="marca marca--' + (m.mais ? "mais" : "menos") + '">' +
+            (m.mais ? "+ " : "− ") + esc(m.grupo) + "</span>";
+        }).join("") + "</span>" +
+        '<span class="diff__t">' + (u && u.su
+          ? "superusuário: continua vendo tudo"
+          : "passa a ver " + telas.length + " de " + D.telas.length + " telas") +
+        "</span></div>"
+      : "";
+  }
+
+  function ligarEco() {
+    palco.querySelectorAll("[data-tela]").forEach(function (el) {
+      el.addEventListener("mouseenter", function () {
+        var id = el.getAttribute("data-tela");
+        palco.querySelectorAll('[data-tela="' + id + '"]').forEach(function (o) {
+          o.style.outline = "2px solid var(--md-primary)";
+          o.style.outlineOffset = "1px";
+        });
+      });
+      el.addEventListener("mouseleave", function () {
+        palco.querySelectorAll("[data-tela]").forEach(function (o) {
+          o.style.outline = ""; o.style.outlineOffset = "";
+        });
+      });
+    });
+  }
+
+  // ------------------------------------------------------------- AS TRILHAS
+  var caminhos = {}, pecas = {};
+
+  function trilha(sx, sy, ex, ey, horizontalPrimeiro) {
+    var r = Math.min(16, Math.abs(ex - sx), Math.abs(ey - sy));
+    var gx = ex > sx ? 1 : -1, gy = ey > sy ? 1 : -1;
+    var n = function (v) { return v.toFixed(1); };
+    if (r < 1) return "M" + n(sx) + " " + n(sy) + " L" + n(ex) + " " + n(ey);
+    if (horizontalPrimeiro) {
+      return "M" + n(sx) + " " + n(sy) + " H" + n(ex - r * gx) +
+             " Q" + n(ex) + " " + n(sy) + " " + n(ex) + " " + n(sy + r * gy) +
+             " V" + n(ey);
+    }
+    return "M" + n(sx) + " " + n(sy) + " V" + n(ey - r * gy) +
+           " Q" + n(sx) + " " + n(ey) + " " + n(sx + r * gx) + " " + n(ey) +
+           " H" + n(ex);
+  }
+
+  // Z: vertical, corredor entre as fileiras, vertical. É a rota de canto — a
+  // rota curta cruzava o cartão do meio, e como o SVG fica atrás dos cartões a
+  // trilha aparecia picada, como se o desenho estivesse quebrado.
+  function trilhaZ(sx, sy, yc, ex, ey) {
+    var n = function (v) { return v.toFixed(1); };
+    var gy1 = yc > sy ? 1 : -1, gx = ex > sx ? 1 : -1, gy2 = ey > yc ? 1 : -1;
+    var r1 = Math.min(12, Math.abs(yc - sy), Math.abs(ex - sx) / 2);
+    var r2 = Math.min(12, Math.abs(ey - yc), Math.abs(ex - sx) / 2);
+    if (r1 < 1 || r2 < 1) {
+      return "M" + n(sx) + " " + n(sy) + " V" + n(yc) + " H" + n(ex) + " V" + n(ey);
+    }
+    return "M" + n(sx) + " " + n(sy) + " V" + n(yc - r1 * gy1) +
+           " Q" + n(sx) + " " + n(yc) + " " + n(sx + r1 * gx) + " " + n(yc) +
+           " H" + n(ex - r2 * gx) +
+           " Q" + n(ex) + " " + n(yc) + " " + n(ex) + " " + n(yc + r2 * gy2) +
+           " V" + n(ey);
+  }
+
+  function pad(svg, nome, sx, sy, ex, ey, on) {
+    var par = pecas[nome];
+    if (!par) {
+      par = {
+        pad: document.createElementNS("http://www.w3.org/2000/svg", "circle"),
+        pino: document.createElementNS("http://www.w3.org/2000/svg", "rect")
+      };
+      par.pad.setAttribute("r", "3.6");
+      par.pino.setAttribute("width", "9");
+      par.pino.setAttribute("height", "9");
+      par.pino.setAttribute("rx", "2.5");
+      svg.appendChild(par.pad); svg.appendChild(par.pino);
+      pecas[nome] = par;
+    }
+    par.pad.setAttribute("cx", sx.toFixed(1));
+    par.pad.setAttribute("cy", sy.toFixed(1));
+    par.pad.setAttribute("class", "pad" + (on ? "" : " pad--off"));
+    par.pino.setAttribute("x", (ex - 4.5).toFixed(1));
+    par.pino.setAttribute("y", (ey - 4.5).toFixed(1));
+    par.pino.setAttribute("class", "pino" + (on ? "" : " pino--off"));
+  }
+
+  function desenharFios(op) {
+    op = op || {};
+    var svg = document.getElementById("fios"), anel = document.getElementById("anel");
+    if (!svg || !anel) return;
+    if (getComputedStyle(svg).display === "none") {
+      svg.innerHTML = ""; caminhos = {}; pecas = {}; return;
+    }
+    var eu = anel.querySelector(".eu__av"), euCard = anel.querySelector(".eu");
+    if (!eu || !euCard) return;
+    var base = anel.getBoundingClientRect(), a = eu.getBoundingClientRect();
+    var k = euCard.getBoundingClientRect();
+    svg.setAttribute("viewBox", "0 0 " + base.width + " " + base.height);
+    var cx = a.left - base.left + a.width / 2, cy = a.top - base.top + a.height / 2;
+    // O ENCAPSULAMENTO é o cartão da pessoa, e é nele que os pinos pousam: o
+    // SVG fica atrás do cartão, então trilha mirada no centro do avatar
+    // entrava por baixo e sumia.
+    var kEsq = k.left - base.left, kDir = kEsq + k.width;
+    var kTopo = k.top - base.top, kBaixo = kTopo + k.height;
+
+    anel.querySelectorAll("[data-grupo]").forEach(function (card) {
+      var nome = card.getAttribute("data-grupo");
+      var r = card.getBoundingClientRect();
+      var px = r.left - base.left + r.width / 2, py = r.top - base.top + r.height / 2;
+      var esqC = r.left - base.left, dirC = esqC + r.width;
+      var topoC = r.top - base.top, baixoC = topoC + r.height;
+      var dx = cx - px, dy = cy - py;
+
+      var alinhadoY = py > kTopo + 10 && py < kBaixo - 10;
+      var alinhadoX = px > kEsq + 10 && px < kDir - 10;
+      var sx, sy, ex, ey, forma;
+      if (alinhadoY) {
+        sx = dx > 0 ? dirC : esqC; sy = py;
+        ex = dx > 0 ? kEsq : kDir; ey = py;
+        forma = trilha(sx, sy, ex, ey, true);
+      } else if (alinhadoX) {
+        sx = px; sy = dy > 0 ? baixoC : topoC;
+        ex = px; ey = dy > 0 ? kTopo : kBaixo;
+        forma = trilha(sx, sy, ex, ey, false);
+      } else {
+        sx = px; sy = dy > 0 ? baixoC : topoC;
+        var corredor = dy > 0 ? (baixoC + kTopo) / 2 : (topoC + kBaixo) / 2;
+        ex = cx; ey = dy > 0 ? kTopo : kBaixo;
+        forma = trilhaZ(sx, sy, corredor, ex, ey);
+      }
+      var on = card.getAttribute("aria-pressed") === "true";
+
+      var caminho = caminhos[nome];
+      if (!caminho) {
+        caminho = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        caminho.setAttribute("data-fio", nome);
+        svg.appendChild(caminho);
+        caminhos[nome] = caminho;
+      }
+      caminho.setAttribute("d", forma);
+      // trilha de rascunho anda (formigas): ela mostra o que VAI valer, nao o
+      // que vale. Linha cheia e' so' para acesso gravado.
+      var classe = on ? "aceso" : "off";
+      if (emRascunho(nome)) classe += " provisorio";
+      caminho.setAttribute("class", classe);
+      pad(svg, nome, sx, sy, ex, ey, on);
+
+      if (op.animar === nome && op.ligou) {
+        var len = caminho.getTotalLength();
+        caminho.style.setProperty("--len", len);
+        caminho.style.strokeDasharray = len;
+        caminho.classList.remove("desenha");
+        void caminho.getBoundingClientRect();
+        caminho.classList.add("desenha");
+        setTimeout(function () {
+          caminho.classList.remove("desenha");
+          caminho.style.strokeDasharray = "";
+          caminho.style.removeProperty("--len");
+        }, 620);
+        pulsar(svg, forma, len);
+      }
+    });
+  }
+
+  // a energia que corre pela trilha recém-fechada, uma vez só
+  function pulsar(svg, forma, len) {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", forma);
+    p.setAttribute("class", "pulso");
+    p.style.setProperty("--len", len);
+    p.style.strokeDasharray = "14 " + len;
+    svg.appendChild(p);
+    setTimeout(function () { p.remove(); }, 820);
+  }
+
+  function realcar(nome, ligar) {
+    var c = caminhos[nome];
+    if (c) c.classList.toggle("realce", !!ligar);
+  }
+
+  // ------------------------------------------------------------- modo GRUPO
+  function pintarGrupo(entrada) {
+    var g = GRUPO[est.selGrupo];
+    if (!g) { palco.innerHTML = ""; return; }
+    var membros = D.usuarios.filter(function (u) { return u.grupos.indexOf(g.nome) >= 0; });
+    var mud = mudancasTela();
+
+    palco.innerHTML =
+      '<div class="palco__topo">' +
+      '<button type="button" class="bt bt--s voltar-mob" data-voltar="1">← Grupos</button>' +
+      "<div><h2>" + esc(g.nome) + "</h2><p>" +
+      (g.membros ? pessoas(g.membros) : "ninguém") + " · destrava " +
+      g.telas.length + " tela" + (g.telas.length === 1 ? "" : "s") +
+      " de " + RESTRITAS.length + " restritas</p></div>" +
+      (D.pode_mapa
+        ? '<div class="palco__acao">' +
+          // Excluir só aparece com o grupo VAZIO: com gente dentro, apagar
+          // tira acesso de todos de uma vez e sem rastro.
+          (D.pode_grupo && !g.membros
+            ? '<button type="button" class="bt bt--s" id="bt-excluir">Excluir grupo</button>'
+            : "") +
+          '<button type="button" class="bt bt--s" id="bt-desfazer-g"' +
+          (mud.length ? "" : " disabled") + ">Desfazer</button>" +
+          '<button type="button" class="bt bt--p" id="bt-salvar-g"' +
+          (mud.length ? "" : " disabled") + ">Salvar</button></div>"
+        : "") +
+      "</div>" +
+      '<div class="duo">' +
+      '<div class="cx"><h3>Quem está neste grupo</h3>' +
+      '<p class="d">Clique para abrir a pessoa e mexer nos grupos dela.</p>' +
+      '<div class="membros">' + (membros.length
+        ? membros.map(function (u) {
+            return '<button type="button" class="li" data-ir="' + esc(u.user) + '">' +
+              '<span class="av' + (u.su ? " av--su" : "") + '">' + esc(u.inicial) + "</span>" +
+              '<span class="li__n"><b>' + esc(u.nome) + "</b><span>" +
+              esc(u.grupos.join(" · ")) + "</span></span>" +
+              '<span class="li__t">abrir</span></button>';
+          }).join("")
+        : '<p class="d">Ninguém — o grupo existe e não tem gente.</p>') + "</div></div>" +
+      '<div class="cx"><h3>O que este grupo destrava</h3>' +
+      '<p class="d">Das ' + RESTRITAS.length + " telas que dependem de grupo." +
+      (D.pode_mapa ? " Clique para ligar ou desligar."
+                   : " Só superusuário muda isto.") + "</p>" +
+      '<div class="telas">' + RESTRITAS.map(function (t) {
+        var tem = telaLigada(t.id);
+        var corpo = ico(t.ic) + "<div><b>" + esc(t.nome) + "</b><span>" + esc(t.url) +
+          '</span></div><span class="tela__s' + (tem ? "" : " tela__s--n") + '">' +
+          (tem ? "destrava" : "não") + "</span>";
+        return D.pode_mapa
+          ? '<button type="button" class="tela' + (tem ? "" : " tela--fora") +
+            '" data-tg="' + t.id + '" aria-pressed="' + tem + '">' + corpo + "</button>"
+          : '<div class="tela' + (tem ? "" : " tela--fora") + '">' + corpo + "</div>";
+      }).join("") + "</div></div></div>" +
+      (mud.length
+        ? '<div class="diff"><span class="diff__t">O que muda ao salvar:</span>' +
+          '<span class="diff__l">' + mud.map(function (m) {
+            return '<span class="marca marca--' + (m.mais ? "mais" : "menos") + '">' +
+              (m.mais ? "+ " : "− ") + esc(TELA[m.tela] ? TELA[m.tela].nome : m.tela) +
+              "</span>";
+          }).join("") + "</span>" +
+          '<span class="diff__t">vale para ' +
+          (g.membros ? pessoas(g.membros) : "ninguém") + "</span></div>"
+        : "") +
+      '<p class="nota"><b>Isto reescreve o acesso de todos os membros de uma vez.</b> ' +
+      "O menu e as telas obedecem no clique seguinte — não é operação de rotina, e por " +
+      "isso só superusuário grava aqui.</p>";
+
+    palco.querySelectorAll("[data-voltar]").forEach(function (b) {
+      b.addEventListener("click", function () { mostrarDetalhe(false); });
+    });
+    palco.querySelectorAll("[data-ir]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        est.modo = "pessoa"; est.sel = b.getAttribute("data-ir"); est.rascunho = {};
+        document.getElementById("aba-p").setAttribute("aria-selected", "true");
+        document.getElementById("aba-g").setAttribute("aria-selected", "false");
+        pintar(true);
+      });
+    });
+    palco.querySelectorAll("[data-tg]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = b.getAttribute("data-tg");
+        est.rascunhoTela[id] = !telaLigada(id);
+        pintarGrupo(false);
+      });
+    });
+    var bdg = document.getElementById("bt-desfazer-g");
+    if (bdg) bdg.addEventListener("click", function () {
+      est.rascunhoTela = {}; pintarGrupo(false);
+    });
+    var bsg = document.getElementById("bt-salvar-g");
+    if (bsg) bsg.addEventListener("click", salvarGrupo);
+    var bxg = document.getElementById("bt-excluir");
+    if (bxg) bxg.addEventListener("click", excluirGrupo);
+  }
+
+  // ------------------------------------------------------------- GRAVAR
+  function corpoForm(pares) {
+    var fd = new FormData();
+    fd.append("csrfmiddlewaretoken", CSRF);
+    pares.forEach(function (p) { fd.append(p[0], p[1]); });
+    return fd;
+  }
+
+  function enviar(url, fd, botao, rotulo, depois) {
+    if (botao) { botao.disabled = true; botao.textContent = "Salvando…"; }
+    fetch(url, { method: "POST", body: fd, credentials: "same-origin" })
+      .then(function (r) {
+        return r.json().catch(function () {
+          return { ok: false, erro: "Resposta inesperada do servidor." };
+        });
+      })
+      .then(function (j) {
+        if (j.ok) { aviso(j.msg || "Salvo."); depois(j); }
+        else {
+          aviso(j.erro || "Não foi possível salvar.", true);
+          if (botao) { botao.disabled = false; botao.textContent = rotulo; }
+        }
+      })
+      .catch(function () {
+        aviso("Falha de rede ao salvar.", true);
+        if (botao) { botao.disabled = false; botao.textContent = rotulo; }
+      });
+  }
+
+  function salvarPessoa() {
+    var u = usuario();
+    if (!u) return;
+    var pares = [["usuario", u.id]];
+    gruposLigados().forEach(function (n) { pares.push(["grupos", n]); });
+    enviar(URL_PESSOA, corpoForm(pares), document.getElementById("bt-salvar"), "Salvar",
+      function () {
+        // o estado passa a ser o gravado, e o rascunho zera — sem recarregar a
+        // página inteira, que perderia a pessoa selecionada. Depois disto os
+        // cartoes perdem o tracejado e a etiqueta: agora eles SAO o banco.
+        u.grupos = gruposLigados();
+        u.telas = telasDaPessoa().length;
+        est.rascunho = {};
+        pintar(false);
+      });
+  }
+
+  function salvarGrupo() {
+    var g = GRUPO[est.selGrupo];
+    if (!g) return;
+    var pares = [["grupo", g.id]];
+    RESTRITAS.forEach(function (t) { if (telaLigada(t.id)) pares.push(["telas", t.id]); });
+    enviar(URL_GRUPO, corpoForm(pares), document.getElementById("bt-salvar-g"), "Salvar",
+      function () {
+        // Aqui recarrega de propósito: mudar o que um grupo destrava muda o
+        // menu e o "vê N telas" de TODA a lista. Repintar só este pedaço
+        // deixaria o resto da tela mentindo.
+        location.reload();
+      });
+  }

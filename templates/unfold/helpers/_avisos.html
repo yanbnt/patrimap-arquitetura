@@ -1,0 +1,88 @@
+{% load i18n %}
+{% comment %}
+AVISOS — a lista de notificações do sistema.
+
+Saiu do sino da barra de cima por pedido do dono ("o sino também vai ser nele").
+Quem adota este nó é o `initAgendaTopo()` do **make-admin.js** — a área de
+avisos com calendário no topo da tela, não o Assistente (o texto antigo aqui
+dizia que era o `make-assistente.js`; a adoção mudou de dono quando o painel do
+topo foi criado, e o comentário ficou para trás).
+
+O trecho é renderizado ESCONDIDO no fim do <header> e o nó é movido inteiro.
+Mover é seguro porque não há mais Alpine nesta subárvore (o
+`x-data="{openNotif}"` do sino foi removido; Alpine destrói o estado de
+qualquer subárvore reparentada, e era esse estado que abria o dropdown).
+
+As classes `make-notif-*` continuam as mesmas, então o item, o "Aprovar/Negar"
+e os botões de marcar/limpar seguem funcionando com o CSS e o JS que já existem.
+{% endcomment %}
+<div id="mk-avisos-fonte" hidden data-nao-lidas="{{ notif_nao_lidas|default:0 }}">
+<div class="make-notif-drop__head">
+    <span class="mkhdr__droptt">{% trans 'Notificações' %}</span>
+    <div class="flex items-center gap-3">
+        {% if notif_nao_lidas %}
+            <button type="button" onclick="notifMarcarTodas(this)" class="mkhdr__droplink">
+                {% trans 'Marcar todas como lidas' %}
+            </button>
+        {% endif %}
+        {% if notif_lista %}
+            <button type="button" onclick="notifLimpar(this)" class="mkhdr__droplink mkhdr__droplink--del">
+                {% trans 'Limpar' %}
+            </button>
+        {% endif %}
+    </div>
+</div>
+
+{% for n in notif_lista %}
+    {% if n.fixa and n.acao_ok_url %}
+        {# Notificação FIXA de aprovar/negar #}
+        <div class="make-notif-fixa flex flex-col gap-2 px-4 py-3 border-b border-base-100 dark:border-base-700/60">
+            <div class="flex gap-3">
+                <span class="mt-0.5 text-red-600 dark:text-red-400"><svg class="mkhdr-nic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{% if n.icone == 'verified' %}<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>{% elif n.icone == 'swap_horiz' %}<path d="M4 8h16M16 4l4 4-4 4"/><path d="M20 16H4M8 12l-4 4 4 4"/>{% elif n.icone == 'event_busy' %}<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/><path d="m14 14-4 4M10 14l4 4"/>{% elif n.icone == 'request_quote' %}<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h6"/><path d="M9 13h6M9 17h4"/>{% elif n.icone == 'task_alt' %}<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>{% elif n.icone == 'wrong_location' %}<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><path d="m10 8 4 4M14 8l-4 4"/>{% elif n.icone == 'build' or n.icone == 'construction' or n.icone == 'engineering' %}<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>{% else %}<path d="M10.3 21a2 2 0 0 0 3.4 0"/><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>{% endif %}</svg></span>
+                <div class="flex flex-col min-w-0">
+                    {# 500 é o peso máximo de rótulo no M3 (§5, item 4): font-semibold → font-medium. #}
+                    <span class="text-sm font-medium text-important">{{ n.titulo }}</span>
+                    {% if n.mensagem %}<span class="text-xs text-subtle truncate">{{ n.mensagem }}</span>{% endif %}
+                </div>
+            </div>
+            {% comment %}
+                Aprovar/Negar em POST (auditoria 4.2): as views de decisão passaram a
+                exigir POST, porque um GET que muda estado é acionável por
+                <img src="...autorizar/"> num e-mail — o navegador da vítima manda o
+                pedido com a sessão dela e o CSRF middleware não olha GET.
+                O `next` devolve o usuário à tela onde ele estava (o Referer não serve:
+                é escolhido por quem manda o link — ver `apps/parque/utils.voltar_para`).
+            {% endcomment %}
+            <div class="flex gap-2">
+                <form method="post" action="{{ n.acao_ok_url }}" class="make-notif-acao">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="make-notif-ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Aprovar</button></form>
+                <form method="post" action="{{ n.acao_no_url }}" class="make-notif-acao" onsubmit="return confirm('Negar esta transferência?')">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="make-notif-no"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg> Negar</button></form>
+            </div>
+        </div>
+    {% else %}
+        <div class="make-notif-row">
+            <a href="{% url 'notif_abrir' n.pk %}"
+               class="make-notif-item flex gap-3 px-4 py-3 border-b border-base-100 hover:bg-base-50 dark:border-base-700/60 dark:hover:bg-base-700/40 {% if not n.lida %}is-unread bg-primary-50/60 dark:bg-primary-500/5{% endif %}">
+                <span class="mt-0.5
+                    {% if n.nivel == 'alerta' %}text-red-600 dark:text-red-400{% elif n.nivel == 'sucesso' %}text-primary-600 dark:text-primary-400{% else %}text-base-400{% endif %}"><svg class="mkhdr-nic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{% if n.icone == 'verified' %}<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>{% elif n.icone == 'swap_horiz' %}<path d="M4 8h16M16 4l4 4-4 4"/><path d="M20 16H4M8 12l-4 4 4 4"/>{% elif n.icone == 'event_busy' %}<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/><path d="m14 14-4 4M10 14l4 4"/>{% elif n.icone == 'request_quote' %}<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h6"/><path d="M9 13h6M9 17h4"/>{% elif n.icone == 'task_alt' %}<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>{% elif n.icone == 'wrong_location' %}<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><path d="m10 8 4 4M14 8l-4 4"/>{% elif n.icone == 'build' or n.icone == 'construction' or n.icone == 'engineering' %}<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>{% else %}<path d="M10.3 21a2 2 0 0 0 3.4 0"/><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>{% endif %}</svg></span>
+                <div class="flex flex-col min-w-0">
+                    <span class="text-sm font-medium text-important truncate">{{ n.titulo }}</span>
+                    {% if n.mensagem %}<span class="text-xs text-subtle truncate">{{ n.mensagem }}</span>{% endif %}
+                    <span class="text-[11px] text-base-400 mt-0.5">{{ n.criada_em|timesince }}</span>
+                </div>
+                {% if not n.lida %}<span class="ml-auto w-2 h-2 rounded-full bg-primary-500 mt-1.5 shrink-0"></span>{% endif %}
+            </a>
+            <button type="button" class="make-notif-del" title="{% trans 'Excluir notificação' %}"
+                    aria-label="{% trans 'Excluir notificação' %}"
+                    onclick="notifExcluir({{ n.pk }}, this)"><svg class="mkhdr-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+    {% endif %}
+{% empty %}
+    <div class="px-4 py-6">
+        <div class="mkpro-empty mkpro-empty--slim">
+            <span class="mkpro-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 21a2 2 0 0 0 3.4 0"/><path d="M18 8a6 6 0 0 0-9.3-5"/><path d="M6.3 6.3A6 6 0 0 0 6 8c0 7-3 9-3 9h15"/><path d="m2 2 20 20"/></svg></span>
+            <p class="mkpro-empty__title">{% trans 'Nenhuma notificação' %}</p>
+            <p class="mkpro-empty__hint">{% trans 'Avisos de transferência, preventiva e chamado aparecem aqui.' %}</p>
+        </div>
+    </div>
+{% endfor %}
+</div>

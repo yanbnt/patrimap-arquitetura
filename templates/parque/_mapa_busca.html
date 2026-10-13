@@ -1,0 +1,88 @@
+{% comment %}
+Campo de busca do mapa — filtra os cards por Nº de série, Cód. patrimônio,
+nome, colaborador ou specs (CPU/RAM/disco/marca/modelo/status). É client-side
+(initMapaBusca no make-admin.js), esconde cards/setores/unidades sem match.
+Reutilizado em TODOS os mapas (completo, loja, score, notebooks, filtro).
+
+HOOKS (não remover): #mapa-busca, #mapa-busca-x e #mapa-busca-vazio — o JS liga e
+desliga os dois últimos pelo atributo `hidden`. Por isso a regra `[hidden]` abaixo:
+qualquer `display` que a folha global aplique NÃO pode vencer o `hidden`.
+{% endcomment %}
+<style>
+  /* _mapa_busca.html — prefixo .bscx-. Campo M3 OUTLINED: 56px, raio 4px, borda
+     1px outline (2px primary no foco), texto body-large. Sem card, sem anel de
+     brilho verde: o foco é a própria borda ficando primary, como no M3.
+     Os seletores levam `#main .mapa__busca` na frente porque make-m3.css §7 aplica
+     o campo global com !important e especificidade (1,1,1); duas classes vencem. */
+  .mapa__busca {
+    position: relative; display: flex; align-items: center;
+    flex: 1 1 280px; max-width: 480px; margin: 0;
+  }
+  /* A LUPA E' ITEM DO FLEX, NAO CAMADA POR CIMA.
+     Ela estava `absolute; left: 14px` e o campo compensava com 30px de
+     recuo — 2px a menos que a largura da lupa, e o texto entrava por baixo
+     dela. Com a lupa ocupando lugar de verdade na linha, nao existe mais
+     sobreposicao possivel: o campo comeca onde a lupa termina. */
+  .mapa__busca-ico {
+    position: static; flex: 0 0 auto;
+    margin-left: 14px;
+    width: 18px; height: 18px; line-height: 0;
+    color: var(--md-on-surface-variant); pointer-events: none;
+  }
+  .mapa__busca-ico svg { width: 18px; height: 18px; display: block; }
+  /* O CAMPO NÃO DESENHA MOLDURA — quem desenha é a casca `.mapa__busca`
+     (make-m3.css §19.20), que é a barra de busca preenchida em pílula.
+
+     Aqui havia `border: 1px` e `border-radius: 4px` no input. O resultado era
+     um RETÂNGULO dentro da pílula, e ainda por cima com 56px de altura numa
+     casca de 40px: sobrava borda por cima do campo. O dono viu na hora.
+
+     Esta regra tem 1 id + 2 classes e vencia a da folha do sistema, que tem
+     1 id + 1 classe — por isso o conserto tinha de ser aqui, no arquivo que é
+     dono do componente, e não com mais um `!important` lá. */
+  #main .mapa__busca .mapa__busca-input {
+    width: 100%; height: 40px; min-height: 40px; box-sizing: border-box;
+    padding: 0 36px 0 10px !important;
+    font: 400 14.5px/20px var(--md-font) !important; letter-spacing: .1px !important;
+    color: var(--md-on-surface) !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important; outline: none;
+    -webkit-appearance: none; appearance: none;
+  }
+  #main .mapa__busca .mapa__busca-input::placeholder { color: var(--md-on-surface-variant) !important; opacity: 1; }
+  #main .mapa__busca .mapa__busca-input:hover,
+  #main .mapa__busca .mapa__busca-input:focus {
+    border: 0 !important; box-shadow: none !important; background: transparent !important;
+  }
+  /* Limpar: icon button de 40px com state layer (M3), não um "×" solto. */
+  .mapa__busca-x {
+    position: absolute; right: 4px; width: 32px; height: 32px;
+    display: grid; place-items: center;
+    border: 0; border-radius: var(--md-shape-full); cursor: pointer;
+    background: transparent; color: var(--md-on-surface-variant);
+    font-size: 20px; line-height: 1; padding: 0;
+  }
+  .mapa__busca-x:hover {
+    background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+    color: var(--md-on-surface);
+  }
+
+  /* Aviso de "nada encontrado": ocupa a linha inteira da barra de filtro. */
+  .mapa__busca-vazio {
+    flex: 1 0 100%; margin: 12px 0 0;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+    color: var(--md-on-surface-variant);
+  }
+  /* O JS liga/desliga por `hidden` — esta regra garante que nada o reacenda. */
+  .mapa__busca-vazio[hidden] { display: none !important; }
+</style>
+<div class="mapa__busca">
+  <span class="mapa__busca-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
+  <input type="search" id="mapa-busca" class="mapa__busca-input" autocomplete="off"
+         placeholder="Buscar por nº de série, patrimônio, nome ou specs…"
+         aria-label="Buscar dispositivo no mapa">
+  <button type="button" id="mapa-busca-x" class="mapa__busca-x" aria-label="Limpar busca" hidden>×</button>
+</div>
+<p class="mapa__vazio mapa__busca-vazio" id="mapa-busca-vazio" hidden>Nenhum dispositivo encontrado para essa busca.</p>

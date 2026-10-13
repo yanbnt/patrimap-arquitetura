@@ -1,0 +1,66 @@
+{% comment %}
+Avatar do colaborador com camisa polo da Make. A expressão é controlada
+pela classe do elemento-pai (.av--smile / .av--neutral / .av--sad) e o
+notebook nas mãos aparece com .av--has-nb.
+{% endcomment %}
+<svg class="av-svg" viewBox="0 0 120 150" aria-hidden="true">
+  <!-- corpo / camisa polo preta -->
+  <g class="av-body">
+    <path class="av-shirt" d="M30 150 V108 q0 -22 30 -28 q30 6 30 28 V150 Z"/>
+    <!-- gola verde -->
+    <path class="av-collar" d="M48 84 L60 98 L72 84 L84 92 q-12 8 -24 8 q-12 0 -24 -8 Z"/>
+    <!-- carcela (abertura) verde + botões -->
+    <rect class="av-placket" x="57" y="96" width="6" height="30" rx="2"/>
+    <circle class="av-btn" cx="60" cy="104" r="1.5"/>
+    <circle class="av-btn" cx="60" cy="113" r="1.5"/>
+    <!-- mangas com vivo verde -->
+    <path class="av-sleeve" d="M30 112 q-9 4 -11 16 l10 4 q3 -10 6 -14 Z"/>
+    <path class="av-sleeve" d="M90 112 q9 4 11 16 l-10 4 q-3 -10 -6 -14 Z"/>
+    <rect class="av-sleeve-trim" x="17" y="128" width="12" height="3" rx="1.5" transform="rotate(12 23 129)"/>
+    <rect class="av-sleeve-trim" x="91" y="128" width="12" height="3" rx="1.5" transform="rotate(-12 97 129)"/>
+    <!-- logo Make (folha + nome) -->
+    <g class="av-logo" transform="translate(70 108)">
+      <path class="av-leaf" d="M0 8 q5 -10 12 -8 q-1 9 -12 8 Z"/>
+      <text class="av-brand" x="-2" y="14">MAKE</text>
+    </g>
+  </g>
+
+  <!-- pescoço -->
+  <rect class="av-neck" x="53" y="74" width="14" height="16" rx="6"/>
+
+  <!-- cabeça -->
+  <g class="av-head">
+    <!-- cabelo feminino: madeixas atrás do rosto (só com .av--f) -->
+    <g class="av-hair-f">
+      <path class="av-hair" d="M34 42 q-7 30 0 52 q7 -4 8 -16 q-4 -18 4 -34 Z"/>
+      <path class="av-hair" d="M86 42 q7 30 0 52 q-7 -4 -8 -16 q4 -18 -4 -34 Z"/>
+    </g>
+    <ellipse class="av-ear" cx="38" cy="52" rx="5" ry="7"/>
+    <ellipse class="av-ear" cx="82" cy="52" rx="5" ry="7"/>
+    <ellipse class="av-face" cx="60" cy="50" rx="24" ry="27"/>
+    <!-- cabelo masculino (curto) — padrão -->
+    <path class="av-hair av-hair-m" d="M36 46 q2 -30 24 -30 q22 0 24 30 q-6 -14 -24 -14 q-18 0 -24 14 Z"/>
+    <!-- cabelo feminino (topo com franja) -->
+    <path class="av-hair av-hair-f" d="M34 48 q0 -34 26 -34 q26 0 26 34 q-5 -12 -14 -12 q-3 8 -12 8 q-9 0 -12 -8 q-9 0 -14 12 Z"/>
+    <!-- sobrancelhas (mudam com a tristeza) -->
+    <path class="av-brow av-brow--l" d="M46 40 q5 -3 10 0"/>
+    <path class="av-brow av-brow--r" d="M64 40 q5 -3 10 0"/>
+    <!-- olhos -->
+    <circle class="av-eye" cx="51" cy="48" r="3"/>
+    <circle class="av-eye" cx="69" cy="48" r="3"/>
+    <!-- bocas (uma visível por expressão) -->
+    <path class="av-mouth av-mouth--smile" d="M50 60 q10 10 20 0"/>
+    <line class="av-mouth av-mouth--neutral" x1="52" y1="62" x2="68" y2="62"/>
+    <path class="av-mouth av-mouth--sad" d="M50 64 q10 -9 20 0"/>
+  </g>
+
+  <!-- notebook nas mãos (só com .av--has-nb) -->
+  <g class="av-laptop">
+    <rect class="av-lap-screen" x="40" y="118" width="40" height="22" rx="2"/>
+    <rect class="av-lap-screen-in" x="43" y="121" width="34" height="16" rx="1"/>
+    <rect class="av-lap-base" x="35" y="139" width="50" height="6" rx="2"/>
+    <!-- mãos -->
+    <circle class="av-hand" cx="38" cy="140" r="5"/>
+    <circle class="av-hand" cx="82" cy="140" r="5"/>
+  </g>
+</svg>

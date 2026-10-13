@@ -1,0 +1,153 @@
+{% extends 'unfold/layouts/skeleton.html' %}
+{% comment %}
+Base das telas de autenticação (login, recuperar senha, e-mail enviado, definir
+nova senha). Substitui o `block base` do unfold para ter as duas colunas —
+painel de marca + painel do formulário (ver static/css/make-auth.css).
+
+Blocos que as telas filhas preenchem:
+  auth_doctitle · título da aba do navegador
+  auth_step     · pílula pequena acima do título (opcional)
+  auth_title    · h1
+  auth_sub      · parágrafo de apoio
+  auth_alerts   · avisos/erros específicos da tela
+  auth_body     · formulário / conteúdo
+  auth_foot     · rodapé do painel (links)
+{% endcomment %}
+{% load i18n static mkassets %}
+
+{% block bodyclass %}{{ block.super }}login{% endblock %}
+
+{% block title %}{% block auth_doctitle %}{{ title }}{% endblock %} | {{ site_title|default:"Patrimap" }}{% endblock %}
+
+{% block extrastyle %}{{ block.super }}
+  {% comment %}
+  UM ÚNICO CSS aqui, de propósito: `make-auth.css`.
+
+  MEDIDO EM 08/09/2026, e o que estava escrito aqui era FALSO:
+
+  Este comentário dizia que estas telas não são views do admin e que por isso o
+  unfold não injeta a lista UNFOLD["STYLES"]. Isso vale para /admin/password_reset/
+  e /trocar-senha/, que são views do projeto — mas NÃO para /admin/login/, que é
+  view do AdminSite: lá entram make-admin.css, make-pro.css, make-m3.css e
+  make-assistente.css pela lista do unfold, mesmo sem <link> nenhum aqui.
+
+  Consequência prática, e o motivo de este registro existir: correção de tela de
+  entrada tem de ir para o make-auth.css, a única folha presente nas QUATRO
+  telas (/admin/login/, /admin/password_reset/, /admin/password_reset/done/ e
+  /trocar-senha/). Escrita no make-m3.css, ela conserta o login e deixa as
+  outras três quebradas.
+  telas ("aquele tema espelhado escuro") e pediu para mantê-lo enquanto o resto
+  do sistema seguia para o Material Design 3.
+
+  Eu havia linkado o `make-m3.css` aqui à mão, para os papéis `--md-*`
+  resolverem. Foi um erro: as regras genéricas dele (campo, `input[type=submit]`,
+  cor de texto do corpo) pintavam por cima e o painel de marca ficava com texto
+  escuro sobre verde — ilegível. O link saiu. Estas telas têm tokens próprios
+  (`--ink`, `--s*`), declarados no próprio `make-auth.css`, e não dependem do M3.
+
+  Ou seja: mexer no M3 não toca aqui, e mexer aqui não toca no M3.
+  {% endcomment %}
+  <link rel="stylesheet" href="{% mkstatic 'css/make-auth.css' %}">
+{% endblock %}
+
+{% block base %}
+<div class="mkauth">
+
+  {# ---------------------------------------------------------- painel de marca #}
+  <aside class="mkauth__brand">
+    <div class="mkauth__logo">
+      <img src="{% static 'img/make-logo.webp' %}" alt="Make Distribuidora">
+    </div>
+
+    <div class="mkauth__brand-body">
+      <p class="mkauth__eyebrow">Patrimap</p>
+      <h2 class="mkauth__headline">Gestão de ativos de TI</h2>
+      <p class="mkauth__lede">
+        Parque de máquinas, chamados, manutenção preventiva e movimentação de
+        equipamentos entre as lojas — em um só lugar.
+      </p>
+
+      <ul class="mkauth__facts">
+        <li>
+          <span class="mkauth__chip" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+            </svg>
+          </span>
+          <span>Parque e patrimônio sempre conferidos</span>
+        </li>
+        <li>
+          <span class="mkauth__chip" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+            </svg>
+          </span>
+          <span>Chamados e preventiva com histórico</span>
+        </li>
+        <li>
+          <span class="mkauth__chip" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12h4l3-9 4 18 3-9h4"/>
+            </svg>
+          </span>
+          <span>Telemetria e saúde das máquinas</span>
+        </li>
+      </ul>
+    </div>
+
+    <div class="mkauth__brand-foot">
+      <span>© {% now "Y" %} Make Distribuidora</span>
+      <span>Acesso restrito a colaboradores</span>
+    </div>
+  </aside>
+
+  {# ----------------------------------------------------- painel do formulário #}
+  <main class="mkauth__panel">
+    <div class="mkauth__form">
+      <div class="mkauth__mark">
+        <img src="{% static 'img/make-logo.webp' %}" alt="Make Distribuidora">
+      </div>
+
+      {% block auth_step %}{% endblock %}
+
+      <h1 class="mkauth__title">{% block auth_title %}{{ title }}{% endblock %}</h1>
+      <p class="mkauth__sub">{% block auth_sub %}{% endblock %}</p>
+
+      {% if messages %}
+        {% for message in messages %}
+          <div class="mkauth__alert{% if 'error' in message.tags %} mkauth__alert--error{% elif 'warning' in message.tags %} mkauth__alert--warn{% elif 'success' in message.tags %} mkauth__alert--ok{% endif %}"
+               role="{% if 'error' in message.tags %}alert{% else %}status{% endif %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              {% if 'success' in message.tags %}
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>
+              {% else %}
+                <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
+              {% endif %}
+            </svg>
+            <div>{{ message }}</div>
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      {% block auth_alerts %}{% endblock %}
+
+      {% block auth_body %}{% endblock %}
+
+      {% block auth_foot %}{% endblock %}
+    </div>
+
+    {% include "unfold/helpers/unauthenticated_header.html" %}
+  </main>
+</div>
+
+<script>
+  /* Marca os campos com erro para leitores de tela (o styling vem do CSS). */
+  document.querySelectorAll('.mkauth__field--erro input').forEach(function (el) {
+    el.setAttribute('aria-invalid', 'true');
+  });
+</script>
+{% endblock %}

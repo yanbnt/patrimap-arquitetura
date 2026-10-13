@@ -1,0 +1,67 @@
+{% load i18n %}
+
+{% comment %}
+Busca da trilha de navegação. Override Make: sem o placeholder longo do unfold e
+sem o atalho "t". O resto (Alpine searchDropdown + HTMX) é idêntico ao unfold
+para não quebrar a busca — hx-get/hx-trigger/hx-target, os x-on de teclado, o id
+`nav-filter` e o `name` seguem iguais.
+
+O campo NÃO desenha a si mesmo: quem faz isso é o make-m3.css §3, que estiliza
+`#page #nav-sidebar div:has(> #nav-filter)` como a search bar do M3 — pílula em
+`surface-container-high`, 48px, sem borda. Aqui só sai o que brigava com ele
+(bg-white, border clara) e a lupa passa a usar o papel de tinta certo.
+
+MIGRAÇÃO PARA M3: `--ui-*` → `--md-*`; a altura passou a ser a mesma 48px da
+pílula do make-m3.css (era `--ui-h-control`, 40px, que deixava o ícone fora do
+centro); a lupa de foco deixou de virar LIMA (segunda cor de destaque — §5,
+item 6) e usa `primary`; texto em body-medium.
+{% endcomment %}
+{% if sidebar_show_search %}
+    <style>
+      /* Prefixo .mksrch. Cor SÓ por papel --md-*. */
+      .mksrch-ic { width: 24px; height: 24px; flex: 0 0 auto; display: block; }
+      #page #nav-sidebar .mksrch-box { display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 0 16px; height: 48px; }
+      #page #nav-sidebar .mksrch-box .mksrch-ic { color: var(--md-on-surface-variant) !important; }
+      #page #nav-sidebar .mksrch-box:focus-within { outline: 2px solid var(--md-primary); outline-offset: -2px; border-radius: var(--md-shape-full); }
+      #page #nav-sidebar .mksrch-box:focus-within .mksrch-ic { color: var(--md-primary) !important; }
+      #page #nav-sidebar .mksrch-fake { flex: 1 1 auto; min-width: 0; font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant) !important; }
+      #page #nav-sidebar .mksrch-input { flex: 1 1 auto; min-width: 0; padding: 0 !important; }
+    </style>
+    {% if sidebar_command_search %}
+        <div class="mb-2.5 mx-3 relative" x-on:click="$dispatch('opencommand')">
+            <div class="mksrch-box cursor-pointer relative w-full">
+                <svg class="mksrch-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+
+                <div class="mksrch-fake truncate">
+                    {% trans 'Buscar...' %}
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="mb-2.5 mx-3 relative" x-data="searchDropdown()" x-on:keydown.window="applyShortcut($event)" x-on:click.outside="openSearchResults = false">
+            <div class="mksrch-box relative w-full">
+                <svg class="mksrch-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+
+                <input type="search"
+                       id="nav-filter"
+                       name="s"
+                       x-ref="searchInput"
+                       x-on:focus="openSearchResults = true; currentIndex = 0"
+                       x-on:keydown="openSearchResults = true;"
+                       x-on:keydown.arrow-down.prevent="nextItem()"
+                       x-on:keydown.arrow-up.prevent="prevItem()"
+                       x-on:keydown.escape.prevent="openSearchResults = false; if ($refs.searchInput.value === '') { $refs.searchInput.blur() } else { $refs.searchInput.value = '' }"
+                       x-on:keydown.enter.prevent="selectItem()"
+                       x-on:search="currentIndex = 0"
+                       hx-get="{% url "admin:search" %}"
+                       hx-trigger="keyup changed delay:500ms"
+                       hx-target="#search-results"
+                       class="mksrch-input font-medium overflow-hidden truncate focus:outline-hidden"
+                       placeholder="{% trans 'Buscar no sistema…' %}"
+                       aria-label="{% trans 'Filter navigation items' %}">
+            </div>
+
+            <div id="search-results" x-show="openSearchResults"></div>
+        </div>
+    {% endif %}
+{% endif %}

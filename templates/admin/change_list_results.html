@@ -1,0 +1,171 @@
+{% load admin_urls i18n unfold %}
+
+{% comment %}
+Tabela da changelist do admin — DATA TABLE do M3 (DESIGN-SYSTEM.md §4):
+linha de 52px, divisor `outline-variant`, cabeçalho GRUDENTO em `label-medium`,
+SEM zebra, hover como state layer de 8%, números em tabular-nums.
+
+MIGRAÇÃO PARA M3 (§5 — a essência é REMOVER):
+  · `--ui-*` → papéis `--md-*`;
+  · saiu a borda em volta do painel: a tabela é `surface-container-low` sobre o
+    `surface` da página — a separação é TOM, não linha;
+  · saiu a MAIÚSCULA do cabeçalho (label-medium em caixa normal) e o peso 700;
+  · saiu o filete verde que o hover desenhava na primeira célula: no M3 hover é
+    UMA camada de 8% na linha inteira, e nada mais;
+  · saiu a borda de topo que o Tailwind põe nas células de arraste/expandir;
+  · o link da linha perdeu o peso 600 (corpo é 400) e ganha a tinta `primary`
+    só no hover;
+  · a zebra continua fora dos DOIS lugares — o cycle que pintava o <tbody> e a
+    regra `tbody:nth-of-type(even)` do make-admin.css.
+
+O make-admin.css usa !important nos seletores da changelist; para vencer sem
+apagar nada lá, estes seletores levam um id a mais (`#main` na frente) —
+DESIGN-SYSTEM.md §7.2. Estrutura, ids, x-data/x-sort e includes: intactos.
+{% endcomment %}
+
+<style>
+  /* Prefixo .mkclr — escopo desta tela. Cor SÓ por papel --md-*. */
+  .mkclr-grip, .mkclr-chev { width: 18px; height: 18px; display: block; }
+
+  /* Painel da tabela: cartão filled — superfície tonal, sem borda, sem sombra. */
+  .mkclr-wrap, .dark .mkclr-wrap {
+    background: var(--md-surface-container-low);
+    border: 0;
+    border-radius: var(--md-shape-md);
+    box-shadow: none;
+    /* Rolagem PRÓPRIA: é o que faz o cabeçalho grudar de verdade. Como é
+       max-height, tabela curta continua inteira na tela, sem rolagem interna. */
+    max-height: 72vh;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* --- Cabeçalho grudento em label-medium, caixa normal. --- */
+  body.change-list #main #result_list thead th,
+  body.change-list #main #result_list thead th a,
+  .dark body.change-list #main #result_list thead th,
+  .dark body.change-list #main #result_list thead th a {
+    color: var(--md-on-surface-variant) !important;
+    font: 500 12px/16px var(--md-font) !important;
+    letter-spacing: .5px !important;
+    text-transform: none !important;
+  }
+  body.change-list #main #result_list thead th,
+  .dark body.change-list #main #result_list thead th {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 3 !important;
+    /* O MESMO tom do painel: a linha que rola por baixo desaparece. */
+    background: var(--md-surface-container-low) !important;
+    background-image: none !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--md-outline-variant) !important;
+    padding: 14px 16px !important;
+    white-space: nowrap;
+  }
+
+  /* --- Sem zebra: o divisor já separa. --- */
+  body.change-list #main #result_list tbody:nth-of-type(even) td,
+  .dark body.change-list #main #result_list tbody:nth-of-type(even) td {
+    background: transparent !important;
+  }
+
+  /* --- Linha de 52px: body-medium + 16px de respiro, divisor de 1px. --- */
+  body.change-list #main #result_list tbody td,
+  body.change-list #main #result_list tbody th,
+  .dark body.change-list #main #result_list tbody td,
+  .dark body.change-list #main #result_list tbody th {
+    border: 0 !important;
+    border-bottom: 1px solid var(--md-outline-variant) !important;
+    padding: 16px !important;
+    font: 400 14px/20px var(--md-font) !important;
+    letter-spacing: .25px !important;
+    color: var(--md-on-surface) !important;
+    font-variant-numeric: tabular-nums;
+  }
+  body.change-list #main #result_list tbody a,
+  .dark body.change-list #main #result_list tbody a {
+    color: var(--md-on-surface) !important; font-weight: 400 !important;
+  }
+  body.change-list #main #result_list tbody a:hover { color: var(--md-primary) !important; }
+
+  /* --- Hover: state layer de 8% na linha inteira. Nada de filete. --- */
+  body.change-list #main #result_list tbody tr.data-row:hover td,
+  .dark body.change-list #main #result_list tbody tr.data-row:hover td {
+    background: color-mix(in srgb, var(--md-on-surface) 8%, transparent) !important;
+  }
+  /* O filete verde do hover é desenhado no make-admin.css (box-shadow inset na
+     primeira célula). Aqui ele é DESLIGADO, sem editar aquele arquivo. */
+  body.change-list #main #result_list tbody tr.data-row:hover td:first-child {
+    box-shadow: none !important;
+  }
+</style>
+
+{% if result_hidden_fields %}
+    <div class="hiddenfields">
+        {% for item in result_hidden_fields %}{{ item }}{% endfor %}
+    </div>
+{% endif %}
+
+{% if results %}
+    <div class="tab-wrap mkclr-wrap">
+        <table id="result_list" class="result-list block border-base-200 border-spacing-none border-separate w-full lg:table" {% if cl.model_admin.ordering_field %}x-sort.ghost x-on:end="sortRecords" data-ordering-field="{{ cl.model_admin.ordering_field }}"{% endif %}>
+            {% include 'unfold/helpers/change_list_headers.html' %}
+
+            {% for result in results %}
+                <tbody class="block relative lg:table-row-group" x-data="{rowOpen: false}" {% if cl.model_admin.ordering_field %}x-sort:item{% endif %}>
+                    {% if result.form and result.form.non_field_errors %}
+                        <tr>
+                            <td class="text-left" colspan="{{ result|length }}">
+                                {{ result.form.non_field_errors }}
+                            </td>
+                        </tr>
+                    {% endif %}
+
+                    <tr class="data-row block border border-base-200 mb-3 relative rounded-default lg:table-row lg:border-none lg:mb-0 lg:rounded-none dark:border-base-800">
+                        {% if cl.model_admin.ordering_field %}
+                            <td class="align-middle flex border-b border-base-200 font-normal px-2.5 py-2 relative text-left before:font-semibold before:text-font-important-light before:block before:capitalize before:content-[attr(data-label)] before:mr-auto lg:before:hidden lg:border-b-0 lg:border-t lg:pl-3 lg:pr-0 lg:table-cell dark:border-base-800 dark:lg:border-base-800 dark:before:text-font-important-dark lg:w-px" x-sort:handle>
+                                <div class="cursor-move hover:bg-base-100 dark:hover:bg-base-800 flex h-[36px] w-[36px] items-center justify-center -ml-1.5 -my-1 rounded-default select-none transition-colors">
+                                    <span class="align-middle cursor-move" aria-hidden="true"><svg class="mkclr-grip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01"/></svg></span>
+                                </div>
+                            </td>
+                        {% endif %}
+
+                        {% if cl.model_admin.list_sections|length > 0 %}
+                            <td class="align-middle cursor-pointer flex border-b border-base-200 font-normal px-2.5 py-2 relative text-left before:font-semibold before:text-font-important-light before:block before:capitalize before:content-[attr(data-label)] before:mr-auto lg:before:hidden lg:border-b-0 lg:border-t lg:pl-3 lg:pr-0 lg:table-cell dark:border-base-800 dark:lg:border-base-800 dark:before:text-font-important-dark lg:w-px"
+                                data-label="{% trans "Expand row" %}"
+                                x-on:click="rowOpen = !rowOpen">
+                                <div class="absolute bg-primary-600 -bottom-px hidden left-0 top-0 w-0.5 z-[50] lg:block" x-show="rowOpen"></div>
+                                <span class="select-none block! h-[18px] w-[18px] -rotate-90 transition-all" x-bind:class="rowOpen && 'rotate-0'" aria-hidden="true">
+                                    <svg class="mkclr-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                </span>
+                            </td>
+                        {% endif %}
+
+                        {% for item in result %}
+                            {{ item }}
+                        {% endfor %}
+
+                        {% include 'unfold/helpers/actions_row.html' with actions=actions_row instance_pk=result.instance.pk %}
+                    </tr>
+
+                    {% if cl.model_admin.list_sections|length > 0 %}
+                        <tr class="block mb-3 relative z-30 lg:table-row" x-show="rowOpen">
+                            <td colspan="100%" class="border bg-base-200/10 block border-base-200 relative rounded-default p-3 lg:shadow-inner lg:border-0 lg:border-t lg:rounded-none lg:table-cell dark:border-base-800">
+                                <div class="absolute bg-primary-600 h-full hidden left-0 top-0 w-0.5 lg:block"></div>
+
+                                <div class="grid gap-3 {{ cl.model_admin.list_sections_classes }}">
+                                    {% for section in cl.model_admin.list_sections %}
+                                        {% render_section cl.model_admin.list_sections|index:forloop.counter0 result.instance %}
+                                    {% endfor %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            {% endfor %}
+        </table>
+    </div>
+{% else %}
+    {% include 'unfold/helpers/empty_results.html' %}
+{% endif %}

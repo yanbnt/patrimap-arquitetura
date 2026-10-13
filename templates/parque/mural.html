@@ -1,0 +1,3593 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% comment %}
+MURAL DO PARQUE — a tela de Registros virou feed.
+
+Era um calendário de seis semanas com três fontes; no mês atual dava UM
+registro para a tela inteira, e o sistema guardava dez tipos de acontecimento
+que a tela ignorava. Aqui cada acontecimento é um post com autor, o que a
+pessoa escreveu, quem autorizou, a máquina, o que ainda falta e para onde
+clicar dentro do sistema.
+
+Junto com ela saem do menu "Usuários online" (virou a faixa de rostos no alto)
+e "Logs" (virou a aba "Acessos e ações").
+
+ACESSO: um post só entra no feed se a pessoa PODE ABRIR A TELA que já o
+mostrava — apps/parque/mural.py, TELA_DO_TIPO, lendo o registro único de
+apps/orgs/acessos.py. O mural não abre porta nova. As duas faixas novas seguem
+as telas "online" e "logs".
+
+O CSS nasceu do protótipo aprovado e foi religado aos tokens do sistema
+(--md-*, que já sabem virar escuro) e escopado em #mu. Os tons dos avatares e
+o espaçamento ficam locais, definidos no próprio #mu.
+
+O feed pagina de 12 em 12 com rolagem infinita: com os 117 posts de uma vez a
+página passava de 38.000px no PC e 51.000px no celular.
+{% endcomment %}
+
+{% block extrastyle %}{{ block.super }}
+<style>
+  #mu {
+    --e1: 4px; --e2: 8px; --e3: 12px; --e4: 16px; --e5: 20px; --e6: 24px; --e8: 32px;
+    --mola: cubic-bezier(.34,1.56,.64,1);
+    /* oito tons para os avatares: mesma familia do verde da Make, baixa
+       saturacao, para identificar a pessoa sem competir com o acento */
+    --p0: #a8f0c2; --p0i: #002110;
+    --p1: #cfe9a8; --p1i: #1a2000;
+    --p2: #ffdea8; --p2i: #281900;
+    --p3: #b9e8e0; --p3i: #002420;
+    --p4: #f6d7c3; --p4i: #331708;
+    --p5: #d8dcf2; --p5i: #14172e;
+    --p6: #e7dcc0; --p6i: #241d05;
+    --p7: #d4e8d8; --p7i: #0c1f13;
+  }
+  .dark #mu {
+    --p0: #00563a; --p0i: #a8f0c2;
+    --p1: #3d4a12; --p1i: #e6f2b8;
+    --p2: #4d3400; --p2i: #ffdea8;
+    --p3: #0d423c; --p3i: #b9e8e0;
+    --p4: #4a2a17; --p4i: #f6d7c3;
+    --p5: #2a2d47; --p5i: #d8dcf2;
+    --p6: #3c341a; --p6i: #eee2c4;
+    --p7: #24382b; --p7i: #d4e8d8;
+  }
+#mu * { box-sizing: border-box; }
+/* SEM fundo proprio: o chao da pagina e' da pagina. Quando esta regra
+   pintava um `--chao` sintetico, o #mu virava um RETANGULO cinza encaixado
+   dentro do padding do #content, com as bordas a' mostra. */
+#mu { margin: 0; color: var(--md-on-surface);
+         font: 400 14.5px/21px var(--md-font); letter-spacing: .15px;
+         -webkit-font-smoothing: antialiased; }
+#mu button, #mu input, #mu select, #mu textarea { font: inherit; color: inherit; }
+#mu svg { width: 1em; height: 1em; flex: none; }
+#mu :focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px;
+                   border-radius: var(--md-shape-sm); }
+#mu ::selection { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+/* ---------------------------------------------------------------- casca */
+#mu .top { position: sticky; top: 0; z-index: 40; background: var(--md-surface);
+         border-bottom: 1px solid var(--md-outline-variant); }
+#mu .top__in { max-width: 1264px; margin: 0 auto; padding: var(--e3) var(--e5);
+             display: flex; align-items: center; gap: var(--e4); }
+#mu .marca { display: flex; align-items: center; gap: 10px; font-weight: 800;
+           font-size: 15.5px; letter-spacing: -.1px; }
+#mu .marca i { display: grid; place-items: center; width: 30px; height: 30px;
+             border-radius: 9px; background: var(--md-primary); color: var(--md-on-primary);
+             font-size: 17px; }
+#mu .top__sp { flex: 1; }
+#mu .euSel { display: flex; align-items: center; gap: var(--e2);
+           background: var(--md-surface-container); border: 1px solid var(--md-outline-variant);
+           border-radius: var(--md-shape-full); padding: 4px 4px 4px var(--e3);
+           font-size: 12.5px; color: var(--md-on-surface-variant); }
+#mu .euSel select { border: 0; background: transparent; font-weight: 700; font-size: 13px;
+                  color: var(--md-on-surface); padding: 4px 6px; border-radius: var(--md-shape-full);
+                  cursor: pointer; max-width: 168px; }
+/* Uma coluna. O feed era o unico conteudo real da tela e vivia espremido
+     no terco do meio, entre um rail de 20 botoes e tres cards. */
+/* A coluna pega a tela toda. Eram 900px fixos, e num monitor largo sobravam
+   duas brechas laterais enormes — ele apontou. O teto de 1264px e' o MESMO
+   da barra grudada no alto (.top__in), para as duas se alinharem; acima
+   disso o conteudo ficaria largo demais para varrer com o olho. */
+#mu .casca { max-width: 1264px; margin: 0 auto; padding: var(--e6) var(--e5) var(--e8);
+           display: grid; grid-template-columns: minmax(0, 1fr);
+           gap: var(--e4); align-items: start; }
+/* ------------------------------------------------------------- cabecalho */
+#mu .cab { grid-column: 1 / -1; }
+#mu .cab__t { margin: 0 0 2px; font: 800 27px/32px var(--md-font);
+            letter-spacing: -.7px; }
+#mu .cab__s { margin: 0; max-width: 66ch; color: var(--md-on-surface-variant); font-size: 15px;
+            line-height: 23px; }
+#mu .cab__s b { color: var(--md-on-surface); font-weight: 700; }
+#mu .olho { font: 500 11.5px/16px var(--md-font); letter-spacing: .9px; text-transform: uppercase;
+          color: var(--md-on-surface-variant); margin-bottom: var(--e2); }
+/* --------------------------------------------- o cartao do topo (um so') */
+/* Cartao M3 como o resto do sistema: superficie tonal, sem sombra — a
+   separacao vem do tom. Era `--md-surface`, que aqui e' a cor do FUNDO. */
+#mu .topo { background: var(--md-surface-container-low);
+          border-radius: var(--md-shape-xl);
+          padding: var(--e5) var(--e5) 0; display: grid; }
+/* Faixa por dentro do cartao: divisoria fina em vez de um card novo. */
+#mu .topo__f { padding: var(--e3) 0; border-top: 1px solid
+             color-mix(in srgb, var(--md-outline-variant) 55%, var(--md-surface)); }
+#mu .topo__f--fim { padding-bottom: var(--e4); }
+#mu .topo .cab__t { margin-bottom: var(--e3); }
+#mu .topo .vistas { border-bottom: 0; margin-bottom: 0; }
+/* -------------------- a linha de apoio do titulo (data + o que espera voce) */
+#mu .cab__lede { margin: 2px 0 var(--e3); font: 400 13.5px/19px var(--md-font);
+               color: var(--md-on-surface-variant); }
+#mu .cab__lede b { color: var(--md-on-surface); font-weight: 600; }
+
+/* ------------------------------------- a faixa do estado do dia (a escada) */
+/* TRES caras, nao tres cores soltas: grave, atencao e em dia. Cada uma e' um
+   PAR casado X / on-X — o contêiner inteiro carrega o estado, sem filete de
+   cor na borda e sem cartao dentro de cartao. */
+#mu .mu-dia { display: flex; align-items: center; gap: var(--e4);
+            padding: var(--e3) var(--e4); border-radius: var(--md-shape-lg); }
+#mu .mu-dia--age { background: var(--md-error-container); color: var(--md-on-error-container); }
+#mu .mu-dia--aten { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+#mu .mu-dia--ok { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+/* Numero-heroi: UMA magnitude grande na tela. O olho pousa nela primeiro, e
+   por isso a cor nao precisa gritar. */
+#mu .mu-dia__n { font: 700 40px/40px var(--md-font); letter-spacing: -1.6px;
+               font-variant-numeric: tabular-nums; }
+#mu .mu-dia__ico { display: grid; place-items: center; width: 38px; height: 38px;
+                 border-radius: var(--md-shape-md);
+                 background: color-mix(in srgb, currentColor 12%, transparent); }
+#mu .mu-dia__ico svg { width: 19px; height: 19px; }
+#mu .mu-dia__c { flex: 1; min-width: 0; }
+#mu .mu-dia__t { margin: 0; font: 600 16.5px/23px var(--md-font); letter-spacing: -.1px; }
+#mu .mu-dia__s { margin: 2px 0 0; font: 400 13px/19px var(--md-font); opacity: .82; }
+#mu .mu-dia__bt { display: inline-flex; align-items: center; gap: 7px; border: 0;
+                cursor: pointer; height: 38px; padding: 0 17px; white-space: nowrap;
+                border-radius: var(--md-shape-full); color: inherit;
+                text-decoration: none; font: 600 13px/18px var(--md-font);
+                background: color-mix(in srgb, currentColor 12%, transparent); }
+#mu .mu-dia__bt:hover { background: color-mix(in srgb, currentColor 20%, transparent); }
+#mu .mu-dia__bt svg { width: 16px; height: 16px; }
+/* O X e' discreto de proposito: fechar e' saida, nao acao principal. */
+#mu .mu-dia__x { flex: none; border: 0; cursor: pointer; width: 32px; height: 32px;
+               display: grid; place-items: center; margin: -4px -6px -4px 0;
+               border-radius: var(--md-shape-full); background: transparent;
+               color: inherit; opacity: .6; }
+#mu .mu-dia__x:hover { opacity: 1; background: color-mix(in srgb, currentColor 12%, transparent); }
+#mu .mu-dia__x svg { width: 15px; height: 15px; }
+/* Fechado, o aviso vira ESTA ficha — some o bloco grande, fica o fato. */
+#mu .mu-dia-min { display: inline-flex; align-items: center; gap: 8px; border: 0;
+                cursor: pointer; height: 32px; padding: 0 14px;
+                border-radius: var(--md-shape-full);
+                font: 600 12.5px/16px var(--md-font); }
+#mu .mu-dia-min--age { background: var(--md-error-container); color: var(--md-on-error-container); }
+#mu .mu-dia-min--aten { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+#mu .mu-dia-min--ok { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+#mu .mu-dia-min__p { width: 8px; height: 8px; border-radius: 50%;
+                   background: currentColor; opacity: .75; }
+#mu .mu-dia-min__x { opacity: .7; font-weight: 500; }
+#mu .mu-dia-min:hover .mu-dia-min__x { opacity: 1; text-decoration: underline; }
+
+/* ------------------------------ inventario: uma linha, conjuntos disjuntos */
+#mu .mu-inv { display: flex; align-items: center; gap: var(--e5); flex-wrap: wrap; }
+#mu .mu-inv__i { display: flex; align-items: baseline; gap: 7px; padding: 2px 0;
+               text-decoration: none; color: inherit;
+               border-bottom: 1px solid transparent; }
+#mu .mu-inv__i:hover { border-bottom-color: var(--md-outline-variant); }
+#mu .mu-inv__n { font: 600 16px/22px var(--md-font); font-variant-numeric: tabular-nums; }
+#mu .mu-inv__r { font: 400 13px/18px var(--md-font); color: var(--md-on-surface-variant); }
+#mu .mu-inv__mais { margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+                  font: 600 12.6px/18px var(--md-font); color: var(--md-primary);
+                  text-decoration: none; white-space: nowrap; }
+#mu .mu-inv__mais:hover { text-decoration: underline; }
+#mu .mu-inv__mais svg { width: 15px; height: 15px; }
+/* ---------------------------------------------------- nivel 1: as telas */
+  /* Aba com sublinhado le como aba. O botao arredondado do rail antigo lia
+     como filtro ligado/desligado — e metade dele era tela, nao filtro. */
+#mu .vistas { display: flex; gap: var(--e1); overflow-x: auto; margin-bottom: 2px;
+            border-bottom: 1px solid color-mix(in srgb, var(--md-outline-variant) 70%, var(--md-surface));
+            scrollbar-width: none; }
+#mu .vistas::-webkit-scrollbar { display: none; }
+#mu .vista { display: inline-flex; align-items: center; gap: 8px; border: 0;
+           background: transparent; cursor: pointer; padding: 10px var(--e3) 12px;
+           font: 600 13.6px/20px var(--md-font); color: var(--md-on-surface-variant);
+           position: relative; white-space: nowrap;
+           transition: color 140ms var(--md-ease-standard); }
+#mu .vista:hover { color: var(--md-on-surface); }
+#mu .vista svg { font-size: 17px; }
+#mu .vista b { font-variant-numeric: tabular-nums; font-size: 11.5px; font-weight: 700;
+             background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+             padding: 1px 7px; border-radius: var(--md-shape-full); }
+#mu .vista::after { content: ""; position: absolute; left: var(--e3); right: var(--e3);
+                  bottom: -1px; height: 3px; border-radius: 3px 3px 0 0;
+                  background: transparent; transition: background 180ms var(--md-ease-standard); }
+#mu .vista[aria-selected="true"] { color: var(--md-primary); }
+#mu .vista[aria-selected="true"]::after { background: var(--md-primary); }
+#mu .vista[aria-selected="true"] b { background: var(--md-primary-container);
+                                   color: var(--md-on-primary-container); }
+/* -------------------------------------------- nivel 2: a linha de filtro */
+  /* GRADE, nao flex: em flex o quarto seletor caia sozinho na linha de baixo
+     com meia tela vazia ao lado. Aqui a busca tem a linha de cima e os quatro
+     dividem a de baixo em partes iguais — nunca sobra orfao. */
+  /* Em fila unica os quatro seletores dividiam a largura e CORTAVAM o proprio
+     rotulo ("Qualquer situaçã⌄") — parece defeito e nao diz o que filtram.
+     Agora a busca ocupa a linha e eles moram num painel. */
+#mu .filtros { display: flex; align-items: center; gap: var(--e2);
+             background: var(--md-surface-container-low); border-radius: var(--md-shape-full);
+             padding: 3px 4px 3px var(--e4); position: relative; }
+#mu .filtros svg.lupa { font-size: 17px; color: var(--md-on-surface-variant); flex: none; }
+#mu .filtros input { flex: 1; border: 0; background: transparent; outline: none;
+                   font-size: 14.5px; min-width: 0; padding: 11px 0; }
+#mu .fbt { display: inline-flex; align-items: center; gap: 7px; border: 0;
+         cursor: pointer; background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+         font: 600 12.8px/1 var(--md-font); padding: 10px 14px;
+         border-radius: var(--md-shape-full); white-space: nowrap; flex: none;
+         box-shadow: inset 0 0 0 1px var(--md-outline-variant);
+         transition: background 140ms var(--md-ease-standard), color 140ms var(--md-ease-standard); }
+#mu .fbt:hover { background: var(--md-surface-container); color: var(--md-on-surface); }
+#mu .fbt svg { font-size: 15px; }
+#mu .fbt b { display: grid; place-items: center; min-width: 18px; height: 18px;
+           padding: 0 5px; border-radius: var(--md-shape-full); font-size: 11px;
+           font-weight: 700; background: var(--md-primary); color: var(--md-on-primary); }
+#mu .fbt--on { background: var(--md-secondary-container);
+             color: var(--md-on-secondary-container); box-shadow: none; }
+#mu .fpan { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40;
+          width: min(340px, calc(100vw - 40px));
+          background: var(--md-surface-container); border: 1px solid var(--md-outline-variant);
+          border-radius: var(--md-shape-lg); box-shadow: var(--md-elev-2);
+          padding: var(--e4); display: grid; gap: var(--e3);
+          animation: sobe 200ms var(--md-ease-emphasized) both; }
+#mu .fpan label { display: grid; gap: 5px; font: 500 11px/16px var(--md-font);
+                letter-spacing: .9px; text-transform: uppercase;
+                color: var(--md-on-surface-variant); }
+#mu .fpan select { width: 100%; border: 1px solid var(--md-outline-variant);
+                 background: var(--md-surface-container-low); cursor: pointer;
+                 font: 600 13.4px/1 var(--md-font); color: var(--md-on-surface);
+                 padding: 11px var(--e3); border-radius: var(--md-shape-md); }
+#mu .fpan select:hover { border-color: var(--md-outline); }
+#mu .fpan select.on { border-color: var(--md-primary); color: var(--md-primary); }
+#mu .fpan__p { display: flex; align-items: center; gap: var(--e2);
+             border-top: 1px solid var(--md-outline-variant); padding-top: var(--e3); }
+#mu .fpan__p span { flex: 1; font-size: 12.2px; color: var(--md-on-surface-variant); }
+/* Os filtros LIGADOS, cada um com o seu ✕. Era isto que faltava: para saber
+     o que estava filtrando, antes era preciso varrer o rail atras do item
+     aceso. */
+#mu .fichas { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+#mu .ficha { display: inline-flex; align-items: center; gap: 7px; border: 0;
+           cursor: pointer; background: var(--md-secondary-container);
+           color: var(--md-on-secondary-container); font: 600 12.4px/1 var(--md-font);
+           padding: 7px 10px 7px 12px; border-radius: var(--md-shape-full);
+           transition: background 140ms var(--md-ease-standard); }
+#mu .ficha:hover { background: var(--md-surface-container-highest); }
+#mu .ficha em { font-style: normal; opacity: .65; font-weight: 500; }
+/* Era um circulo escuro cheio: o elemento mais pesado da tela para a coisa
+     menos importante dela. */
+#mu .ficha span { font-size: 13px; line-height: 1; opacity: .5; }
+#mu .ficha:hover span { opacity: 1; }
+#mu .fichas__lim { border: 0; background: transparent; cursor: pointer;
+                 font: 600 12.6px/1 var(--md-font); color: var(--md-primary);
+                 padding: 7px 10px; border-radius: var(--md-shape-full); }
+#mu .fichas__lim:hover { background: var(--md-surface-container-highest); }
+/* ------------------------------------------------------------- rail esq. */
+  /* -------------------------------------------------------------- o feed */
+  /* Fora afasta, dentro aperta: e' o que faz o card ler como um objeto. */
+#mu .feed { display: grid; gap: var(--e5); min-width: 0; }
+#mu .feed .conta { margin-bottom: calc(var(--e5) * -1 + 2px); }
+#mu .conta { display: flex; align-items: center; gap: var(--e2);
+           padding: 0 var(--e2); font-size: 12.4px;
+           color: var(--md-on-surface-variant); }
+#mu .conta b { color: var(--md-on-surface); font-variant-numeric: tabular-nums; }
+/* Sem borda: sombra suave ja' separa do chao, e uma borda em doze cards
+     seguidos vira grade de tabela. */
+#mu .post { background: var(--md-surface-container-low);
+          border-radius: var(--md-shape-lg);
+          overflow: hidden; position: relative;
+          transition: box-shadow 220ms var(--md-ease-standard), transform 220ms var(--md-ease-standard); }
+#mu .post:hover { box-shadow: var(--md-elev-2); transform: translateY(-2px); }
+/* espinha: a cor conta o estado — verde quando alguem assumiu, ambar quando
+     esta esperando gente, neutra quando e' historia ja' resolvida */
+#mu .post::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+                  background: var(--md-outline-variant); transition: background 300ms var(--md-ease-standard); }
+#mu .post--dem::before { background: var(--md-st-warn); }
+#mu .post--meu::before { background: var(--md-primary); }
+#mu .post--old::before { background: var(--md-st-crit); }
+#mu .ph { display: flex; gap: var(--e3); padding: var(--e4) var(--e5) 10px;
+        align-items: flex-start; }
+#mu .av { display: grid; place-items: center; flex: none; border-radius: var(--md-shape-full);
+        font: 700 13.5px/1 var(--md-font); letter-spacing: .2px; width: 40px; height: 40px;
+        user-select: none; }
+#mu .av--sm { width: 26px; height: 26px; font-size: 10.5px; }
+#mu .av--xs { width: 21px; height: 21px; font-size: 9px; }
+#mu .c0 { background: var(--p0); color: var(--p0i); }
+#mu .c1 { background: var(--p1); color: var(--p1i); }
+#mu .c2 { background: var(--p2); color: var(--p2i); }
+#mu .c3 { background: var(--p3); color: var(--p3i); }
+#mu .c4 { background: var(--p4); color: var(--p4i); }
+#mu .c5 { background: var(--p5); color: var(--p5i); }
+#mu .c6 { background: var(--p6); color: var(--p6i); }
+#mu .c7 { background: var(--p7); color: var(--p7i); }
+#mu .cx { background: var(--md-surface-variant); color: var(--md-on-surface-variant); }
+#mu .ph__txt { flex: 1; min-width: 0; }
+/* A linha do autor e' contexto, o titulo e' o assunto. Antes as duas
+     brigavam: 700/14.2 contra 600/16.5. */
+#mu .ph__l1 { font-size: 13.4px; line-height: 19px; color: var(--md-on-surface-variant); }
+#mu .ph__ninguem { color: var(--md-st-warn); }
+#mu .ph__l1 b { color: var(--md-on-surface); font-weight: 700; }
+#mu .ph__l2 { display: flex; align-items: center; gap: 6px; font-size: 11.8px;
+            color: var(--md-on-surface-variant); margin-top: 1px; flex-wrap: wrap;
+            opacity: .85; }
+#mu .ph__l2 em { font-style: normal; }
+/* Circulo de fundo: sem ele o icone ficava solto no canto do card, com um
+     anel finissimo em volta que parecia sobra de desenho. */
+#mu .pt { position: relative; flex: none; width: 40px; height: 40px; display: grid;
+        place-items: center; border-radius: var(--md-shape-full);
+        background: color-mix(in srgb, var(--md-surface-container) 70%, var(--md-surface)); }
+#mu .pt svg.ic { position: absolute; font-size: 18px; color: var(--md-on-surface-variant); }
+#mu .pt .anel { position: absolute; inset: 0; transform: rotate(-90deg); }
+#mu .pt .anel circle { fill: none; stroke-width: 2.4; }
+#mu .pt .anel .tr { stroke: color-mix(in srgb, var(--md-outline-variant) 60%, var(--md-surface)); }
+#mu .pt .anel .fr { stroke: var(--md-st-warn); stroke-linecap: round;
+                  transition: stroke-dashoffset 900ms var(--md-ease-emphasized) 120ms; }
+#mu .pt--crit .anel .fr { stroke: var(--md-st-crit); }
+#mu .pt--ok { background: color-mix(in srgb, var(--md-st-ok-cont) 34%, var(--md-surface)); }
+#mu .pt--ok svg.ic { color: var(--md-primary); }
+/* O critico misturava `--md-st-crit-cont` a 34% com a superficie e mantinha o
+   icone em `--md-on-surface-variant`: no tema escuro o resultado era um disco
+   vinho com um icone CINZA por cima e um arco quase invisivel — o dono leu
+   como defeito de renderizacao, e tinha razao. Par casado resolve: o fundo e'
+   error-container e tudo que vai em cima e' on-error-container. */
+#mu .pt--crit { background: var(--md-error-container); }
+#mu .pt--crit svg.ic { color: var(--md-on-error-container); }
+#mu .pt--crit .anel .fr { stroke: var(--md-on-error-container); }
+#mu .pt--crit .anel .tr { stroke: color-mix(in srgb, var(--md-on-error-container) 28%, transparent); }
+#mu .pb { padding: 0 var(--e5) var(--e4); display: grid; gap: 10px; }
+#mu .pb__t { margin: 0; font: 650 17px/24px var(--md-font); letter-spacing: -.3px;
+           text-wrap: pretty; }
+/* O CARTAO e' largo, mas a PROSA nao: passando de ~86 caracteres o olho
+   perde a linha ao voltar. O titulo e as fileiras de tag seguem a largura
+   toda; so' o texto corrido tem medida. */
+#mu .fala { margin: 0; padding: 1px 0 1px var(--e4); position: relative;
+          max-width: 86ch;
+          font-size: 14.2px; line-height: 21px; color: var(--md-on-surface-variant); }
+#mu .fala::before { content: ""; position: absolute; left: 0; top: 2px; bottom: 2px;
+                  width: 3px; border-radius: 2px; background: var(--md-outline-variant); }
+#mu .fala b { color: var(--md-on-surface); font-weight: 600; }
+#mu .fala mark { background: var(--md-primary-container); color: var(--md-on-primary-container);
+               border-radius: 4px; padding: 0 3px; font-weight: 700; }
+/* "sobre <registro>": leva ao card do registro que a publicação cita. */
+#mu .sobre { display: inline-flex; align-items: center; gap: 7px; border: 0;
+           cursor: pointer; background: var(--md-surface-container-low); color: var(--md-on-surface-variant);
+           font: 500 12.6px/1.35 var(--md-font); padding: 8px var(--e3);
+           border-radius: var(--md-shape-md); text-align: left; justify-self: start;
+           max-width: 100%; transition: background 140ms var(--md-ease-standard); }
+#mu .sobre:hover { background: var(--md-surface-container); color: var(--md-on-surface); }
+#mu .sobre svg { font-size: 15px; flex: none; opacity: .7; }
+#mu .sobre b { color: var(--md-on-surface); font-weight: 700; }
+#mu .anexo { display: inline-flex; align-items: center; gap: 7px;
+           background: var(--md-surface-container-low); color: var(--md-primary); text-decoration: none;
+           font: 600 12.6px/1 var(--md-font); padding: 9px var(--e3);
+           border-radius: var(--md-shape-md); justify-self: start; max-width: 100%; }
+#mu .anexo:hover { background: var(--md-surface-container); }
+#mu .anexo svg { font-size: 15px; flex: none; }
+#mu .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+#mu .chip { display: inline-flex; align-items: center; gap: 5px; border: 0; cursor: default;
+          background: var(--md-surface-container); color: var(--md-on-surface-variant); font-size: 12.2px;
+          font-weight: 500; padding: 4px 10px; border-radius: var(--md-shape-full); }
+#mu .chip svg { font-size: 13px; }
+/* Container primario puro (#8df8b0) e' o verde mais forte da paleta, e ele
+     aparecia em todo card. Misturado com a superficie continua sendo o unico
+     chip colorido da linha, sem berrar. */
+#mu .chip--maq { background: color-mix(in srgb, var(--md-primary-container) 46%, var(--md-surface));
+               color: var(--md-on-primary-container); cursor: pointer; font-weight: 700;
+               letter-spacing: .2px;
+               box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-primary) 22%, transparent);
+               transition: background 160ms var(--md-ease-standard), box-shadow 180ms var(--md-ease-standard); }
+#mu .chip--maq:hover { background: var(--md-primary-container);
+                     box-shadow: 0 2px 6px rgba(0,113,58,.22); }
+#mu .chip--st { background: transparent; box-shadow: inset 0 0 0 1px var(--md-outline-variant); }
+/* A tag e' o eixo transversal do feed: mais leve que o chip da maquina
+     (que e' identidade) e mais forte que a etiqueta de situacao. */
+#mu .chip--tag { background: transparent; cursor: pointer; font-weight: 600;
+               color: var(--md-on-surface-variant);
+               box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--md-outline-variant) 75%, transparent);
+               transition: background 140ms var(--md-ease-standard), color 140ms var(--md-ease-standard); }
+#mu .chip--tag:hover { background: var(--md-tertiary-container);
+                     color: var(--md-on-tertiary-container); }
+#mu .chip--tag[aria-pressed="true"] { background: var(--md-tertiary-container);
+                                    color: var(--md-on-tertiary-container);
+                                    box-shadow: none; }
+#mu .chip--tag i { font-style: normal; opacity: .55; }
+#mu .chip--lote { background: var(--md-tertiary-container); color: var(--md-on-tertiary-container);
+                font-weight: 700; }
+#mu .chip--mais { background: transparent; box-shadow: inset 0 0 0 1px var(--md-outline-variant);
+                cursor: pointer; }
+#mu .chip--mais:hover { background: var(--md-surface-container-highest); }
+/* trilha: quem pediu, quem autorizou — ja' esta no banco */
+  /* Sem fundo: era caixa cinza dentro de caixa branca dentro do card. Uma
+     linha de texto com rostinhos ja' le como trilha. */
+#mu .tri { display: flex; align-items: center; gap: var(--e2); margin: 0;
+         padding: 2px 0; flex-wrap: wrap; font-size: 12.2px;
+         color: var(--md-on-surface-variant); }
+#mu .tri__p { display: flex; align-items: center; gap: 6px; }
+#mu .tri__p b { color: var(--md-on-surface); font-weight: 700; }
+#mu .tri__seta { color: var(--md-outline); font-size: 13px; }
+/* faixa do que falta */
+  /* Bloco chapado de ponta a ponta em doze cards seguidos cansa e para de
+     avisar. Barra fina + fundo suave continua sendo o primeiro que se ve. */
+#mu .falta { display: flex; align-items: center; gap: 10px; margin: 0;
+           padding: 8px var(--e3) 8px 10px; border-radius: 6px;
+           border-left: 3px solid var(--md-st-warn);
+           background: color-mix(in srgb, var(--md-st-warn-cont) 30%, var(--md-surface));
+           color: var(--md-st-warn); font-size: 12.8px; font-weight: 500; }
+#mu .falta svg { font-size: 16px; flex: none; opacity: .8; }
+#mu .falta span { flex: 1; }
+#mu .falta button { border: 0; cursor: pointer; background: var(--md-st-warn);
+                  color: var(--md-surface); font-size: 12.2px; font-weight: 700;
+                  padding: 6px 13px; border-radius: var(--md-shape-full); white-space: nowrap;
+                  transition: filter 160ms var(--md-ease-standard); }
+#mu .falta button:hover { filter: brightness(1.15); }
+#mu .falta--ok { border-left-color: var(--md-primary);
+               background: color-mix(in srgb, var(--md-st-ok-cont) 28%, var(--md-surface));
+               color: var(--md-on-primary-container); }
+#mu .falta--ok button { display: none; }
+@keyframes varrer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+#mu .falta--novo { position: relative; overflow: hidden; }
+#mu .falta--novo::after { content: ""; position: absolute; inset: 0;
+                        background: linear-gradient(90deg, transparent,
+                          rgba(255,255,255,.55), transparent);
+                        animation: varrer 900ms var(--md-ease-standard); }
+/* quem esta cuidando */
+#mu .cuid { display: flex; align-items: center; gap: var(--e2); margin-top: var(--e3);
+          padding: 7px var(--e3); background: var(--md-secondary-container);
+          color: var(--md-on-secondary-container); border-radius: var(--md-shape-md);
+          font-size: 12.8px; font-weight: 600; }
+#mu .pilha { display: flex; }
+#mu .pilha .av { box-shadow: 0 0 0 2px var(--md-secondary-container); margin-left: -7px; }
+#mu .pilha .av:first-child { margin-left: 0; }
+@keyframes entraAv { from { transform: scale(.2) rotate(-18deg); opacity: 0; }
+                       to { transform: scale(1) rotate(0); opacity: 1; } }
+#mu .pilha .av--novo { animation: entraAv 460ms var(--mola); }
+/* barra de acao */
+#mu .pa { display: flex; align-items: center; gap: 2px; padding: 5px var(--e3);
+        border-top: 1px solid color-mix(in srgb, var(--md-outline-variant) 55%, var(--md-surface));
+        background: transparent; }
+#mu .ab { display: inline-flex; align-items: center; gap: 7px; border: 0; cursor: pointer;
+        background: transparent; color: var(--md-on-surface-variant); font-size: 12.6px;
+        font-weight: 600; padding: 8px 11px; border-radius: var(--md-shape-full);
+        transition: background 140ms var(--md-ease-standard), color 140ms var(--md-ease-standard); }
+#mu .ab:hover { background: var(--md-surface-container-highest); color: var(--md-on-surface); }
+#mu .ab svg { font-size: 16px; transition: transform 260ms var(--mola); }
+#mu .ab:hover svg { transform: scale(1.14); }
+#mu .ab[aria-pressed="true"] { color: var(--md-primary); }
+#mu .ab--on { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+#mu .ab--on:hover { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+#mu .pa__sp { flex: 1; }
+/* `text-decoration` porque este aqui e' um <a>, e ancora nasce sublinhada. */
+#mu .ab--ir { color: var(--md-primary); text-decoration: none; }
+#mu .ab__n { font-variant-numeric: tabular-nums; }
+@keyframes tremeSino { 0%,100% { transform: rotate(0); }
+    25% { transform: rotate(-14deg); } 55% { transform: rotate(11deg); } 80% { transform: rotate(-5deg); } }
+#mu .ab--sino svg { animation: tremeSino 520ms var(--md-ease-standard); }
+/* thread de comentarios */
+#mu .th { display: grid; grid-template-rows: 0fr;
+        transition: grid-template-rows 320ms var(--md-ease-emphasized); }
+#mu .th--ab { grid-template-rows: 1fr; }
+/* min-width:0 obrigatorio: .th__in e' item de grid, e item de grid nasce com
+   min-width:auto — nao encolhe abaixo do conteudo. Sem isto ele pedia 302px
+   numa caixa de 298 no celular, e o `overflow:hidden` cortava 4px de TODA
+   caixa de comentario. */
+#mu .th__in { overflow: hidden; min-width: 0; }
+/* minmax(0,1fr) e nao a coluna `auto` padrao: `auto` cresce ate' o
+   min-content do item mais teimoso (aqui o campo de escrever, que tem largura
+   intrinseca), e no celular a coluna ia a 286px num espaco de 266 — 4px de
+   TODA caixa de comentario cortados pelo overflow:hidden do .th__in. */
+#mu .th__b { padding: var(--e4) var(--e5) var(--e4);
+           border-top: 1px solid var(--md-outline-variant); display: grid;
+           grid-template-columns: minmax(0, 1fr); gap: var(--e3); }
+#mu .cm { display: flex; gap: 10px; }
+#mu .cm__b { background: var(--md-surface-container); border-radius: 4px var(--md-shape-md) var(--md-shape-md) var(--md-shape-md);
+           padding: 9px var(--e3); flex: 1; min-width: 0; }
+#mu .cm__q { font-size: 12.8px; font-weight: 700; display: flex; align-items: center;
+           gap: 7px; flex-wrap: wrap; }
+/* O ✕ de apagar: discreto ate' o mouse chegar perto. Apagar e' destrutivo,
+   entao nao pode competir por atencao com o resto — mas tambem nao pode ser
+   um segredo. */
+#mu .foto-w { position: relative; display: inline-flex; }
+#mu .lixo {
+  position: absolute; top: 6px; right: 6px; z-index: 2;
+  width: 26px; height: 26px; display: grid; place-items: center;
+  border: 0; border-radius: var(--md-shape-full); cursor: pointer;
+  background: color-mix(in srgb, var(--md-scrim, #000) 55%, transparent);
+  color: #fff; opacity: 0; transition: opacity 140ms var(--md-ease-standard);
+}
+#mu .foto-w:hover .lixo, #mu .lixo:focus-visible { opacity: 1; }
+#mu .lixo svg { font-size: 14px; }
+#mu .cm__x {
+  border: 0; background: transparent; cursor: pointer; padding: 0 2px;
+  color: var(--md-on-surface-variant); font-size: 12px; line-height: 1;
+  opacity: 0; transition: opacity 140ms var(--md-ease-standard);
+}
+#mu .cm:hover .cm__x, #mu .cm__x:focus-visible { opacity: 1; }
+#mu .cm__x:hover { color: var(--md-error); }
+#mu .cm__q em { font-style: normal; font-weight: 500; font-size: 11.6px;
+              color: var(--md-on-surface-variant); }
+#mu .cm__t { font-size: 14px; line-height: 20px; margin-top: 2px; white-space: pre-wrap;
+           word-break: break-word; }
+#mu .cm__t mark { background: var(--md-primary-container); color: var(--md-on-primary-container);
+                border-radius: 4px; padding: 0 3px; font-weight: 700; }
+#mu .cm__t mark.mk--all, #mu .fala mark.mk--all { background: var(--md-st-warn-cont);
+                color: var(--md-st-warn); }
+#mu .cm--eu .cm__b { background: var(--md-secondary-container);
+                   color: var(--md-on-secondary-container); }
+#mu .cm--sis .cm__b { background: transparent; box-shadow: inset 0 0 0 1px var(--md-outline-variant); }
+#mu .selo { font: 700 9.5px/1 var(--md-font); letter-spacing: .7px; text-transform: uppercase;
+          background: var(--md-tertiary-container); color: var(--md-on-tertiary-container);
+          padding: 3px 6px; border-radius: 4px; }
+@keyframes entraBolha { from { opacity: 0; transform: translateY(8px) scale(.97); }
+                          to { opacity: 1; transform: none; } }
+#mu .cm--novo { animation: entraBolha 340ms var(--md-ease-emphasized) both; }
+#mu .cm--flash .cm__b { box-shadow: 0 0 0 2px var(--md-primary); }
+#mu .vazio { font-size: 13px; color: var(--md-on-surface-variant); text-align: center;
+           padding: var(--e2) 0 var(--e1); }
+#mu .esc { display: flex; gap: 10px; align-items: flex-start; position: relative; }
+/* min-width:0: item de flex tambem nasce com min-width:auto e se recusa a
+   encolher abaixo do proprio conteudo. O textarea la' dentro ja' tinha; a
+   CAIXA dele nao — e era ela que passava 4px da borda no celular. */
+#mu .esc__c { flex: 1; min-width: 0;
+            background: var(--md-surface-container); border: 1px solid var(--md-outline-variant);
+            border-radius: var(--md-shape-lg); padding: 6px 6px 6px var(--e3);
+            display: flex; align-items: flex-end; gap: 6px;
+            transition: border-color 160ms var(--md-ease-standard); }
+#mu .esc__c:focus-within { border-color: var(--md-primary); }
+#mu .esc textarea { flex: 1; border: 0; background: transparent; outline: none; resize: none;
+                  font-size: 14px; line-height: 20px; padding: 7px 0; max-height: 132px;
+                  min-width: 0; }
+#mu .esc__b { border: 0; cursor: pointer; width: 34px; height: 34px; flex: none;
+            border-radius: var(--md-shape-full); display: grid; place-items: center;
+            background: var(--md-surface-variant); color: var(--md-on-surface-variant);
+            transition: background 200ms var(--md-ease-standard), color 200ms var(--md-ease-standard),
+                        transform 200ms var(--mola); }
+#mu .esc__b svg { font-size: 17px; }
+#mu .esc__b--vivo { background: var(--md-primary); color: var(--md-on-primary); }
+#mu .esc__b--vivo:hover { transform: scale(1.09); }
+#mu .esc__anx { border: 0; cursor: pointer; width: 34px; height: 34px; flex: none;
+              border-radius: var(--md-shape-full); display: grid; place-items: center;
+              background: transparent; color: var(--md-on-surface-variant); }
+#mu .esc__anx:hover { background: var(--md-surface-container-highest); }
+#mu .mens { position: absolute; left: 44px; bottom: calc(100% + 6px); z-index: 20;
+          background: var(--md-surface-container); border: 1px solid var(--md-outline-variant);
+          border-radius: var(--md-shape-md); box-shadow: var(--md-elev-2); padding: 5px;
+          display: grid; gap: 2px; min-width: 208px; }
+#mu .mens button { display: flex; align-items: center; gap: var(--e2); border: 0;
+                 background: transparent; cursor: pointer; padding: 6px var(--e2);
+                 border-radius: var(--md-shape-sm); text-align: left; font-size: 13.2px;
+                 font-weight: 600; }
+#mu .mens button:hover, #mu .mens button[aria-selected="true"] { background: var(--md-surface-container-highest); }
+#mu .mens__t { margin: 4px 0 2px; padding: 0 var(--e2);
+             font: 500 10px/14px var(--md-font); letter-spacing: .9px;
+             text-transform: uppercase; color: var(--md-on-surface-variant); }
+#mu .men__all { border-bottom: 1px solid var(--md-outline-variant) !important;
+              border-radius: var(--md-shape-sm) var(--md-shape-sm) 0 0 !important;
+              padding-bottom: 8px !important; margin-bottom: 2px; }
+#mu .men__all em { font-style: normal; font-weight: 500; font-size: 11.4px;
+                 opacity: .6; margin-left: auto; }
+#mu .dica { font-size: 11.5px; color: var(--md-on-surface-variant); padding-left: 46px; }
+/* ------------------------------------------------------------ o composer */
+  /* Fechado e' um CAMPO (fundo afundado, sem borda) — convida a escrever.
+     Aberto sobe para card. Antes era card sempre, e um card vazio de 160px no
+     alto da tela parecia formulario esquecido. */
+  /* Dentro do cartao do topo, o composer fechado e' so' um campo — sem fundo
+     proprio, senao vira caixa dentro de caixa. Aberto ele afunda de leve,
+     para marcar que virou area de escrita. */
+#mu .comp { background: transparent; border-radius: var(--md-shape-md);
+          display: flex; gap: var(--e3); padding: 4px 0;
+          transition: background 220ms var(--md-ease-standard), padding 220ms var(--md-ease-standard); }
+#mu .comp--on { background: var(--md-surface-container-low); padding: var(--e3); }
+#mu .comp__c { flex: 1; min-width: 0; display: grid; gap: 10px; align-content: start; }
+#mu .comp textarea { width: 100%; border: 0; background: transparent; outline: none;
+                   resize: none; font: 400 14.8px/22px var(--md-font);
+                   color: var(--md-on-surface); padding: 9px 0 0; max-height: 200px;
+                   min-height: 22px; }
+#mu .comp--on textarea { padding-top: 2px; }
+#mu .comp textarea::placeholder { color: var(--md-on-surface-variant); }
+#mu .comp__b { display: none; align-items: center; gap: var(--e2); flex-wrap: wrap; }
+#mu .comp--on .comp__b { display: flex; }
+#mu .comp__sp { flex: 1; }
+#mu .amarra { display: inline-flex; align-items: center; gap: 6px; border: 0;
+            cursor: pointer; background: transparent; color: var(--md-on-surface-variant);
+            font: 600 12.4px/1 var(--md-font); padding: 8px 12px;
+            border-radius: var(--md-shape-full);
+            box-shadow: inset 0 0 0 1px var(--md-outline-variant);
+            transition: background 140ms var(--md-ease-standard), color 140ms var(--md-ease-standard); }
+#mu .amarra:hover { background: var(--md-surface-container-highest); color: var(--md-on-surface); }
+#mu .amarra svg { font-size: 15px; }
+#mu .amarra--on { background: var(--md-primary-container);
+                color: var(--md-on-primary-container); }
+#mu .amarra--on span { display: grid; place-items: center; width: 15px; height: 15px;
+                     border-radius: var(--md-shape-full); font-size: 9px;
+                     background: var(--md-on-primary-container);
+                     color: var(--md-primary-container); }
+#mu .comp select { border: 0; background: transparent; cursor: pointer;
+                 font: 600 12.4px/1 var(--md-font); color: var(--md-on-surface-variant);
+                 padding: 8px 10px; border-radius: var(--md-shape-full); max-width: 190px;
+                 box-shadow: inset 0 0 0 1px var(--md-outline-variant); }
+#mu .comp select:hover { background: var(--md-surface-container-highest); }
+#mu .comp__pub { border: 0; cursor: pointer; background: var(--md-primary);
+               color: var(--md-on-primary); font: 700 13px/1 var(--md-font);
+               padding: 11px 20px; border-radius: var(--md-shape-full);
+               transition: background 160ms var(--md-ease-standard), color 160ms var(--md-ease-standard),
+                           box-shadow 160ms var(--md-ease-standard); }
+#mu .comp__pub:hover { box-shadow: 0 2px 8px rgba(0,113,58,.32); }
+/* Desligado e' CONTORNO. Verde palido sobre verde palido com opacidade
+     parecia botao quebrado. */
+#mu .comp__pub:disabled { background: transparent; color: var(--md-outline);
+                        box-shadow: inset 0 0 0 1px var(--md-outline-variant);
+                        cursor: default; }
+#mu .comp__x { border: 0; cursor: pointer; background: transparent;
+             color: var(--md-on-surface-variant); font: 600 12.6px/1 var(--md-font);
+             padding: 11px 12px; border-radius: var(--md-shape-full); }
+#mu .comp__x:hover { background: var(--md-surface-container-highest); }
+#mu .comp__pv { display: flex; align-items: center; gap: var(--e2);
+              background: var(--md-surface-container-low); border-radius: var(--md-shape-md);
+              padding: var(--e2) var(--e3); font-size: 12.4px;
+              color: var(--md-on-surface-variant); }
+#mu .comp__pv img { width: 46px; height: 34px; object-fit: cover;
+                  border-radius: 6px; }
+/* O registro citado, e a sugestão de qual citar. */
+#mu .comp__alvo, #mu .sug button { display: flex; align-items: center; gap: 10px;
+                             text-align: left; width: 100%; }
+#mu .comp__alvo { background: var(--md-secondary-container);
+                color: var(--md-on-secondary-container); border-radius: var(--md-shape-md);
+                padding: 9px var(--e3); font-size: 13px; }
+#mu .comp__alvo > svg { font-size: 17px; flex: none; opacity: .8; }
+#mu .comp__alvo span, #mu .sug button span { flex: 1; min-width: 0; display: grid; }
+#mu .comp__alvo b, #mu .sug button b { font-weight: 700; overflow: hidden;
+                                 text-overflow: ellipsis; white-space: nowrap; }
+#mu .comp__alvo em, #mu .sug button em { font-style: normal; font-size: 11.6px;
+                                   opacity: .72; overflow: hidden;
+                                   text-overflow: ellipsis; white-space: nowrap; }
+#mu .sug { display: grid; gap: 2px; background: var(--md-surface-container); border-radius: var(--md-shape-md);
+         padding: var(--e2); animation: sobe 220ms var(--md-ease-emphasized) both; }
+#mu .sug__t { margin: 0 0 2px; padding: 0 var(--e2);
+            font: 500 11px/16px var(--md-font); letter-spacing: .9px;
+            text-transform: uppercase; color: var(--md-on-surface-variant); }
+#mu .sug button { border: 0; cursor: pointer; background: transparent;
+                padding: 8px var(--e2); border-radius: var(--md-shape-sm);
+                font: 400 13px/17px var(--md-font); color: var(--md-on-surface);
+                transition: background 140ms var(--md-ease-standard); }
+#mu .sug button:hover { background: var(--md-surface-container-high); }
+#mu .sug button > svg { font-size: 16px; flex: none; color: var(--md-on-surface-variant); }
+#mu .sug__x { justify-content: center; font-weight: 600 !important;
+            color: var(--md-on-surface-variant) !important; font-size: 12.2px !important; }
+#mu .comp__dica { font-size: 11.6px; line-height: 16px;
+                color: var(--md-on-surface-variant); margin: -2px 0 0; }
+#mu .comp__dica b { color: var(--md-on-surface); }
+/* o menu ⋯ do post (editar / apagar), so' no que e' meu */
+/* `relative`, nao `absolute`: em absolute ele caia' EM CIMA do anel do
+   icone, que ocupa o mesmo canto do cabecalho. Como o ⋯ ja' e' desenhado logo
+   depois do anel, sendo item do flex o proprio layout separa os dois. Segue
+   posicionado porque o menu suspenso se ancora nele. */
+#mu .post__mais { position: relative; flex: none; z-index: 3; }
+#mu .post__mais > button { border: 0; cursor: pointer; background: transparent;
+                         color: var(--md-on-surface-variant); width: 30px; height: 30px;
+                         border-radius: var(--md-shape-full); font-size: 16px;
+                         line-height: 1; }
+#mu .post__mais > button:hover { background: var(--md-surface-container-highest); color: var(--md-on-surface); }
+#mu .menu { position: absolute; right: 0; top: 34px; background: var(--md-surface-container);
+          border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-md);
+          box-shadow: var(--md-elev-2); padding: 5px; display: grid; gap: 2px;
+          min-width: 154px; animation: sobe 180ms var(--md-ease-emphasized) both; }
+#mu .menu button { display: flex; align-items: center; gap: var(--e2); border: 0;
+                 background: transparent; cursor: pointer; padding: 8px var(--e2);
+                 border-radius: var(--md-shape-sm); text-align: left;
+                 font: 600 13px/1 var(--md-font); color: var(--md-on-surface); }
+#mu .menu button:hover { background: var(--md-surface-container-highest); }
+#mu .menu button svg { font-size: 15px; color: var(--md-on-surface-variant); }
+#mu .menu button.perigo { color: var(--md-st-crit); }
+#mu .menu button.perigo svg { color: var(--md-st-crit); }
+#mu .ed { display: grid; gap: var(--e2); }
+#mu .ed textarea { width: 100%; border: 1px solid var(--md-outline-variant);
+                 background: var(--md-surface-container); border-radius: var(--md-shape-md);
+                 padding: var(--e3); font: 400 14.5px/21px var(--md-font);
+                 color: var(--md-on-surface); resize: vertical; min-height: 88px;
+                 outline: none; }
+#mu .ed textarea:focus { border-color: var(--md-primary); }
+#mu .ed__b { display: flex; align-items: center; gap: var(--e2); flex-wrap: wrap; }
+#mu .marca-ed { font: 600 11px/1 var(--md-font); color: var(--md-on-surface-variant); }
+/* ---------------------------------------------------------------- fotos */
+  /* Flex com base fixa, nao grid 1fr: com uma foto so', o grid esticava o
+     tile para a largura toda e o card ganhava 400px de altura. */
+#mu .fotos { display: flex; flex-wrap: wrap; gap: var(--e2); margin-top: var(--e3); }
+#mu .foto { flex: 1 1 186px; max-width: 292px; position: relative; border: 0;
+          padding: 0; cursor: zoom-in; overflow: hidden;
+          border-radius: var(--md-shape-md); background: var(--md-surface-container); aspect-ratio: 4 / 3;
+          box-shadow: inset 0 0 0 1px var(--md-outline-variant);
+          transition: transform 240ms var(--mola), box-shadow 200ms var(--md-ease-standard); }
+#mu .foto:hover { transform: scale(1.02);
+                box-shadow: inset 0 0 0 1px var(--md-primary), var(--md-elev-2); }
+#mu .foto svg { width: 100%; height: 100%; display: block; }
+#mu .foto__c { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 9px 7px;
+             background: linear-gradient(transparent, rgba(0,0,0,.62));
+             color: #fff; font: 600 11.4px/15px var(--md-font); text-align: left;
+             display: flex; align-items: center; gap: 5px; }
+#mu .foto__c svg { width: 13px; height: 13px; flex: none; }
+#mu .foto__sel { position: absolute; top: 7px; right: 7px; font: 700 9px/1 var(--md-font);
+               letter-spacing: .7px; text-transform: uppercase; padding: 4px 6px;
+               border-radius: 4px; background: var(--md-tertiary-container);
+               color: var(--md-on-tertiary-container); }
+#mu .foto--nova { animation: pipoca 380ms var(--mola) both; }
+#mu .lb { position: fixed; inset: 0; z-index: 90; background: rgba(6,12,8,.86);
+        display: grid; place-items: center; padding: var(--e5);
+        animation: some 200ms var(--md-ease-standard); }
+@keyframes some { from { opacity: 0; } to { opacity: 1; } }
+#mu .lb__c { background: var(--md-surface-container-high); border-radius: var(--md-shape-lg); overflow: hidden;
+           max-width: 640px; width: 100%; box-shadow: var(--md-elev-2);
+           animation: sobe 300ms var(--md-ease-emphasized) both; }
+#mu .lb__i { background: var(--md-surface-container); aspect-ratio: 4 / 3; }
+#mu .lb__i svg { width: 100%; height: 100%; display: block; }
+#mu .lb__t { padding: var(--e4); display: flex; align-items: center; gap: var(--e3);
+           font-size: 13.5px; }
+#mu .lb__t div { flex: 1; }
+#mu .lb__t b { display: block; }
+#mu .lb__t em { font-style: normal; font-size: 12.2px; color: var(--md-on-surface-variant); }
+#mu .lb__x { border: 0; cursor: pointer; background: var(--md-surface-container); width: 34px;
+           height: 34px; border-radius: var(--md-shape-full); font-size: 15px; flex: none; }
+#mu .lb__x:hover { background: var(--md-surface-container-high); }
+/* o periodo da aba de logs: botao + painel com o calendario DA CASA */
+#mu .per { position: relative; }
+#mu .per__cal { display: inline-flex; align-items: center; gap: 7px; }
+#mu .per__cal span { font-weight: 700; }
+#mu .per__sp { flex: 1; min-width: 8px; }
+#mu .per__limpa { display: inline-flex; align-items: center; gap: 6px; }
+#mu .per__limpa:disabled { opacity: .4; cursor: default; }
+/* O painel flutua: se empurrasse a lista, a tela pularia a cada abertura. */
+#mu .per__pan {
+  position: absolute; left: 0; top: calc(100% + 6px); z-index: 30;
+  background: var(--md-surface-container); border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-lg); box-shadow: var(--md-elev-2); padding: var(--e3);
+}
+
+#mu .fim { text-align: center; font-size: 12.6px; color: var(--md-on-surface-variant);
+         margin: var(--e2) 0 0; }
+
+/* ------------------------------------------------------- tira de paginas */
+#mu .pgr { display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+         gap: 4px; margin: var(--e5) 0 var(--e3); }
+#mu .pgr__b { min-width: 36px; height: 36px; padding: 0 10px; border: 0; cursor: pointer;
+            border-radius: var(--md-shape-full); background: transparent;
+            color: var(--md-on-surface-variant); font: 600 13.5px/1 var(--md-font);
+            display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+            transition: background 140ms var(--md-ease-standard), color 140ms; }
+#mu .pgr__b:hover { background: var(--md-surface-container-high); color: var(--md-on-surface); }
+#mu .pgr__b:disabled { opacity: .35; cursor: default; background: transparent; }
+/* A pagina atual nao e' botao: e' onde voce esta'. Clicar nela nao faria nada. */
+#mu .pgr__aqui { min-width: 36px; height: 36px; padding: 0 10px; display: inline-flex;
+               align-items: center; justify-content: center; border-radius: var(--md-shape-full);
+               background: var(--md-primary); color: var(--md-on-primary);
+               font: 700 13.5px/1 var(--md-font); }
+#mu .pgr__e { padding: 0 2px; color: var(--md-on-surface-variant); user-select: none; }
+#mu .pgr__c { width: 100%; text-align: center; font-size: 12.4px;
+            color: var(--md-on-surface-variant); margin-top: 2px; }
+#mu .pgr__b svg { font-size: 15px; }
+@media (max-width: 560px) { #mu .pgr__b span { display: none; } }
+#mu .aviso { position: fixed; left: 50%; bottom: 24px; z-index: 95;
+           transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+           max-width: min(560px, calc(100vw - 32px));
+           background: var(--md-on-surface); color: var(--md-surface);
+           font: 600 13.5px/19px var(--md-font); padding: 13px 20px;
+           border-radius: var(--md-shape-md); box-shadow: var(--md-elev-2);
+           transition: opacity 220ms var(--md-ease-standard), transform 260ms var(--mola); }
+#mu .aviso--on { opacity: 1; transform: translate(-50%, 0); }
+/* --------------------------------------------- presenca (uma linha so') */
+#mu .pres { display: flex; align-items: center; gap: var(--e3);
+          flex-wrap: nowrap; min-width: 0; padding: 0; }
+#mu .pres__t { font: 500 11px/16px var(--md-font); letter-spacing: .9px;
+             text-transform: uppercase; color: var(--md-on-surface-variant);
+             white-space: nowrap; }
+#mu .pres__l { display: flex; gap: 5px; flex-wrap: nowrap; min-width: 0; }
+#mu .pres__r { font-size: 12.4px; color: var(--md-on-surface-variant); flex: 1;
+             min-width: 0; white-space: nowrap; overflow: hidden;
+             text-overflow: ellipsis; margin: 0; }
+#mu .pres__r b { color: var(--md-on-surface); }
+/* O anel diz QUANDO a pessoa passou por aqui; o title diz em palavras. */
+#mu .pp { position: relative; border: 0; background: transparent; cursor: pointer;
+        padding: 2px; border-radius: var(--md-shape-full); line-height: 0;
+        animation: pipoca 320ms var(--mola) both;
+        transition: transform 200ms var(--mola); }
+#mu .pp:hover { transform: translateY(-2px) scale(1.06); }
+#mu .pp .av { width: 27px; height: 27px; font-size: 10.5px;
+            box-shadow: 0 0 0 2px var(--anel, var(--md-outline-variant)); }
+#mu .pp--agora { --anel: var(--md-primary); }
+#mu .pp--hoje { --anel: #7cb35f; }
+/* Quem passou na semana nao precisa de anel de alerta: fica neutro. */
+#mu .pp--semana { --anel: var(--md-outline-variant); }
+#mu .pp--sumido, #mu .pp--nunca { --anel: var(--md-outline-variant); opacity: .6; }
+#mu .pp[aria-pressed="true"] .av { box-shadow: 0 0 0 2.5px var(--md-on-surface); }
+@keyframes halo { 0% { box-shadow: 0 0 0 0 rgba(0,113,58,.5); }
+                    70% { box-shadow: 0 0 0 10px rgba(0,113,58,0); }
+                    100% { box-shadow: 0 0 0 0 rgba(0,113,58,0); } }
+#mu .pp--agora::after { content: ""; position: absolute; inset: 2px;
+                      border-radius: var(--md-shape-full); pointer-events: none;
+                      animation: halo 2.1s var(--md-ease-standard) infinite; }
+#mu .pp__su { position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px;
+            border-radius: var(--md-shape-full); background: var(--md-tertiary-container);
+            box-shadow: 0 0 0 2px var(--md-surface); display: grid;
+            place-items: center; font-size: 6px; line-height: 1;
+            color: var(--md-on-tertiary-container); }
+#mu .pp--mais { display: grid; place-items: center; width: 31px; height: 31px;
+              border-radius: var(--md-shape-full); background: var(--md-surface-container-high);
+              color: var(--md-on-surface-variant); font: 700 11px/1 var(--md-font); }
+/* ------------------------------------------------ acessos e alteracoes */
+#mu .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+          gap: var(--e2); }
+#mu .kpi { border: 0; cursor: pointer; text-align: left; background: var(--md-surface-container-low);
+         border-radius: var(--md-shape-md); padding: var(--e4) var(--e3);
+         box-shadow: 0 1px 2px rgba(12,31,19,.06);
+         transition: box-shadow 180ms var(--md-ease-standard), transform 200ms var(--mola); }
+#mu .kpi:hover { box-shadow: var(--md-elev-2); transform: translateY(-2px); }
+#mu .kpi b { display: block; font: 800 25px/27px var(--md-font); letter-spacing: -.8px;
+           font-variant-numeric: tabular-nums; }
+#mu .kpi em { font-style: normal; font-size: 11.8px; color: var(--md-on-surface-variant);
+            line-height: 15px; display: block; margin-top: 2px; }
+#mu .kpi--al b { color: var(--md-st-crit); }
+#mu .kpi--av b { color: var(--md-st-warn); }
+#mu .kpi[aria-pressed="true"] { background: var(--md-secondary-container);
+                              color: var(--md-on-secondary-container);
+                              box-shadow: inset 0 0 0 1.5px var(--md-on-secondary-container); }
+/* Só layout: sem fundo nem borda. Caixa em volta de caixa (os KPI já são
+     tiles) engorda a tela sem dizer nada. */
+#mu .trava svg { font-size: 16px; flex: none; margin: 2px 2px 0 0; }
+#mu .logh { display: grid; gap: var(--e4); min-width: 0; }
+#mu .logh > * { min-width: 0; }
+/* -------------------------------------------------- a escolha do periodo */
+  /* Alvo grande e o numero do lado. Barra de 4px era bonita e nao se
+     clicava; pilula de data sem numero nao dizia nada. */
+#mu .per { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+#mu .per button { display: inline-flex; align-items: baseline; gap: 6px; border: 0;
+                cursor: pointer; background: var(--md-surface-container-high);
+                color: var(--md-on-surface-variant); font: 600 12.8px/1 var(--md-font);
+                padding: 9px 13px; border-radius: var(--md-shape-full);
+                box-shadow: inset 0 0 0 1px var(--md-outline-variant);
+                transition: background 140ms var(--md-ease-standard), color 140ms var(--md-ease-standard),
+                            box-shadow 140ms var(--md-ease-standard); }
+#mu .per button:hover { background: var(--md-surface-container-highest); color: var(--md-on-surface); }
+#mu .per button b { font-variant-numeric: tabular-nums; font-size: 11.5px;
+                  font-weight: 700; opacity: .6; }
+#mu .per button[aria-pressed="true"] { background: var(--md-primary);
+                                     color: var(--md-on-primary); box-shadow: none; }
+#mu .per button[aria-pressed="true"] b { opacity: .8; }
+#mu .per__volta { box-shadow: none !important; background: transparent !important;
+                color: var(--md-primary) !important; font-weight: 700; }
+#mu .per__volta:hover { background: var(--md-surface-container-highest) !important; }
+#mu .per__t { font: 500 11px/16px var(--md-font); letter-spacing: .9px;
+            text-transform: uppercase; color: var(--md-on-surface-variant);
+            margin-right: var(--e1); }
+#mu .lgn { margin: 0; font-size: 12.4px; color: var(--md-on-surface-variant); }
+#mu .lgn b { color: var(--md-on-surface); font-variant-numeric: tabular-nums; }
+#mu .lgt { display: flex; flex-wrap: wrap; gap: 2px; background: var(--md-surface-container-low);
+         border-radius: var(--md-shape-lg); padding: 3px; align-self: flex-start;
+         max-width: 100%; }
+#mu .lgt button { border: 0; cursor: pointer; background: transparent;
+                font: 600 12.2px/1 var(--md-font); color: var(--md-on-surface-variant);
+                padding: 8px 14px; border-radius: var(--md-shape-full);
+                white-space: nowrap;
+                transition: background 140ms var(--md-ease-standard), color 140ms var(--md-ease-standard); }
+#mu .lgt button:hover { color: var(--md-on-surface); }
+#mu .lgt button[aria-pressed="true"] { background: var(--md-surface-container-high);
+                                     color: var(--md-on-surface);
+                                     box-shadow: var(--md-elev-1); }
+#mu .lgl { background: var(--md-surface-container-low); border: 1px solid var(--md-outline-variant);
+         border-radius: var(--md-shape-lg); box-shadow: var(--md-elev-1); overflow: hidden; }
+#mu .lg { display: flex; align-items: center; gap: 10px; padding: 9px var(--e4);
+        border-top: 1px solid var(--md-outline-variant); position: relative;
+        font-size: 13.4px; }
+#mu .lg:first-child { border-top: 0; }
+#mu .lg::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+                width: 3px; background: transparent; }
+#mu .lg--alerta::before { background: var(--md-st-crit); }
+#mu .lg--aviso::before { background: var(--md-st-warn); }
+#mu .lg--ok::before { background: var(--md-st-ok); }
+#mu .lg:hover { background: var(--md-surface-container-highest); }
+#mu .lg__q { font-weight: 700; white-space: nowrap; }
+#mu .lg__o { color: var(--md-on-surface-variant); white-space: nowrap; }
+#mu .lg__a { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+           white-space: nowrap; color: var(--md-on-surface-variant); }
+#mu .lg__d { font-variant-numeric: tabular-nums; font-size: 12.2px;
+           white-space: nowrap; color: var(--md-on-surface-variant); }
+#mu .lg__ip { font: 500 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+            background: var(--md-surface-container); padding: 4px 7px; border-radius: 5px;
+            color: var(--md-on-surface-variant); white-space: nowrap; }
+#mu .lg__sel { font: 700 9.5px/1 var(--md-font); letter-spacing: .6px;
+             text-transform: uppercase; padding: 4px 7px; border-radius: 5px;
+             white-space: nowrap; background: var(--md-st-warn-cont);
+             color: var(--md-st-warn); }
+#mu .lgm { display: block; width: 100%; border: 0; cursor: pointer;
+         background: var(--md-surface-container-low); padding: var(--e3); font-size: 13px;
+         font-weight: 700; color: var(--md-primary);
+         border-top: 1px solid var(--md-outline-variant); }
+#mu .lgm:hover { background: var(--md-surface-container); }
+/* -------------------------------------------------------------- conversa */
+#mu .cv { display: grid; grid-template-columns: 264px minmax(0, 1fr);
+        gap: var(--e4); align-items: start; }
+#mu .cv__l { background: var(--md-surface-container-low); border-radius: var(--md-shape-lg);
+           box-shadow: 0 1px 2px rgba(12,31,19,.06); overflow: hidden;
+           max-height: 68vh; overflow-y: auto; }
+#mu .cvp { display: flex; align-items: center; gap: 10px; width: 100%; border: 0;
+         cursor: pointer; background: transparent; text-align: left;
+         padding: 10px var(--e3); border-top: 1px solid
+         color-mix(in srgb, var(--md-outline-variant) 45%, var(--md-surface));
+         transition: background 140ms var(--md-ease-standard); }
+#mu .cvp:first-child { border-top: 0; }
+#mu .cvp:hover { background: var(--md-surface-container-highest); }
+#mu .cvp[aria-selected="true"] { background: var(--md-secondary-container); }
+#mu .cvp__t { flex: 1; min-width: 0; display: grid; }
+#mu .cvp__n { font: 600 13.4px/18px var(--md-font); overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap; }
+#mu .cvp__u { font-size: 11.8px; color: var(--md-on-surface-variant); overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap; }
+#mu .cvp__d { font-size: 10.5px; color: var(--md-on-surface-variant); white-space: nowrap;
+            align-self: flex-start; }
+#mu .cvp__b { display: grid; place-items: center; min-width: 19px; height: 19px;
+            padding: 0 5px; border-radius: var(--md-shape-full); font: 700 11px/1 var(--md-font);
+            background: var(--md-primary); color: var(--md-on-primary); }
+#mu .cv__c { background: var(--md-surface-container-low); border-radius: var(--md-shape-lg);
+           box-shadow: 0 1px 2px rgba(12,31,19,.06); display: grid;
+           grid-template-rows: auto minmax(0, 1fr) auto; max-height: 68vh; }
+#mu .cv__cab { display: flex; align-items: center; gap: 10px; padding: var(--e3) var(--e4);
+             border-bottom: 1px solid var(--md-outline-variant); }
+#mu .cv__cab b { flex: 1; font: 700 14px/1.3 var(--md-font); }
+#mu .cv__volta { display: none; border: 0; background: transparent; cursor: pointer;
+               font: 600 12.6px/1 var(--md-font); color: var(--md-primary);
+               padding: 8px 10px; border-radius: var(--md-shape-full); }
+#mu .cv__m { overflow-y: auto; padding: var(--e4); display: grid; gap: 10px;
+           align-content: start; }
+#mu .msg { display: grid; gap: 3px; justify-items: start; max-width: 78%; }
+#mu .msg--meu { justify-self: end; justify-items: end; }
+#mu .msg__b { background: var(--md-surface-container); color: var(--md-on-surface); padding: 9px var(--e3);
+            border-radius: var(--md-shape-md) var(--md-shape-md) var(--md-shape-md) 4px;
+            font-size: 14px; line-height: 20px; white-space: pre-wrap;
+            word-break: break-word; }
+#mu .msg--meu .msg__b { background: var(--md-primary-container);
+                      color: var(--md-on-primary-container);
+                      border-radius: var(--md-shape-md) var(--md-shape-md) 4px var(--md-shape-md); }
+#mu .msg__q { font-size: 10.8px; color: var(--md-on-surface-variant); }
+#mu .msg__b img { max-width: 220px; border-radius: var(--md-shape-sm); display: block;
+                margin-top: 6px; }
+#mu .msg__alvo { display: flex; align-items: center; gap: 6px; margin-top: 6px;
+               padding: 6px 9px; border-radius: 6px; font: 600 11.6px/1.3 var(--md-font);
+               background: color-mix(in srgb, var(--md-surface) 55%, transparent); }
+#mu .msg__alvo svg { font-size: 13px; flex: none; opacity: .7; }
+#mu .cv__vazio { display: grid; place-items: center; padding: var(--e8) var(--e4);
+               text-align: center; font-size: 13px;
+               color: var(--md-on-surface-variant); gap: var(--e2); }
+#mu .cv__esc { display: flex; align-items: flex-end; gap: var(--e2);
+             padding: var(--e3); border-top: 1px solid var(--md-outline-variant); }
+#mu .cv__esc textarea { flex: 1; border: 1px solid var(--md-outline-variant);
+                      background: var(--md-surface-container-low); border-radius: var(--md-shape-lg);
+                      padding: 10px var(--e3); font: 400 14px/20px var(--md-font);
+                      color: var(--md-on-surface); resize: none; outline: none;
+                      max-height: 120px; min-height: 40px; }
+#mu .cv__esc textarea:focus { border-color: var(--md-primary); }
+@media (max-width: 860px) {
+/* No celular a lista OCUPA a tela e a conversa entra por cima, com
+       "voltar" — dois paineis de 190px cada nao serve para nada. */
+#mu .cv { grid-template-columns: minmax(0, 1fr); }
+#mu .cv--aberta .cv__l { display: none; }
+#mu .cv:not(.cv--aberta) .cv__c { display: none; }
+#mu .cv__l, #mu .cv__c { max-height: none; }
+#mu .cv__m { max-height: 58vh; }
+#mu .cv__volta { display: inline-flex; }
+  }
+/* --------------------------------------------------------------- rodape */
+  /* --------------------------------------------------------------- entrada */
+@keyframes sobe { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+#mu .post--ent { animation: sobe 420ms var(--md-ease-emphasized) both; }
+/* O canto tem DOIS moradores: o assistente (que agora carrega a ajuda e as
+   conversas no mesmo painel) em bottom:20px, e este logo acima. Em
+   bottom:20px ele nascia EMBAIXO do assistente (z-index 50 contra 9000) —
+   invisivel e sem clique na tela mais longa do sistema. */
+#mu .aoTopo { position: fixed; right: var(--e5); bottom: 86px; z-index: 50;
+            display: flex; align-items: center; gap: var(--e2); border: 0; cursor: pointer;
+            background: var(--md-primary); color: var(--md-on-primary); font-size: 13px;
+            font-weight: 700; padding: 12px var(--e4); border-radius: var(--md-shape-full);
+            box-shadow: var(--md-elev-2); opacity: 0; pointer-events: none;
+            transform: translateY(14px);
+            transition: opacity 240ms var(--md-ease-standard), transform 240ms var(--mola); }
+#mu .aoTopo--on { opacity: 1; pointer-events: auto; transform: none; }
+@media (max-width: 700px) {
+#mu .lg { flex-wrap: wrap; gap: 6px 9px; }
+#mu .lg__a { flex-basis: 100%; white-space: normal; }
+#mu .lg__ip { display: none; }
+#mu .kpis { grid-template-columns: repeat(2, 1fr); }
+/* No estreito a faixa empilha: o numero e o texto em cima, a acao embaixo e
+   inteira — botao de 38px espremido ao lado de um numero de 40px nao cabe. */
+#mu .mu-dia { flex-wrap: wrap; gap: var(--e3); }
+#mu .mu-dia__c { flex-basis: calc(100% - 60px); }
+#mu .mu-dia__bt { width: 100%; justify-content: center; }
+#mu .mu-inv { gap: var(--e3) var(--e4); }
+#mu .mu-inv__mais { margin-left: 0; flex-basis: 100%; }
+  }
+@media (prefers-reduced-motion: reduce) {
+#mu * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  }
+/* --------------------------------------------------------------- telas */
+@media (max-width: 860px) {
+#mu .casca { grid-template-columns: minmax(0, 1fr); gap: var(--e4); padding: var(--e4); }
+#mu .cab__t { font-size: 27px; line-height: 31px; letter-spacing: -.6px; }
+#mu .dem { padding: var(--e4); border-radius: var(--md-shape-lg); }
+#mu .dem__n { font-size: 38px; line-height: 38px; }
+#mu .vista { padding: 10px var(--e3) 12px; font-size: 13.5px; }
+/* A barra de acao tem cinco botoes e nao cabe em 358px: sem wrap, o
+       "Abrir no sistema" — a acao mais importante do card — ficava CORTADO
+       pelo overflow:hidden do post. Duas fileiras, e ele na dele. */
+#mu .pa { flex-wrap: wrap; row-gap: 0; padding: 4px var(--e2); }
+#mu .pa__sp { flex-basis: 100%; height: 0; }
+#mu .ab { font-size: 12.2px; padding: 8px 9px; }
+#mu .ab--ir { margin-left: auto; }
+#mu .ph, #mu .pb { padding-left: var(--e4); padding-right: var(--e4); }
+#mu .th__b { padding-left: var(--e4); padding-right: var(--e4); }
+#mu .pt { width: 38px; height: 38px; }
+#mu .pb__t { font-size: 15.5px; line-height: 21px; }
+/* Em fila unica os seletores nao encolhem e empurram a pagina para fora
+       da tela. Aqui o campo fica em cima e os quatro caem em duas duplas. */
+#mu .comp { padding: var(--e3); }
+#mu .comp select { max-width: 132px; }
+#mu .topo { padding: var(--e4) var(--e4) 0; border-radius: var(--md-shape-lg); }
+#mu .filtros { padding: 3px 4px 3px var(--e3); }
+#mu .fbt span { display: none; }
+#mu .fbt { padding: 10px 12px; }
+/* No celular os rostos rolam de lado em vez de empilhar. flex-wrap:
+       nowrap NAO e' enfeite: `column` + o `wrap` herdado do desktop faz o
+       flex criar COLUNAS EXTRAS, e a pagina foi para 742px numa tela de 390. */
+#mu .pres { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+#mu .pres::-webkit-scrollbar { display: none; }
+#mu .pres__l { flex-wrap: nowrap; }
+#mu .pres__r { display: none; }
+#mu .kpis { grid-template-columns: repeat(2, 1fr); }
+#mu .top__in { padding: var(--e3) var(--e4); }
+#mu .marca span { display: none; }
+#mu .euSel { padding-left: var(--e2); }
+  }
+  #mu .foto img, #mu .lb__i img { width: 100%; height: 100%; display: block;
+                                  object-fit: cover; }
+  #mu .lb__b { font-size: 12.6px; font-weight: 700; color: var(--md-primary);
+               text-decoration: none; white-space: nowrap; padding: 7px 12px;
+               border-radius: var(--md-shape-full); background: var(--md-surface-container); }
+  #mu .lb__b:hover { background: var(--md-surface-container-high); }
+  #mu .aviso { position: fixed; left: 50%; bottom: 24px; z-index: 95;
+               transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+               max-width: min(560px, calc(100vw - 32px));
+               background: var(--md-on-surface); color: var(--md-surface);
+               font: 600 13.5px/19px var(--md-font); padding: 13px 20px;
+               border-radius: var(--md-shape-md); box-shadow: var(--md-elev-2);
+               transition: opacity 220ms var(--md-ease-standard),
+                           transform 260ms var(--mola); }
+  #mu .aviso--on { opacity: 1; transform: translate(-50%, 0); }
+
+  /* O make-admin.css veste TODO input/textarea/select do admin com borda,
+     fundo e sombra — e faz isso com !important, porque nasceu para domar o
+     formulário do Django. Dentro do #mu os campos são parte do desenho da
+     tela (o composer é um campo sem moldura, a busca vive dentro da pílula),
+     então aqui eles voltam ao natural. É o único lugar em que uso !important,
+     e é para DESFAZER, não para impor.
+     Isto só apareceu vendo a tela dentro da casca real: no protótipo, que não
+     carrega o CSS do admin, o composer estava perfeito.
+
+     O seletor tem DOIS IDs de propósito: o make-m3.css dobra o textarea do
+     admin com dois IDs e !important (para domar o `rows` do Django), o que é
+     2-0-1 — mais específico que #mu textarea, que é 1-0-1. Com um ID só, o
+     composer nascia com 120px de altura.
+
+     E aqui NÃO vai exemplo de CSS dentro de comentário. Duas vezes eu me
+     enrolei nisso: primeiro escrevi a regra do m3 como exemplo e o navegador
+     leu o exemplo como REGRA DE VERDADE — eu mesmo criei os 120px que estava
+     caçando; depois escrevi o próprio marcador de fechamento no texto que
+     explicava o erro, e ele fechou o comentário na frase. Comentário de CSS
+     não aninha: o primeiro fechamento encerra tudo, e o que vem depois vira
+     folha de estilo. A guarda no fim deste arquivo confere isso agora. */
+  #main #content #mu textarea, #mu textarea,
+  #main #content #mu input, #mu input,
+  #main #content #mu select, #mu select {
+    box-shadow: none !important; outline: none !important;
+    min-height: 0 !important; height: auto !important;
+    max-height: none !important; min-width: 0 !important;
+    font-family: var(--md-font) !important; }
+  #main #content #mu .comp textarea, #mu .comp textarea,
+  #main #content #mu .filtros input, #mu .filtros input,
+  #main #content #mu .esc textarea, #mu .esc textarea {
+    border: 0 !important; background: transparent !important;
+    border-radius: 0 !important; padding: 0 !important; }
+  #main #content #mu .comp textarea, #mu .comp textarea {
+    padding: 9px 0 0 !important; }
+  #main #content #mu .filtros input, #mu .filtros input {
+    padding: 11px 0 !important; }
+  #main #content #mu .cv__esc textarea, #mu .cv__esc textarea,
+  #main #content #mu .ed textarea, #mu .ed textarea {
+    border: 1px solid var(--md-outline-variant) !important;
+    background: var(--md-surface-container-low) !important;
+    border-radius: var(--md-shape-lg) !important;
+    padding: 10px var(--e3) !important; }
+  #mu .cv__esc textarea:focus, #mu .ed textarea:focus,
+  #mu .comp textarea:focus, #mu .filtros input:focus {
+    border-color: var(--md-primary) !important; }
+  #main #content #mu .fpan select, #mu .fpan select {
+    border: 1px solid var(--md-outline-variant) !important;
+    background: var(--md-surface-container-low) !important;
+    border-radius: var(--md-shape-md) !important;
+    padding: 11px var(--e3) !important; }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="mu">
+<div class="casca">
+  <!-- UM cartao para todo o controle da tela. Eram seis objetos soltos no
+       chao — titulo, abas, rostos, composer, filtro e contador — cada um com
+       o proprio respiro, para uma funcao so'. -->
+  <section class="topo">
+    {% comment %}
+    O título nomeia a TELA, como em todas as outras. "Mural" saiu do menu em
+    18/09 por duplicar "Início" — deixar o H1 dizendo Mural enquanto o menu diz
+    Início é a mesma duplicidade, só que por dentro. O que é pessoal e muda todo
+    dia mora na linha de apoio, onde além de pessoal é informação.
+    {% endcomment %}
+    <h1 class="cab__t">Início</h1>
+    {% now "l, j \d\e F" as mu_hoje %}
+    {% comment %}`|lower|capfirst`: o locale devolve "Setembro" com maiúscula, e
+    em português mês é minúsculo. Só a primeira letra da frase sobe.{% endcomment %}
+    <p class="cab__lede">{{ mu_hoje|lower|capfirst }}{% if precisa_de_mim %} · <b>{{ precisa_de_mim }}</b>
+      {% if precisa_de_mim == 1 %}demanda espera{% else %}demandas esperam{% endif %} por você{% endif %}</p>
+    <nav class="vistas" id="vistas" aria-label="telas"></nav>
+    {% comment %}
+    A ESCADA DE PRIORIDADE. A faixa mostra UM fato — o primeiro degrau com
+    número —, nunca uma lista: se tudo virasse item, nada seria prioridade.
+    Quantidade não promove, atraso promove. A ordem e o porquê estão em
+    `estado_dia()`, em apps/parque/mural.py.
+
+    O botão do degrau de atraso NÃO sai da tela: ele acende o mesmo filtro por
+    tema que os cards já usam (`est.tema`), e o feed logo abaixo responde.
+    {% endcomment %}
+    {% if estado_dia %}
+    <div class="topo__f">
+      {% comment %}
+      FECHAR aqui quer dizer "eu vi", não "esconde para sempre": a chave
+      guardada é o FATO (nível + número). Mudou o fato, o aviso volta sozinho —
+      senão alguém fecha numa terça e deixa de ver que na quinta o número
+      dobrou. Fechado, ele vira a ficha pequena ao lado, que reabre no clique.
+      {% endcomment %}
+      <button type="button" class="mu-dia-min mu-dia-min--{{ estado_dia.nivel }}"
+              id="mu-dia-min" hidden>
+        <span class="mu-dia-min__p" aria-hidden="true"></span>{{ estado_dia.curto }}
+        <span class="mu-dia-min__x">mostrar</span>
+      </button>
+      <div class="mu-dia mu-dia--{{ estado_dia.nivel }}" id="mu-dia"
+           data-chave="{{ estado_dia.nivel }}:{{ estado_dia.n|default_if_none:0 }}">
+        {% if estado_dia.n %}
+          <span class="mu-dia__n">{{ estado_dia.n }}</span>
+        {% else %}
+          <span class="mu-dia__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span>
+        {% endif %}
+        <div class="mu-dia__c">
+          <p class="mu-dia__t">{{ estado_dia.titulo }}</p>
+          <p class="mu-dia__s">{{ estado_dia.sub }}</p>
+        </div>
+        {% if estado_dia.acao %}
+          {% if estado_dia.tema %}
+            <button type="button" class="mu-dia__bt" data-mu-tema="{{ estado_dia.tema }}">{{ estado_dia.acao }}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </button>
+          {% else %}
+            <a class="mu-dia__bt" href="{{ estado_dia.url }}">{{ estado_dia.acao }}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </a>
+          {% endif %}
+        {% endif %}
+        <button type="button" class="mu-dia__x" id="mu-dia-x"
+                title="Fechar até o número mudar" aria-label="Fechar este aviso">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    {% endif %}
+    {% if inventario %}
+    <div class="topo__f mu-inv">
+      {% for i in inventario %}
+      <a class="mu-inv__i" href="{{ i.url }}"><span class="mu-inv__n">{{ i.valor }}</span>
+        <span class="mu-inv__r">{{ i.rotulo }}</span></a>
+      {% endfor %}
+      <a class="mu-inv__mais" href="{% url 'admin:index' %}">Painel completo
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+    </div>
+    {% endif %}
+    <div class="topo__f"><section class="pres" id="pres"></section></div>
+    <div class="topo__f" id="comp"></div>
+    <div class="topo__f topo__f--fim">
+      <div class="filtros">
+        <svg class="lupa" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.9" stroke-linecap="round"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="Buscar máquina, pessoa, loja, texto…"
+               autocomplete="off">
+        <button class="fbt" id="f-bt" type="button" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+               stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+          <span>Filtros</span>
+        </button>
+        <div class="fpan" id="f-pan" hidden>
+          <label>Situação<select id="f-sit"></select></label>
+          <label>Tipo ou tema<select id="f-tipo"></select></label>
+          <label>Loja<select id="f-loja"></select></label>
+          <label>Pessoa<select id="f-quem"></select></label>
+          <div class="fpan__p"><span id="f-quantos"></span>
+            <button type="button" class="comp__x" id="f-limpa">limpar</button>
+            <button type="button" class="comp__pub" id="f-fecha">pronto</button></div>
+        </div>
+      </div>
+      <div class="fichas" id="fichas"></div>
+    </div>
+  </section>
+
+  <main class="feed">
+    <div class="conta" id="conta"></div>
+    <div id="feed"></div>
+  </main>
+
+
+</div>
+
+<input type="file" id="mu-cvarq" hidden
+       accept="image/*,.pdf,.docx,.xlsx,.csv,.txt">
+<input type="file" id="mu-pubfoto" hidden
+       accept="image/*,.pdf,.docx,.xlsx,.csv,.txt">
+
+<input type="file" id="mu-foto" accept="image/png,image/jpeg,image/webp" hidden>
+<input type="file" id="mu-papel" accept=".pdf,.png,.jpg,.jpeg,.docx" hidden>
+
+<button class="aoTopo" id="ao-topo" type="button">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+       stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+  topo
+</button>
+</div>
+{{ dados_js|json_script:"mu-dados" }}
+<script>
+  var CSRF_TOKEN = "{{ csrf_token }}";
+  var URL_COMENTAR = "{% url 'parque_mural_comentar' %}";
+  var URL_MARCAR = "{% url 'parque_mural_marcar' %}";
+  var URL_ANEXAR = "{% url 'parque_arquivo_anexar' %}";
+  var URL_PUBLICAR = "{% url 'parque_mural_publicar' %}";
+  var URL_EDITAR = "{% url 'parque_mural_editar' %}";
+  var URL_APAGAR = "{% url 'parque_mural_apagar' %}";
+  var URL_APAGAR_COMENT = "{% url 'parque_mural_apagar_comentario' %}";
+  var URL_CONVERSA = "{% url 'parque_mural_conversa' %}";
+  var URL_MANDAR = "{% url 'parque_mural_mandar' %}";
+
+(function () {
+  "use strict";
+  var D = JSON.parse(document.getElementById("mu-dados").textContent);
+  var CSRF = document.querySelector("[name=csrfmiddlewaretoken]")
+    ? document.querySelector("[name=csrfmiddlewaretoken]").value : CSRF_TOKEN;
+
+  var IC = {
+    handyman: "m14 7 3-3 3 3-3 3zM4 20l6-6M10 14l-3-3 4-4 3 3z",
+    check: "M20 6 9 17l-5-5",
+    event_repeat: "M4 5h16v16H4zM4 10h16M9 3v4M15 3v4M9 15l2 2-2 2",
+    swap: "M4 9h13l-3-3M20 15H7l3 3",
+    grid: "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z",
+    inventory: "M3 7h18v13H3zM3 7l2-4h14l2 4M12 11v5",
+    tools: "M3 9h18v11H3zM8 9V6h8v3M12 13v3",
+    assina: "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z",
+    doc: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5",
+    task: "M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9",
+    money: "M6 3h9l3 3v15H6zM9 8h6M9 12h6M9 16h3",
+    alerta: "m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3zM12 9v4M12 17h.01",
+    fora: "M14 3h7v7M21 3l-9 9M10 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5",
+    balao: "M21 12a8 8 0 0 1-8 8H8l-5 3 1.4-4.2A8 8 0 1 1 21 12z",
+    mao: "M9 11V5a2 2 0 1 1 4 0v6M13 8a2 2 0 1 1 4 0v5M17 10a2 2 0 1 1 4 0v4a7 7 0 0 1-7 7h-2a7 7 0 0 1-7-7v-3a2 2 0 1 1 4 0",
+    olho: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+    envia: "M4 20l17-8L4 4l3 8z",
+    clipe: "M21 11l-8.5 8.5a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8",
+    tudo: "M4 6h16M4 12h16M4 18h10",
+    sino: "M18 9a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7M10 21a2 2 0 0 0 4 0",
+    pessoa: "M20 21a8 8 0 0 0-16 0M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+    pc: "M4 4h16v11H4zM9 19h6M12 15v4",
+    loja: "M4 9h16v11H4zM3 9l2-5h14l2 5M9 20v-6h6v6",
+    grafico: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+    seta: "M5 12h13l-4-4M18 12l-4 4",
+    // espelho do `seta`: o "anterior" da tira de paginas. Sem ele o ico()
+    // caia no fallback e desenhava um DOCUMENTO no botao de voltar.
+    volta: "M19 12H6l4-4M6 12l4 4",
+    chevron: "m6 9 6 6 6-6",
+    lapis: "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z",
+    lixo: "M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6",
+    mais: "M12 5v14M5 12h14",
+
+    wifi: "M5 12.5a10 10 0 0 1 14 0M8 16a5.5 5.5 0 0 1 8 0M12 20h.01M2 9a15 15 0 0 1 20 0",
+    trava: "M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4",
+    raio: "M13 2 4 14h6l-1 8 9-12h-6z",
+    hist: "M12 8v4l3 2M3 12a9 9 0 1 0 3-6.7M3 4v4h4",
+    camera: "M3 8h3l2-3h8l2 3h3v12H3zM12 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"
+  };
+  function ico(n, cls) {
+    return '<svg class="' + (cls || "") + '" viewBox="0 0 24 24" fill="none" ' +
+      'stroke="currentColor" stroke-width="1.9" stroke-linecap="round" ' +
+      'stroke-linejoin="round" aria-hidden="true"><path d="' + (IC[n] || IC.doc) + '"/></svg>';
+  }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  var MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  function dataCurta(iso) {
+    if (!iso) return "";
+    var p = iso.split("-");
+    return p[2] + " " + MES[+p[1] - 1];
+  }
+  var MES_LONGO = ["janeiro", "fevereiro", "março", "abril", "maio", "junho",
+                   "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+  var SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+  function dataLonga(iso) {
+    if (!iso) return "";
+    var p = iso.split("-");
+    var d = new Date(+p[0], +p[1] - 1, +p[2]);
+    return SEMANA[d.getDay()] + ", " + (+p[2]) + " de " + MES_LONGO[+p[1] - 1];
+  }
+  function mesRotulo(m) {
+    var p = m.split("-");
+    return MES[+p[1] - 1] + "/" + p[0].slice(2);
+  }
+  function faz(dias) {
+    if (dias == null) return "";
+    if (dias <= 0) return "hoje";
+    if (dias === 1) return "ontem";
+    if (dias < 30) return "há " + dias + " dias";
+    var m = Math.round(dias / 30);
+    return "há " + m + (m === 1 ? " mês" : " meses");
+  }
+
+  var TIPO = {};
+  D.tipos.forEach(function (t) { TIPO[t.id] = t; });
+  var GENTE = {};
+  D.pessoas.forEach(function (p) { GENTE[p.k] = p; });
+  function chave(s) {
+    return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .toLowerCase().trim();
+  }
+  function pessoa(nome) {
+    return GENTE[chave(nome)] || null;
+  }
+  function avatar(nome, tam) {
+    var p = pessoa(nome);
+    var ini = p ? p.ini : (String(nome || "?").trim().slice(0, 1).toUpperCase() || "?");
+    var cor = p ? "c" + p.cor : "cx";
+    return '<span class="av ' + (tam ? "av--" + tam + " " : "") + cor +
+      '" title="' + esc(nome) + '" aria-hidden="true">' + esc(ini) + "</span>";
+  }
+
+  // A FOTO agora é arquivo de verdade: <img> com a URL do ComentarioEvento.
+  function tileFoto(f) {
+    return '<img src="' + esc(f.url) + '" alt="' + esc(f.leg) +
+      '" loading="lazy" decoding="async">';
+  }
+
+  var PRECISA = {
+    papel:      { rot: "falta o papel",        cor: "#8a5a00" },
+    assinatura: { rot: "sem assinatura",       cor: "#4f6100" },
+    conclusao:  { rot: "esperando alguém",     cor: "var(--crit)" },
+    decisao:    { rot: "esperando decisão",    cor: "var(--primary)" },
+    revisao:    { rot: "foi negado",           cor: "var(--outline)" }
+  };
+  var VERBO = {
+    chamado: "abriu um chamado", chamado_fim: "concluiu um chamado",
+    preventiva: "concluiu a preventiva", transferencia: "registrou uma transferência",
+    movimentacao: "pediu uma movimentação", peca: "movimentou peça",
+    autorizada: "enviou à autorizada", termo: "emitiu um termo",
+    documento: "anexou um documento", tarefa: "concluiu uma tarefa",
+    tarefa_aberta: "é o responsável", orcamento: "pediu um orçamento",
+    aviso: "publicou"
+  };
+
+  // ------------------------------------------------------------- o composer
+  // Duas amarras que o feed de empresa nao tem: a MAQUINA (a publicacao entra
+  // na ficha corrida dela) e a LOJA. Fechado e' uma linha; abre no clique.
+  var pub = { aberto: false, texto: "", alvo: null, arquivo: null,
+              enviando: false, sugestoes: [] };
+
+  function pintarComposer() {
+    var alvo = document.getElementById("comp");
+    if (!D.pode_publicar) { alvo.innerHTML = ""; return; }
+
+    var h = '<div class="comp' + (pub.aberto ? " comp--on" : "") + '" id="comp-c">' +
+      avatar(est.eu) + '<div class="comp__c">' +
+      '<textarea id="comp-t" rows="1" placeholder="Escreva para o time… ' +
+      '@ chama alguém, # marca loja ou tema">' + esc(pub.texto) + "</textarea>";
+
+    // O REGISTRO CITADO, quando escolhido: a máquina e a loja vêm dele.
+    if (pub.alvo) {
+      var t0 = TIPO[pub.alvo.tipo] || { nome: pub.alvo.tipo, ic: "doc" };
+      h += '<div class="comp__alvo">' + ico(t0.ic) +
+        "<span><b>" + esc(pub.alvo.titulo) + "</b>" +
+        '<em>' + esc(t0.nome) + " · " + esc(dataCurta(pub.alvo.data)) +
+        (pub.alvo.maquina ? " · " + esc(pub.alvo.maquina) : "") +
+        (pub.alvo.onde ? " · " + esc(pub.alvo.onde) : "") + "</em></span>" +
+        '<button type="button" class="comp__x" id="comp-semalvo">tirar</button></div>';
+    }
+
+    if (pub.arquivo) {
+      h += '<div class="comp__pv">' +
+        (pub.arquivo.imagem ? '<img src="' + esc(pub.arquivo.url) + '" alt="">'
+                            : ico("doc")) +
+        esc(pub.arquivo.nome) + '<span class="comp__sp"></span>' +
+        '<button type="button" class="comp__x" id="comp-semarq">tirar</button></div>';
+    }
+
+    h += '<div class="comp__b">' +
+      '<button type="button" class="amarra' + (pub.arquivo ? " amarra--on" : "") +
+      '" id="comp-arq">' + ico("clipe") +
+      (pub.arquivo ? "Arquivo trocado" : "Arquivo") + "</button>" +
+      '<span class="comp__sp"></span>' +
+      '<button type="button" class="comp__x" id="comp-cancela">Cancelar</button>' +
+      '<button type="button" class="comp__pub" id="comp-envia"' +
+      (pub.texto.trim() && !pub.enviando ? "" : " disabled") + ">" +
+      (pub.enviando ? "Publicando…" : "Publicar") + "</button></div>";
+
+    if (pub.aberto) {
+      h += '<p class="comp__dica" id="comp-d"></p>';
+    }
+    h += "</div></div>";
+    alvo.innerHTML = h;
+    ligarComposer();
+    if (pub.aberto) {
+      var c = document.getElementById("comp-c");
+      if (c) c.classList.add("comp--on");
+      atualizarDica();
+      var t = document.getElementById("comp-t");
+      if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); }
+    }
+  }
+
+  // A dica muda com a amarra: sem maquina ela explica para que serve; com
+  // maquina ela diz onde a publicacao vai aparecer.
+  function atualizarDica() {
+    var d = document.getElementById("comp-d");
+    if (!d) return;
+    d.innerHTML = (pub.alvo && pub.alvo.maquina)
+      ? "Vai entrar na ficha de <b>" + esc(pub.alvo.maquina) + "</b>, junto do " +
+        "chamado e do laudo dela."
+      : "Escreva e a tela procura <b>o registro do sistema</b> que tem relação. " +
+        "Use <b>#loja</b> ou <b>#tema</b> para marcar, e <b>@</b> para chamar.";
+  }
+
+  function ligarComposer() {
+    var caixa = document.getElementById("comp-c");
+    if (!caixa) return;
+    var ta = document.getElementById("comp-t");
+
+    function cresce() {
+      ta.style.height = "auto";
+      ta.style.height = Math.min(200, ta.scrollHeight) + "px";
+    }
+    function abre() {
+      if (pub.aberto) return;
+      pub.aberto = true;
+      // SEM repintar: o innerHTML novo destruiria o <textarea> em que a
+      // pessoa acabou de clicar. O CSS revela os botoes pela classe.
+      caixa.classList.add("comp--on");
+      if (!document.getElementById("comp-d")) {
+        var d = document.createElement("p");
+        d.className = "comp__dica";
+        d.id = "comp-d";
+        caixa.querySelector(".comp__c").appendChild(d);
+      }
+      atualizarDica();
+    }
+    ta.addEventListener("focus", abre);
+    var atrasoSug;
+    ta.addEventListener("input", function () {
+      pub.texto = ta.value;
+      cresce();
+      var b = document.getElementById("comp-envia");
+      if (b) b.disabled = !pub.texto.trim() || pub.enviando;
+      mencionar(ta, caixa);
+      clearTimeout(atrasoSug);
+      if (!pub.semSugestao) {
+        atrasoSug = setTimeout(pintarSugestao, 320);
+      }
+    });
+    ta.addEventListener("keydown", function (ev) {
+      // Enter pula linha aqui de propósito: publicação é texto de vários
+      // parágrafos, não uma linha de chat. Ctrl+Enter publica.
+      if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); enviar(); }
+      if (ev.key === "Escape") fecharMencao();
+    });
+    cresce();
+
+    var ba = document.getElementById("comp-arq");
+    if (ba) ba.addEventListener("click", function () {
+      var i = document.getElementById("mu-pubfoto");
+      i.value = ""; i.click();
+    });
+    var bsa = document.getElementById("comp-semarq");
+    if (bsa) bsa.addEventListener("click", function () {
+      pub.arquivo = null; pintarComposer();
+    });
+    var bsalvo = document.getElementById("comp-semalvo");
+    if (bsalvo) bsalvo.addEventListener("click", function () {
+      pub.alvo = null; pintarComposer();
+    });
+
+    var bc = document.getElementById("comp-cancela");
+    if (bc) bc.addEventListener("click", function () {
+      pub = { aberto: false, texto: "", alvo: null, arquivo: null,
+              enviando: false, sugestoes: [] };
+      pintarComposer();
+    });
+
+    var be = document.getElementById("comp-envia");
+    if (be) be.addEventListener("click", enviar);
+
+    function enviar() {
+      if (!pub.texto.trim() || pub.enviando) return;
+      pub.enviando = true;
+      pintarComposer();
+      publicarNoServidor();
+    }
+  }
+
+
+  // ------------------------------------------------------------------ estado
+  // O estado vem do banco (montar_conversa em mural.py) e volta para lá a
+  // cada clique. Nada de localStorage: se eu assumo uma demanda, o time tem
+  // que ver o meu rosto no card, não só eu no meu navegador.
+  var meu = { cuidando: {}, seguindo: {}, coment: {}, papel: {}, fotos: {},
+              conversa: {} };
+  (function () {
+    Object.keys(D.assumido || {}).forEach(function (k) {
+      (D.assumido[k] || []).forEach(function (p) { if (p.eu) meu.cuidando[k] = p.quem; });
+    });
+    Object.keys(D.seguindo || {}).forEach(function (k) {
+      (D.seguindo[k] || []).forEach(function (p) { if (p.eu) meu.seguindo[k] = true; });
+    });
+    meu.coment = D.comentarios || {};
+    meu.fotos = D.fotos || {};
+  })();
+  function guardar() { /* o banco é a memória */ }
+
+  function pedir(url, campos, arquivo, entao) {
+    var fd = new FormData();
+    fd.append("csrfmiddlewaretoken", CSRF);
+    Object.keys(campos).forEach(function (k) { fd.append(k, campos[k]); });
+    if (arquivo) fd.append(arquivo.campo, arquivo.arquivo);
+    fetch(url, { method: "POST", body: fd, credentials: "same-origin" })
+      .then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (d) {
+        if (!d || !d.ok) { avisar((d && d.erro) || "Não deu para salvar."); return; }
+        entao(d);
+      })
+      .catch(function () { avisar("Sem resposta do servidor."); });
+  }
+
+  function avisar(msg) {
+    var t = document.getElementById("mu-aviso");
+    if (!t) {
+      t = document.createElement("div");
+      t.id = "mu-aviso";
+      t.className = "aviso";
+      document.getElementById("mu").appendChild(t);
+    }
+    t.textContent = msg;
+    t.classList.add("aviso--on");
+    clearTimeout(t._t);
+    t._t = setTimeout(function () { t.classList.remove("aviso--on"); }, 4200);
+  }
+
+  // Quanto do log cabe numa tela sem virar rolagem infinita de dado cru.
+  var PAGINA_LOG = window.innerWidth < 860 ? 20 : 40;
+  // vista = QUAL TELA (navegacao). sit = QUAL RECORTE do mural (filtro).
+  // Estavam no mesmo campo, e por isso apareciam no mesmo rail com a mesma
+  // cara — clicar em "Acessos e acoes" parecia ligar um filtro.
+  var POR_PAGINA = 12;
+  var est = { vista: "mural", sit: "", tipo: "", loja: "", quem: "", maquina: "",
+              pag: 1,
+              tema: "", conversaCom: null, conversa: null,
+              mes: "", busca: "", eu: D.eu, abertos: {}, expand: {},
+              editando: null,
+              lane: "", logDe: "", logAte: "", logSens: false, calAberto: false,
+              logLim: (window.innerWidth < 860 ? 20 : 40), lim: 12, foco: null };
+
+  // Sem semente: o mural começa com o que o time escreveu, e nada mais.
+  function fotosDe(id) {
+    return (meu.fotos[id] || []);
+  }
+
+  function comentarios(id) {
+    return (meu.coment[id] || []);
+  }
+  function nComent(id) { return comentarios(id).length; }
+
+  function temPapel(e) {
+    if (!e.papel) return null;
+    return e.papel.tem || !!meu.papel[e.id];
+  }
+  function precisaDe(e) {
+    if ((e.precisa === "papel" || e.precisa === "assinatura") && meu.papel[e.id]) return "";
+    return e.precisa || "";
+  }
+  function donoDe(e) {
+    return (e.donos && e.donos.length ? e.donos : (e.autor ? [e.autor] : []));
+  }
+  function meuPost(e) {
+    if (meu.cuidando[e.id]) return true;
+    var k = chave(est.eu);
+    if (chave(e.autor) === k) return true;
+    return donoDe(e).some(function (n) { return chave(n) === k; });
+  }
+
+  // ------------------------------------------------------------------ filtro
+  // A BUSCA OLHA TUDO QUE O CARD MOSTRA — inclusive os nomes da trilha, o
+  // tipo por extenso e o texto dos comentarios. Antes ela olhava seis campos
+  // e um "Diego" digitado nao achava o card que o Diego autorizou.
+  function textoDe(e) {
+    var t = [e.titulo, e.fala, e.onde, e.autor, e.maquina, e.status,
+             (TIPO[e.tipo] || {}).nome, (e.maquinas || []).join(" "),
+             donoDe(e).join(" "), e.para || "", e.valor || "",
+             (e.tags || []).join(" ")];
+    (e.trilha || []).forEach(function (p) { t.push(p.quem, p.oque); });
+    comentarios(e.id).forEach(function (c) { t.push(c.quem, c.texto); });
+    fotosDe(e.id).forEach(function (f) { t.push(f.leg); });
+    return t.join(" ").toLowerCase();
+  }
+
+  function casaSit(e, sit) {
+    if (!sit) return true;
+    if (sit === "precisa") return !!precisaDe(e);
+    if (PRECISA[sit]) return precisaDe(e) === sit;
+    if (sit === "minhas") return meuPost(e);
+    if (sit === "seguindo") return !!meu.seguindo[e.id];
+    if (sit === "conversa") return nComent(e.id) > 0;
+    if (sit === "foto") return fotosDe(e.id).length > 0;
+    return true;
+  }
+
+  function visiveis(semSit) {
+    var q = est.busca.trim().toLowerCase();
+    return D.eventos.filter(function (e) {
+      if (!semSit && !casaSit(e, est.sit)) return false;
+      if (est.tipo && e.tipo !== est.tipo) return false;
+      if (est.tema && (e.tags || []).indexOf(est.tema) < 0) return false;
+      if (est.loja && e.onde !== est.loja) return false;
+      if (est.mes && e.data.slice(0, 7) !== est.mes) return false;
+      if (est.maquina && e.maquina !== est.maquina &&
+          (e.maquinas || []).indexOf(est.maquina) < 0) return false;
+      if (est.quem) {
+        var k = chave(est.quem);
+        var achou = chave(e.autor) === k ||
+          (e.trilha || []).some(function (p) { return chave(p.quem) === k; }) ||
+          donoDe(e).some(function (n) { return chave(n) === k; });
+        if (!achou) return false;
+      }
+      if (q && textoDe(e).indexOf(q) < 0) return false;
+      return true;
+    });
+  }
+
+  // POSTS IDENTICOS NO MESMO MINUTO VIRAM UM. Nove "Tarefa concluída: Agente
+  // de coleta não está reportando" às 11:59, do mesmo Yan, em Bonsucesso, sao
+  // UM acontecimento em lote — nove cards iguais leem como bug e empurram o
+  // resto do feed para fora da tela. O card diz "N acontecimentos" e lista as
+  // maquinas. (No Django o comentario continua colado no registro individual;
+  // o card agrupado mostra a conversa dos dois juntos.)
+  function agrupar(evs) {
+    var out = [], idx = {};
+    evs.forEach(function (e) {
+      var k = [e.data, e.hora || "", e.tipo, e.titulo, chave(e.autor), e.onde].join("|");
+      var maqs = (e.maquinas && e.maquinas.length) ? e.maquinas.slice()
+                 : (e.maquina ? [e.maquina] : []);
+      if (idx[k] === undefined) {
+        idx[k] = out.length;
+        out.push(Object.assign({}, e, { lote: e.lote || 1, maquinas: maqs,
+                                        ids: [e.id] }));
+      } else {
+        var g = out[idx[k]];
+        g.lote += (e.lote || 1);
+        g.ids.push(e.id);
+        maqs.forEach(function (m) { if (g.maquinas.indexOf(m) < 0) g.maquinas.push(m); });
+        if (!g.fala && e.fala) g.fala = e.fala;
+      }
+    });
+    return out;
+  }
+
+  // -------------------------------------------------- nivel 1: as tres telas
+  function pintarVistas() {
+    var q = est.busca.trim().toLowerCase();
+    // Com busca ligada, a aba mostra QUANTOS CASAM NELA — assim se ve que o
+    // que se procura esta na outra tela em vez de concluir que nao existe.
+    var nMural = visiveis().length;
+    var nLogs = q ? D.logs.filter(function (x) {
+      return [x.quem, x.oque, x.alvo, x.ip].join(" ").toLowerCase().indexOf(q) >= 0;
+    }).length : (D.log_resumo.acessos + D.log_resumo.acoes);
+
+    var telas = [
+      { id: "mural", rot: "Mural", ic: "tudo", n: nMural },
+      { id: "logs", rot: "Acessos e alterações", ic: "hist", n: nLogs },
+      // (a terceira aba era Conversas; virou a bolha do make-chat.js)
+      // A conversa virou bolha flutuante (make-chat.js), em toda tela do
+      // sistema. Uma aba aqui diria a mesma coisa num lugar a mais.
+    ];
+    document.getElementById("vistas").innerHTML = telas.map(function (t) {
+      return '<button type="button" class="vista" data-vista="' + t.id + '"' +
+        (est.vista === t.id ? ' aria-selected="true"' : ' aria-selected="false"') +
+        ">" + ico(t.ic) + esc(t.rot) + "<b>" + t.n + "</b></button>";
+    }).join("");
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-vista]"), function (b) {
+      b.addEventListener("click", function () {
+        est.vista = b.getAttribute("data-vista");
+        est.pag = 1; est.logLim = PAGINA_LOG;
+        est.logDe = ""; est.logAte = "";
+        tudo();
+      });
+    });
+  }
+
+  // ------------------------------------------------------------------- posts
+  function anel(e, pr) {
+    // envelhecimento: 90 dias fecham a volta. Uma demanda de 80 dias tem que
+    // aparecer como quase cheia e vermelha, nao como um icone qualquer.
+    var t = TIPO[e.tipo] || { ic: "doc" };
+    if (!pr) {
+      return '<span class="pt pt--ok">' + ico(t.ic, "ic") + "</span>";
+    }
+    var dias = e.dias == null ? 0 : e.dias;
+    var f = Math.min(1, dias / 90);
+    var C = 94.2;
+    var critico = dias >= 60;
+    return '<span class="pt' + (critico ? " pt--crit" : "") + '" title="' +
+      faz(dias) + '"><svg class="anel" viewBox="0 0 36 36">' +
+      '<circle class="tr" cx="18" cy="18" r="15"/>' +
+      '<circle class="fr" cx="18" cy="18" r="15" stroke-dasharray="' + C +
+      '" stroke-dashoffset="' + C + '" data-off="' + (C * (1 - f)).toFixed(1) + '"/>' +
+      "</svg>" + ico(t.ic, "ic") + "</span>";
+  }
+
+  function cartao(e, i) {
+    var pr = precisaDe(e);
+    var t = TIPO[e.tipo] || { nome: e.tipo, ic: "doc" };
+    var dono = donoDe(e)[0] || e.autor;
+    var cuido = !!meu.cuidando[e.id];
+    var velho = pr && e.dias != null && e.dias >= 60;
+    var cls = "post" + (i < 8 ? " post--ent" : "") +
+      (cuido ? " post--meu" : (velho ? " post--old" : (pr ? " post--dem" : "")));
+
+    var h = '<article class="' + cls + '" data-post="' + esc(e.id) + '"' +
+      (i < 8 ? ' style="animation-delay:' + (i * 45) + 'ms"' : "") + ">";
+
+    // cabeca
+    h += '<div class="ph">' + avatar(dono) + '<div class="ph__txt">' +
+      '<div class="ph__l1">' +
+      (dono ? "<b>" + esc(dono) + "</b> " + esc(VERBO[e.tipo] || "registrou")
+            : '<b class="ph__ninguem">Ninguém assumiu</b> — ' +
+              (e.tipo === "tarefa_aberta" ? "tarefa sem responsável"
+                                          : "sem autor registrado")) +
+      "</div>" +
+      '<div class="ph__l2"><em>' + esc(dataCurta(e.data)) +
+      (e.hora ? " · " + esc(e.hora) : "") + "</em>" +
+      (e.dias != null ? '<em>·</em><em>' + esc(faz(e.dias)) + "</em>" : "") +
+      (e.onde ? '<em>·</em><em>' + esc(e.onde) + "</em>" : "") +
+      "</div></div>" + anel(e, pr) +
+      (e.editavel ? '<span class="post__mais" data-mais="' + esc(e.id) + '">' +
+        '<button type="button" title="editar ou apagar">⋯</button></span>' : "") +
+      "</div>";
+
+    // corpo
+    h += '<div class="pb">';
+    if (est.editando === e.id) {
+      // Editar no proprio card, no lugar do texto.
+      h += '<div class="ed" data-ed="' + esc(e.id) + '">' +
+        "<textarea>" + esc((e.titulo + (e.fala ? "\n" + e.fala : ""))) +
+        "</textarea>" +
+        '<div class="ed__b">' +
+        '<button type="button" class="amarra' + (e.maquina ? " amarra--on" : "") +
+        '" data-edmaq="' + esc(e.id) + '">' + ico("pc") +
+        (e.maquina ? esc(e.maquina) + "<span>✕</span>" : "Máquina") + "</button>" +
+        '<span class="comp__sp"></span>' +
+        '<button type="button" class="comp__x" data-edx="' + esc(e.id) +
+        '">Cancelar</button>' +
+        '<button type="button" class="comp__pub" data-edok="' + esc(e.id) +
+        '">Salvar</button></div></div>';
+    } else {
+      h += '<h2 class="pb__t">' + esc(e.titulo) +
+        (e.status === "editada" ? ' <span class="marca-ed">· editada</span>' : "") +
+        "</h2>";
+      if (e.fala) h += '<p class="fala">' + marcarMencoes(e.fala) + "</p>";
+      if (e.alvo_titulo) {
+        h += '<button type="button" class="sobre" data-sobre="' + esc(e.alvo) +
+          '">' + ico("seta") + "<span>sobre <b>" + esc(e.alvo_titulo) +
+          "</b></span></button>";
+      }
+      if (e.arquivo && !e.e_imagem) {
+        h += '<a class="anexo" href="' + esc(e.arquivo) + '" target="_blank" ' +
+          'rel="noopener">' + ico("doc") + esc(e.arquivo_nome || "arquivo") + "</a>";
+      }
+    }
+
+    var fts = fotosDe(e.id);
+    if (fts.length) {
+      h += '<div class="fotos">' + fts.map(function (f, k) {
+        // a foto inteira e' um botao (abre grande); o ✕ nao pode ser filho
+        // dele — botao dentro de botao nao existe em HTML. Vira irmao.
+        return '<span class="foto-w">' +
+          '<button type="button" class="foto' + (f.nova ? " foto--nova" : "") +
+          '" data-foto="' + esc(e.id) + "|" + k + '">' + tileFoto(f) +
+          '<span class="foto__c">' + ico("camera") + esc(f.leg) + "</span></button>" +
+          (f.meu && f.id
+            ? '<button type="button" class="lixo" data-apagarfoto="' + f.id +
+              '" title="Apagar esta foto" aria-label="Apagar esta foto">' +
+              ico("lixo") + "</button>"
+            : "") +
+          "</span>";
+      }).join("") + "</div>";
+    }
+
+    var chips = "";
+    if (e.status) chips += '<span class="chip chip--st">' + esc(e.status) + "</span>";
+    if (e.lote > 1) chips += '<span class="chip chip--lote">' + e.lote +
+      " eventos iguais</span>";
+    if (e.para) chips += '<span class="chip">' + ico("pessoa") + esc(e.para) + "</span>";
+    if (e.valor) chips += '<span class="chip">' + ico("money") + "R$ " + esc(e.valor) + "</span>";
+
+    var maqs = (e.maquinas && e.maquinas.length) ? e.maquinas.slice()
+               : (e.maquina ? [e.maquina] : []);
+    var lim = est.expand[e.id] ? maqs.length : 6;
+    maqs.slice(0, lim).forEach(function (m) {
+      // abre a maquina no mapa (o painel lateral de sempre), em vez de
+      // filtrar o feed e saltar para o topo — que era o que dava a impressao
+      // de "voltou para o comeco".
+      chips += '<button type="button" class="chip chip--maq" data-abrirmaq="' +
+        esc(m) + '" title="Ver esta máquina no mapa" data-maq="' + esc(m) + '">' +
+        ico("pc") + esc(m) + "</button>";
+    });
+    if (maqs.length > lim) chips += '<button type="button" class="chip chip--mais" ' +
+      'data-expand="' + esc(e.id) + '">+' + (maqs.length - lim) + " máquinas</button>";
+
+    // As tags vêm depois das máquinas: primeiro O QUE é, depois COMO agrupa.
+    (e.tags || []).forEach(function (t) {
+      chips += '<button type="button" class="chip chip--tag" data-tema="' + esc(t) +
+        '"' + (est.tema === t ? ' aria-pressed="true"' : "") + '><i>#</i>' +
+        esc(t) + "</button>";
+    });
+    if (chips) h += '<div class="chips">' + chips + "</div>";
+
+    // trilha real do banco
+    if (e.trilha && e.trilha.length) {
+      h += '<div class="tri">' + e.trilha.map(function (p, k) {
+        return (k ? '<span class="tri__seta">' + ico("seta") + "</span>" : "") +
+          '<span class="tri__p">' + avatar(p.quem, "xs") + "<b>" +
+          esc(String(p.quem).split(" ")[0]) + "</b> " + esc(p.oque) +
+          (p.quando ? " · " + esc(dataCurta(p.quando)) : "") + "</span>";
+      }).join("") + "</div>";
+    }
+
+    // o que falta
+    if (pr === "papel" || pr === "assinatura") {
+      h += '<div class="falta"' + '>' + ico("alerta") + "<span>Falta <b>" +
+        esc(e.papel ? e.papel.nome : "o papel") + "</b> deste acontecimento</span>" +
+        '<button type="button" data-papel="' + esc(e.id) + '">Anexar no Arquivo</button></div>';
+    } else if (meu.papel[e.id]) {
+      h += '<div class="falta falta--ok">' + ico("check") +
+        "<span><b>Papel anexado</b> — já está no Arquivo, na pasta do equipamento</span></div>";
+    } else if (pr) {
+      h += '<div class="falta">' + ico("alerta") + "<span>" +
+        esc(PRECISA[pr].rot.charAt(0).toUpperCase() + PRECISA[pr].rot.slice(1)) +
+        (e.dias != null ? " · " + esc(faz(e.dias)) : "") + "</span></div>";
+    }
+
+    if (cuido) {
+      h += '<div class="cuid"><span class="pilha">' + avatar(est.eu, "sm") +
+        "</span>Você está cuidando disso</div>";
+    }
+    h += "</div>";
+
+    // barra de acao
+    var n = nComent(e.id);
+    h += '<div class="pa">' +
+      '<button type="button" class="ab" data-th="' + esc(e.id) + '">' + ico("balao") +
+      'Comentar' + (n ? ' <span class="ab__n">' + n + "</span>" : "") + "</button>" +
+      '<button type="button" class="ab" data-cam="' + esc(e.id) + '" ' +
+      'title="anexar foto do serviço">' + ico("camera") + "Foto" +
+      (fts.length ? ' <span class="ab__n">' + fts.length + "</span>" : "") + "</button>" +
+      '<button type="button" class="ab' + (cuido ? " ab--on" : "") + '" data-cuidar="' +
+      esc(e.id) + '" aria-pressed="' + cuido + '">' + ico("mao") +
+      (cuido ? "Cuidando" : "Eu cuido disso") + "</button>" +
+      '<button type="button" class="ab" data-seguir="' + esc(e.id) +
+      '" aria-pressed="' + !!meu.seguindo[e.id] + '">' + ico(meu.seguindo[e.id] ? "sino" : "olho") +
+      (meu.seguindo[e.id] ? "Acompanhando" : "Acompanhar") + "</button>" +
+      '<span class="pa__sp"></span>' +
+      /* "Abrir no sistema" e' um LINK, nao um botao.
+       *
+       * Era `<button data-ir=…>` com um `click` que trocava o rotulo por
+       * "abre /parque/tabela-pecas/" por 1,6 s e NAO navegava — um esboco que
+       * ficou pela metade. Quem clicava via o texto mudar e concluia que a tela
+       * certa nao abria (relatado pelo Jonas em 21/09/2026).
+       *
+       * Como `<a href>`, o navegador faz tudo de graca e melhor do que o JS
+       * fazia: clique navega, Ctrl/Cmd e botao do meio abrem noutra aba, botao
+       * direito oferece "abrir em nova aba", o foco por teclado entra na ordem
+       * e o leitor de tela anuncia como link. Sem `href` nao ha link: evento
+       * sem URL nao vira um clique que nao leva a lugar nenhum. */
+      (e.url
+        ? '<a class="ab ab--ir" href="' + esc(e.url) + '">' + ico("fora") +
+          "Abrir no sistema</a>"
+        : "") + "</div>";
+
+    // thread
+    h += '<div class="th' + (est.abertos[e.id] ? " th--ab" : "") + '" data-thread="' +
+      esc(e.id) + '"><div class="th__in"><div class="th__b">' +
+      threadHtml(e) + "</div></div></div>";
+
+    return h + "</article>";
+  }
+
+  function marcarMencoes(t) {
+    var s = esc(t);
+    D.pessoas.forEach(function (p) {
+      s = s.split("@" + esc(p.nome)).join("<mark>@" + esc(p.nome) + "</mark>");
+    });
+    // O @all tambem acende — e' o que avisa quem escreveu que chamou geral.
+    ["@all", "@todos"].forEach(function (a) {
+      s = s.split(a).join('<mark class="mk--all">' + a + "</mark>");
+    });
+    return s;
+  }
+
+  function threadHtml(e) {
+    var cs = comentarios(e.id);
+    var h = "";
+    if (!cs.length) {
+      h += '<p class="vazio">Nenhum comentário ainda. Escreva o primeiro — ' +
+        "quem acompanha este acontecimento recebe.</p>";
+    }
+    cs.forEach(function (c, k) {
+      var eu = chave(c.quem) === chave(est.eu);
+      h += '<div class="cm' + (eu ? " cm--eu" : "") + (c.novo ? " cm--novo" : "") +
+        '" style="animation-delay:' + (k * 60) + 'ms">' + avatar(c.quem, "sm") +
+        '<div class="cm__b"><div class="cm__q">' + esc(c.quem) +
+        (c.ex ? '<span class="selo">exemplo</span>' : "") +
+        '<em>' + esc(c.quando === "exemplo" ? "conversa de exemplo" : c.quando) + "</em>" +
+        // `c.meu` vem do servidor. Nao uso o `eu` daqui de cima, que compara
+        // NOME — dois "Daniel" no sistema e um apagaria o comentario do outro
+        // (o servidor recusaria, mas a tela nao deve nem oferecer).
+        (c.meu && c.id
+          ? '<button type="button" class="cm__x" data-apagarc="' + c.id +
+            '" title="Apagar meu comentário" aria-label="Apagar meu comentário">✕</button>'
+          : "") + "</div>" +
+        '<div class="cm__t">' + marcarMencoes(c.texto) + "</div></div></div>";
+    });
+    h += '<div class="esc" data-esc="' + esc(e.id) + '">' + avatar(est.eu, "sm") +
+      '<div class="esc__c"><textarea rows="1" placeholder="Escreva um comentário… ' +
+      'use @ para chamar alguém"></textarea>' +
+      '<button type="button" class="esc__anx" title="anexar o papel deste evento">' +
+      ico("clipe") + "</button>" +
+      '<button type="button" class="esc__b" title="enviar">' + ico("envia") +
+      "</button></div></div>" +
+      '<p class="dica">Enter envia · Shift+Enter pula linha' +
+      (e.papel && !temPapel(e) ? " · o clipe manda o arquivo direto para o Arquivo" : "") +
+      "</p>";
+    return h;
+  }
+
+  /* A tira de paginas. Segue o Google: primeira e ultima sempre visiveis, uma
+     janela em volta da atual, e reticencias no lugar do que foi pulado. Com 10
+     paginas ou menos mostra todas — reticencia so' aparece quando poupa espaco
+     de verdade. */
+  function paginador(total, quantos) {
+    if (total <= 1) {
+      return quantos > POR_PAGINA
+        ? '<p class="fim">' + quantos + " posts neste filtro</p>" : "";
+    }
+    var a = est.pag;
+    var nums = [];
+    if (total <= 10) {
+      for (var i = 1; i <= total; i++) nums.push(i);
+    } else {
+      var perto = [a - 2, a - 1, a, a + 1, a + 2].filter(function (n) {
+        return n > 1 && n < total;
+      });
+      nums = [1].concat(perto, [total]);
+    }
+
+    var h = '<nav class="pgr" aria-label="Páginas do mural">';
+    h += '<button type="button" class="pgr__b" data-pagina="' + (a - 1) + '"' +
+      (a === 1 ? " disabled" : "") + ' aria-label="Página anterior">' +
+      ico("volta") + "<span>anterior</span></button>";
+
+    var ultimo = 0;
+    nums.forEach(function (n) {
+      if (n - ultimo > 1) h += '<span class="pgr__e">…</span>';
+      ultimo = n;
+      h += n === a
+        ? '<span class="pgr__aqui" aria-current="page">' + n + "</span>"
+        : '<button type="button" class="pgr__b" data-pagina="' + n +
+          '" aria-label="Página ' + n + '">' + n + "</button>";
+    });
+
+    h += '<button type="button" class="pgr__b" data-pagina="' + (a + 1) + '"' +
+      (a === total ? " disabled" : "") + ' aria-label="Próxima página">' +
+      "<span>próxima</span>" + ico("seta") + "</button>";
+    h += '<p class="pgr__c">página ' + a + " de " + total + " · " + quantos +
+      " posts neste filtro</p>";
+    return h + "</nav>";
+  }
+
+  function pintarFeed() {
+    if (est.vista === "logs") { pintarLogs(); return; }
+
+    var brutos = visiveis();
+    var evs = agrupar(brutos);
+    var alvo = document.getElementById("feed");
+    document.getElementById("conta").innerHTML =
+      "<b>" + evs.length + "</b> no feed" +
+      (function () {
+        var n = evs.reduce(function (s, e) { return s + (e.lote || 1); }, 0);
+        return n > evs.length ? " · " + n + " eventos agrupados" : "";
+      })() +
+      (est.quem ? " · de " + esc(est.quem) : "") +
+      (est.maquina ? " · da máquina " + esc(est.maquina) : "") +
+      (est.loja ? " · em " + esc(est.loja) : "");
+
+    if (!evs.length) {
+      alvo.innerHTML = '<div class="post"><div class="pb" style="padding:32px 24px;' +
+        'text-align:center"><h2 class="pb__t">Nada com esse filtro</h2>' +
+        '<p class="fala" style="border:0;padding-left:0;justify-self:center">' +
+        "Tire um filtro e o mural volta.</p></div></div>";
+      return;
+    }
+    // UMA PAGINA POR VEZ. Com os 117 posts de uma vez a pagina passava de
+    // 38.000px no PC e 51.000px no celular — feed nenhum funciona assim.
+    var total = Math.max(1, Math.ceil(evs.length / POR_PAGINA));
+    if (est.pag > total) est.pag = total;      // filtrou e a pagina sumiu
+    if (est.pag < 1) est.pag = 1;
+    var ini = (est.pag - 1) * POR_PAGINA;
+    var pag = evs.slice(ini, ini + POR_PAGINA);
+
+    alvo.innerHTML = '<div class="feed">' + pag.map(cartao).join("") +
+      paginador(total, evs.length) + "</div>";
+    ligarFeed(pag);
+
+    Array.prototype.forEach.call(alvo.querySelectorAll("[data-pagina]"),
+      function (b) {
+        b.addEventListener("click", function () {
+          est.pag = +b.getAttribute("data-pagina");
+          pintarFeed();
+          // volta para o alto da lista, como qualquer paginacao faz — senao a
+          // pessoa troca de pagina e continua olhando o rodape da anterior.
+          var t = document.getElementById("mu-feed") || alvo;
+          var y = t.getBoundingClientRect().top + window.pageYOffset - 90;
+          window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+        });
+      });
+    // anel de envelhecimento: sai de vazio e cresce, para o olho ver a idade
+    requestAnimationFrame(function () {
+      Array.prototype.forEach.call(alvo.querySelectorAll(".anel .fr"), function (c) {
+        c.style.strokeDashoffset = c.getAttribute("data-off");
+      });
+    });
+  }
+
+  function achar(id) {
+    var r = null;
+    D.eventos.forEach(function (e) { if (e.id === id) r = e; });
+    return r;
+  }
+
+  function ligarFeed(evs) {
+    var raiz = document.getElementById("feed");
+
+    // Clique no chip da maquina: vai para o mapa e abre o painel dela.
+    // Segurando Ctrl/Cmd (ou clique do meio) o navegador abre noutra aba,
+    // como em qualquer link — por isso o teste de `metaKey`.
+    Array.prototype.forEach.call(raiz.querySelectorAll("[data-abrirmaq]"),
+      function (b) {
+        b.addEventListener("click", function (ev) {
+          var m = b.getAttribute("data-abrirmaq");
+          var url = "/parque/mapa-completo/?patrimonio=" + encodeURIComponent(m);
+          if (ev.ctrlKey || ev.metaKey || ev.button === 1) {
+            window.open(url, "_blank", "noopener");
+          } else {
+            window.location.href = url;
+          }
+        });
+      });
+    Array.prototype.forEach.call(raiz.querySelectorAll("[data-sobre]"), function (b) {
+      b.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var alvo = achar(b.getAttribute("data-sobre"));
+        if (!alvo) { avisar("O registro citado não está mais no feed."); return; }
+        // Leva ao registro: filtra pela máquina dele quando tem, senão pelo
+        // título — nos dois casos o card aparece no topo.
+        est.busca = alvo.maquina || alvo.titulo.slice(0, 40);
+        document.getElementById("q").value = est.busca;
+        est.pag = 1;
+        tudo();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    });
+    Array.prototype.forEach.call(raiz.querySelectorAll("[data-tema]"), function (b) {
+      b.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var t = b.getAttribute("data-tema");
+        est.tema = est.tema === t ? "" : t;
+        est.pag = 1;
+        tudo();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    });
+    Array.prototype.forEach.call(raiz.querySelectorAll("[data-expand]"), function (b) {
+      b.addEventListener("click", function () {
+        est.expand[b.getAttribute("data-expand")] = true; pintarFeed();
+      });
+    });
+    /* O handler de [data-ir] saiu: "Abrir no sistema" virou `<a href>` e quem
+     * navega agora e' o navegador. O que estava aqui trocava o rotulo pelo
+     * endereco e voltava atras em 1,6 s, sem nunca sair da pagina. */
+
+    // ---- o menu ⋯: editar / apagar a propria publicacao
+    Array.prototype.forEach.call(raiz.querySelectorAll("[data-mais]"), function (caixa) {
+      var bt = caixa.querySelector("button");
+      bt.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var velho = caixa.querySelector(".menu");
+        fecharMenus();
+        if (velho) return;
+        var id = caixa.getAttribute("data-mais");
+        var m = document.createElement("div");
+        m.className = "menu";
+        m.innerHTML =
+          '<button type="button" data-editar="' + esc(id) + '">' + ico("lapis") +
+          "Editar</button>" +
+          '<button type="button" class="perigo" data-apagar="' + esc(id) + '">' +
+          ico("lixo") + "Apagar</button>";
+        caixa.appendChild(m);
+        m.querySelector("[data-editar]").addEventListener("click", function () {
+          fecharMenus();
+          est.editando = id;
+          pintarFeed();
+        });
+        m.querySelector("[data-apagar]").addEventListener("click", function () {
+          fecharMenus();
+          apagarPublicacao(id);
+        });
+      });
+    });
+
+    // ---- a area de edicao
+    Array.prototype.forEach.call(raiz.querySelectorAll("[data-ed]"), function (caixa) {
+      var id = caixa.getAttribute("data-ed");
+      var ta = caixa.querySelector("textarea");
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+      ta.addEventListener("input", function () { mencionar(ta, caixa); });
+      ta.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape") { est.editando = null; pintarFeed(); }
+        if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) salvar();
+      });
+      caixa.querySelector("[data-edx]").addEventListener("click", function () {
+        est.editando = null; pintarFeed();
+      });
+      caixa.querySelector("[data-edok]").addEventListener("click", salvar);
+      var bm = caixa.querySelector("[data-edmaq]");
+      bm.addEventListener("click", function () {
+        var e = achar(id);
+        if (e.maquina) { e.maquina = ""; pintarFeed(); return; }
+        escolherMaquina(function (mq) {
+          var ev2 = achar(id);
+          if (ev2) ev2.maquina = mq;
+          pintarFeed();
+        });
+      });
+      function salvar() {
+        var txt = ta.value.trim();
+        if (!txt) { avisar("Escreva o texto."); return; }
+        salvarPublicacao(id, txt);
+      }
+    });
+
+    // ---- foto: anexa e abre grande
+    Array.prototype.forEach.call(raiz.querySelectorAll("[data-cam]"), function (b) {
+      b.addEventListener("click", function () {
+        // Abre o seletor de arquivo do sistema. A foto sobe como comentário
+        // com foto — e NÃO resolve o papel: foto de serviço não é protocolo
+        // assinado. Quem fecha a pendência é o clipe, que manda para o Arquivo.
+        if (!D.pode_comentar) { avisar("Você não tem permissão para comentar."); return; }
+        est.foco = b.getAttribute("data-cam");
+        var inp = document.getElementById("mu-foto");
+        inp.value = "";
+        inp.click();
+      });
+    });
+    Array.prototype.forEach.call(raiz.querySelectorAll("[data-foto]"), function (b) {
+      b.addEventListener("click", function () {
+        var parte = b.getAttribute("data-foto").split("|");
+        var f = fotosDe(parte[0])[+parte[1]];
+        if (f) abrirFoto(f);
+      });
+    });
+
+    // ---- comentar: abre/fecha a thread
+    Array.prototype.forEach.call(raiz.querySelectorAll("[data-th]"), function (b) {
+      b.addEventListener("click", function () {
+        var id = b.getAttribute("data-th");
+        est.abertos[id] = !est.abertos[id];
+        var th = raiz.querySelector('[data-thread="' + id + '"]');
+        if (th) th.classList.toggle("th--ab", !!est.abertos[id]);
+        if (est.abertos[id] && th) {
+          var ta = th.querySelector("textarea");
+          if (ta) setTimeout(function () { ta.focus(); }, 260);
+        }
+      });
+    });
+
+    // ---- eu cuido disso
+    Array.prototype.forEach.call(raiz.querySelectorAll("[data-cuidar]"), function (b) {
+      b.addEventListener("click", function () {
+        // Um caminho só, para os dois sentidos. Quem decide se ligou ou
+        // desligou é o servidor (`d.ligado`), não a tela — era aqui que se
+        // chamava `marcarNoServidor`, que nunca existiu.
+        var id = b.getAttribute("data-cuidar");
+        pedir(URL_MARCAR, { chave: id, marca: "assumido" }, null, function (d) {
+          if (d.ligado) {
+            meu.cuidando[id] = est.eu;
+            // assumir também faz acompanhar — o servidor cria a marca junto
+            meu.seguindo[id] = true;
+          } else {
+            delete meu.cuidando[id];
+          }
+          tudo();
+        });
+      });
+    });
+
+    // ---- acompanhar
+    // ---- apagar a propria foto (que e' um comentario com imagem)
+    Array.prototype.forEach.call(raiz.querySelectorAll("[data-apagarfoto]"),
+      function (b) {
+        b.addEventListener("click", function (ev) {
+          // a foto inteira e' clicavel (abre grande); sem isto o clique no ✕
+          // tambem abriria a foto
+          ev.stopPropagation();
+          var cid = b.getAttribute("data-apagarfoto");
+          if (!window.confirm("Apagar esta foto? Não dá para desfazer.")) return;
+          pedir(URL_APAGAR_COMENT, { id: cid }, null, function () {
+            Object.keys(meu.fotos).forEach(function (k) {
+              meu.fotos[k] = (meu.fotos[k] || []).filter(function (f) {
+                return String(f.id) !== String(cid);
+              });
+            });
+            avisar("Foto apagada.");
+            tudo();
+          });
+        });
+      });
+
+    // ---- apagar o proprio comentario
+    Array.prototype.forEach.call(raiz.querySelectorAll("[data-apagarc]"),
+      function (b) {
+        b.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          var cid = b.getAttribute("data-apagarc");
+          if (!window.confirm("Apagar seu comentário? Não dá para desfazer.")) return;
+          pedir(URL_APAGAR_COMENT, { id: cid }, null, function () {
+            Object.keys(meu.coment).forEach(function (k) {
+              meu.coment[k] = (meu.coment[k] || []).filter(function (c) {
+                return String(c.id) !== String(cid);
+              });
+            });
+            avisar("Comentário apagado.");
+            tudo();
+          });
+        });
+      });
+
+    Array.prototype.forEach.call(raiz.querySelectorAll("[data-seguir]"), function (b) {
+      b.addEventListener("click", function () {
+        var id = b.getAttribute("data-seguir");
+        pedir(URL_MARCAR, { chave: id, marca: "seguindo" }, null, function (d) {
+          if (d.ligado) { meu.seguindo[id] = true; } else { delete meu.seguindo[id]; }
+          var on = !!meu.seguindo[id];
+          b.setAttribute("aria-pressed", String(on));
+          b.innerHTML = ico(on ? "sino" : "olho") + (on ? "Acompanhando" : "Acompanhar");
+          b.classList.toggle("ab--sino", on);
+          if (on) setTimeout(function () { b.classList.remove("ab--sino"); }, 600);
+          pintarVistas(); pintarFiltros();
+        });
+      });
+    });
+
+    // ---- anexar o papel
+    Array.prototype.forEach.call(raiz.querySelectorAll("[data-papel]"), function (b) {
+      b.addEventListener("click", function () {
+        if (!D.pode_anexar) { avisar("Você não tem permissão para anexar no Arquivo."); return; }
+        est.foco = b.getAttribute("data-papel");
+        var pin = document.getElementById("mu-papel");
+        pin.value = ""; pin.click();
+      });
+    });
+
+    // ---- escrever comentario (com @mencao)
+    Array.prototype.forEach.call(raiz.querySelectorAll("[data-esc]"), function (caixa) {
+      var id = caixa.getAttribute("data-esc");
+      var ta = caixa.querySelector("textarea");
+      var bt = caixa.querySelector(".esc__b");
+      var anx = caixa.querySelector(".esc__anx");
+      var pop = null;
+
+      function fecharPop() {
+        if (pop) { pop.remove(); pop = null; }
+      }
+      function abrirPop(frag) {
+        fecharPop();
+        // SÓ existe menção depois de um "@". Sem esta guarda, quem chamava
+        // passava `undefined`, `!frag` era verdadeiro, o filtro devolvia TODO
+        // MUNDO e qualquer tecla abria a lista de pessoas — e como o popup
+        // sobe (`bottom: 100%`), ele ainda tapava os comentários de cima.
+        if (!frag && frag !== "") return;
+        var achados = D.pessoas.filter(function (p) {
+          return !frag || chave(p.nome).indexOf(chave(frag)) === 0;
+        }).slice(0, 5);
+        if (!achados.length) return;
+        pop = document.createElement("div");
+        pop.className = "mens";
+        pop.innerHTML = achados.map(function (p) {
+          return '<button type="button" data-men="' + esc(p.nome) + '">' +
+            avatar(p.nome, "xs") + esc(p.nome) + "</button>";
+        }).join("");
+        // Ancora o popup NESTA caixa. Sem isto ele se pendurava no primeiro
+        // ancestral posicionado — o card do post — e abria por cima da conversa.
+        caixa.style.position = "relative";
+        caixa.appendChild(pop);
+        Array.prototype.forEach.call(pop.querySelectorAll("[data-men]"), function (mb) {
+          mb.addEventListener("mousedown", function (ev) {
+            ev.preventDefault();
+            var nome = mb.getAttribute("data-men");
+            // Troca o fragmento que está ANTES do cursor, não o fim do texto:
+            // quem volta para corrigir uma menção no meio da frase escrevia o
+            // nome no lugar errado.
+            var corte = ta.selectionStart;
+            ta.value = ta.value.slice(0, corte).replace(/@([^@\s]*)$/, "@" + nome + " ") +
+                       ta.value.slice(corte);
+            fecharPop(); ta.focus(); vivo();
+          });
+        });
+      }
+      function vivo() {
+        bt.classList.toggle("esc__b--vivo", ta.value.trim().length > 0);
+        ta.style.height = "auto";
+        ta.style.height = Math.min(132, ta.scrollHeight) + "px";
+      }
+      function enviar() {
+        var txt = ta.value.trim();
+        if (!txt) return;
+        if (!D.pode_comentar) { avisar("Você não tem permissão para comentar."); return; }
+        bt.disabled = true;
+        pedir(URL_COMENTAR, { chave: id, texto: txt }, null, function (d) {
+          bt.disabled = false;
+          (meu.coment[id] = meu.coment[id] || []).push(d.comentario);
+          meu.seguindo[id] = true;
+          ta.value = ""; vivo(); fecharPop();
+          var corpo = caixa.parentNode;
+          var bolha = document.createElement("div");
+          bolha.className = "cm cm--eu cm--novo cm--flash";
+          bolha.innerHTML = avatar(d.comentario.quem, "sm") +
+            '<div class="cm__b"><div class="cm__q">' + esc(d.comentario.quem) +
+            "<em>" + esc(d.comentario.quando) + "</em></div>" +
+            '<div class="cm__t">' + marcarMencoes(d.comentario.texto) + "</div></div>";
+          var vazio = corpo.querySelector(".vazio");
+          if (vazio) vazio.remove();
+          corpo.insertBefore(bolha, caixa);
+          setTimeout(function () { bolha.classList.remove("cm--flash"); }, 900);
+          var post = corpo.closest(".post");
+          var bc = post ? post.querySelector("[data-th]") : null;
+          if (bc) bc.innerHTML = ico("balao") + 'Comentar <span class="ab__n">' +
+            nComent(id) + "</span>";
+          pintarVistas(); pintarFiltros();
+        });
+        setTimeout(function () { bt.disabled = false; }, 6000);
+      }
+
+      ta.addEventListener("input", function () {
+        vivo();
+        // A lista de pessoas só aparece quando se está escrevendo uma menção:
+        // um "@" antes do cursor, sem espaço no meio.
+        var m = /@([^@\s]*)$/.exec(ta.value.slice(0, ta.selectionStart));
+        if (m) abrirPop(m[1]); else fecharPop();
+      });
+      ta.addEventListener("blur", function () { setTimeout(fecharPop, 120); });
+      ta.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); enviar(); }
+        if (ev.key === "Escape") fecharPop();
+      });
+      bt.addEventListener("click", enviar);
+      anx.addEventListener("click", function () {
+        // O clipe manda o PAPEL para o Arquivo quando o evento tem papel
+        // pendente; se não tem, é foto do serviço.
+        var e = achar(id);
+        est.foco = id;
+        if (e && e.papel && !temPapel(e)) {
+          if (!D.pode_anexar) { avisar("Você não tem permissão para anexar no Arquivo."); return; }
+          var pin = document.getElementById("mu-papel");
+          pin.value = ""; pin.click();
+        } else {
+          if (!D.pode_comentar) { avisar("Você não tem permissão para comentar."); return; }
+          var fin = document.getElementById("mu-foto");
+          fin.value = ""; fin.click();
+        }
+      });
+    });
+  }
+
+  // ------------------------------------------------------------ foto grande
+  function abrirFoto(f) {
+    var lb = document.createElement("div");
+    lb.className = "lb";
+    lb.setAttribute("role", "dialog");
+    lb.setAttribute("aria-label", f.leg);
+    lb.innerHTML = '<div class="lb__c"><div class="lb__i">' + tileFoto(f) +
+      '</div><div class="lb__t">' +
+      avatar(f.quem, "sm") + "<div><b>" + esc(f.leg) + "</b><em>" +
+      esc(f.quem) + " · " + esc(f.quando) + '</em></div>' +
+      '<a class="lb__b" href="' + esc(f.url) + '" target="_blank" rel="noopener">' +
+      "abrir o arquivo</a>" +
+      '<button type="button" class="lb__x" aria-label="fechar">✕</button>' +
+      "</div></div>";
+    function fechar() {
+      lb.remove();
+      document.removeEventListener("keydown", tecla);
+    }
+    function tecla(ev) { if (ev.key === "Escape") fechar(); }
+    lb.addEventListener("click", function (ev) {
+      if (ev.target === lb || ev.target.closest(".lb__x")) fechar();
+    });
+    document.addEventListener("keydown", tecla);
+    document.body.appendChild(lb);
+    var x = lb.querySelector(".lb__x");
+    if (x) x.focus();
+  }
+
+  // ------------------------------------------------------- presenca (online)
+  // Isto substitui o item de menu "Usuários online". Um pontinho verde/cinza
+  // nao servia: com 13 pessoas, ninguem estava dentro dos 5 minutos que
+  // definem "online" — entao o anel mostra a FAIXA (agora / hoje / semana /
+  // sumido) e o texto diz quem passou por ultimo e quando.
+  var FAIXA = { agora: "agora", hoje: "hoje", semana: "esta semana",
+                sumido: "sumido", nunca: "nunca entrou" };
+  function tempoDe(mins) {
+    if (mins == null) return "nunca entrou";
+    if (mins < 2) return "agora mesmo";
+    if (mins < 60) return "há " + mins + " min";
+    var h = Math.round(mins / 60);
+    if (h < 36) return "há " + h + " h";
+    return "há " + Math.round(h / 24) + " dias";
+  }
+  function presencaAgora() {
+    // Quem esta olhando a tela ESTA online — o resto vem do banco.
+    return D.presenca.map(function (p) {
+      if (chave(p.nome) === chave(est.eu)) {
+        return Object.assign({}, p, { faixa: "agora", mins: 0, eu: true });
+      }
+      return p;
+    }).sort(function (a, b) {
+      var o = { agora: 0, hoje: 1, semana: 2, sumido: 3, nunca: 4 };
+      if (o[a.faixa] !== o[b.faixa]) return o[a.faixa] - o[b.faixa];
+      return (a.mins == null ? 1e9 : a.mins) - (b.mins == null ? 1e9 : b.mins);
+    });
+  }
+  function pintarPresenca() {
+    var ps = presencaAgora();
+    var cont = {};
+    ps.forEach(function (p) { cont[p.faixa] = (cont[p.faixa] || 0) + 1; });
+    var ultimo = ps.filter(function (p) { return !p.eu && p.mins != null; })[0];
+
+    var TETO = 8;
+    var bolas = ps.slice(0, TETO).map(function (p, i) {
+      return '<button type="button" class="pp pp--' + p.faixa + '" data-quem="' +
+        esc(p.nome) + '"' +
+        (chave(est.quem) === chave(p.nome) ? ' aria-pressed="true"' : ' aria-pressed="false"') +
+        ' title="' + esc(p.nome) + " — " + esc(p.eu ? "é você, agora" : tempoDe(p.mins)) +
+        (p.ip ? " · " + esc(p.ip) : "") + '" style="animation-delay:' + (i * 35) + 'ms">' +
+        avatar(p.nome) + (p.su ? '<span class="pp__su" title="superusuário">★</span>' : "") +
+        "</button>";
+    }).join("");
+
+    document.getElementById("pres").innerHTML =
+      '<div class="pres__l">' + bolas +
+      (ps.length > TETO ? '<button type="button" class="pp pp--mais" ' +
+        'data-vista="gente" title="ver todos">+' + (ps.length - TETO) +
+        "</button>" : "") + "</div>" +
+      '<p class="pres__r"><b>' + (cont.agora || 0) + " no sistema agora</b>" +
+      ((cont.hoje || 0) ? " · " + cont.hoje +
+        (cont.hoje === 1 ? " passou hoje" : " passaram hoje") : "") +
+      " · " + ps.length + " com acesso</p>";
+
+    Array.prototype.forEach.call(document.querySelectorAll("#pres [data-quem]"), function (b) {
+      b.addEventListener("click", function () {
+        var v = b.getAttribute("data-quem");
+        est.quem = chave(est.quem) === chave(v) ? "" : v;
+        est.vista = "mural";
+        est.pag = 1;
+        tudo();
+      });
+    });
+  }
+
+  // ------------------------------------------------ logs (acessos e acoes)
+  // Substitui o item de menu "Logs". O volume nao e' a noticia: 976 acessos e
+  // 456 acoes nao dizem nada. O que importa e' 167 falhas de senha, 47
+  // exclusoes e 61 mexidas em usuario/grupo — por isso vao em KPI clicavel.
+  function logsVisiveis() {
+    var q = est.busca.trim().toLowerCase();
+    return D.logs.filter(function (x) {
+      if (est.lane && x.lane !== est.lane) return false;
+      if (est.logSens && !x.sens) return false;
+      // Um intervalo, duas comparacoes. As datas sao ISO (2026-09-14), e
+      // string ISO se compara em ordem alfabetica igual a data — por isso
+      // nao precisa converter nada.
+      if (est.logDe && x.quando < est.logDe) return false;
+      if (est.logAte && x.quando > est.logAte) return false;
+      if (est.quem && chave(x.quem) !== chave(est.quem)) return false;
+      if (q && [x.quem, x.oque, x.alvo, x.ip].join(" ").toLowerCase().indexOf(q) < 0) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  // -------------------------------------------------- a escolha do periodo
+  // Dois niveis na MESMA fileira: primeiro os atalhos e os meses; clicando
+  // num mes, os dias daquele mes que tem registro. Cada chip traz a
+  // contagem, que e' a informacao que a barra de 4px escondia.
+  function contaLogs(teste) {
+    return D.logs.reduce(function (n, x) { return n + (teste(x) ? 1 : 0); }, 0);
+  }
+
+  function diasAtras(n) {
+    var d = new Date(D.hoje + "T00:00:00");
+    d.setDate(d.getDate() - n);
+    return d.toISOString().slice(0, 10);
+  }
+
+  /* DE ... ATE, com o calendario do proprio sistema operacional
+     (`<input type="date">`) — o mesmo idioma do _filtros.html, que e' o filtro
+     compartilhado de 20 telas daqui.
+
+     Os atalhos so' PREENCHEM as duas datas; nao existe um segundo mecanismo de
+     periodo. E sao todos relativos a hoje de proposito: atalho absoluto (o chip
+     "set/26") envelhece e se acumula — era a queixa dele, e estava certa. */
+  function rotuloIntervalo() {
+    if (!est.logDe && !est.logAte) return "qualquer data";
+    if (est.logDe && est.logAte) {
+      return est.logDe === est.logAte
+        ? dataCurta(est.logDe)
+        : dataCurta(est.logDe) + " a " + dataCurta(est.logAte);
+    }
+    return est.logDe ? "desde " + dataCurta(est.logDe)
+                     : "até " + dataCurta(est.logAte);
+  }
+
+  /* O calendario e' O DA CASA (`[data-mkcal]`, montado pelo make-admin.js) —
+     o mesmo do popup de filtros das outras 20 telas. Ele desenha a grade do
+     mes e escreve nos dois <input> abaixo, que sao quem guarda o valor; por
+     isso o <form> em volta, que e' onde ele os procura (`host.closest`). */
+  function escolhaDePeriodo() {
+    function atalho(id, rot, de, ate) {
+      var n = contaLogs(function (x) {
+        return (!de || x.quando >= de) && (!ate || x.quando <= ate);
+      });
+      var ligado = est.logDe === (de || "") && est.logAte === (ate || "");
+      return '<button type="button" data-atalho="' + id + '"' +
+        (ligado ? ' aria-pressed="true"' : "") + ">" + rot +
+        " <b>" + n + "</b></button>";
+    }
+
+    var h = '<div class="per">';
+    h += '<button type="button" class="per__cal" data-calabrir' +
+      (est.calAberto ? ' aria-expanded="true"' : ' aria-expanded="false"') + ">" +
+      ico("event_repeat") + "<span>" + esc(rotuloIntervalo()) + "</span>" +
+      ico("chevron") + "</button>";
+    h += atalho("hoje", "hoje", D.hoje, D.hoje);
+    h += atalho("7d", "7 dias", diasAtras(6), D.hoje);
+    h += atalho("30d", "30 dias", diasAtras(29), D.hoje);
+    h += '<span class="per__sp"></span>';
+    h += '<button type="button" class="per__limpa" data-limpatudo' +
+      (filtroLimpo() ? " disabled" : "") + ">" + ico("fora") + "Limpar filtros</button>";
+
+    if (est.calAberto) {
+      h += '<form class="per__pan" onsubmit="return false">' +
+        '<div class="mkcal" data-mkcal data-desde="' + esc(est.logDe) +
+        '" data-ate="' + esc(est.logAte) + '" data-hoje="' + esc(D.hoje) + '"></div>' +
+        '<input type="hidden" name="vence_desde" value="' + esc(est.logDe) + '">' +
+        '<input type="hidden" name="vence_ate" value="' + esc(est.logAte) + '">' +
+        "</form>";
+    }
+    return h + "</div>";
+  }
+
+  /* Tudo limpo? Serve para desligar o botao de limpar — botao que nao faz nada
+     nao deve parecer clicavel. */
+  function filtroLimpo() {
+    return !est.lane && !est.logSens && !est.logDe && !est.logAte &&
+           !est.busca.trim() && !est.quem;
+  }
+
+
+  function pintarLogs() {
+    var R = D.log_resumo;
+    // So' os que os botoes de cima NAO alcancam. "Entradas e saidas" e
+    // "acoes feitas" saíram: faziam exatamente o mesmo que "So' acessos" e
+    // "So' acoes", na mesma linha de codigo. O numero deles foi para dentro do
+    // proprio botao, onde informacao e acao passam a morar juntas.
+    var kpis = [
+      { id: "falha", n: R.falhas, rot: "erros de senha no login", cls: "kpi--av" },
+      { id: "excl", n: R.exclusoes, rot: "registros apagados", cls: "kpi--al" },
+      { id: "perm", n: R.permissao, rot: "mexidas em usuário ou grupo", cls: "kpi--av" }
+    ];
+    var dias = Object.keys(D.log_dias).sort();
+    var pico = Math.max.apply(null, dias.map(function (d) { return D.log_dias[d]; }));
+
+    var h = '<div class="feed">';
+    h += '<div class="trava">' + ico("trava") +
+      "<span><b>Esta aba respeita o acesso que a tela <i>/logs/</i> já tinha.</b> " +
+      "Quem não podia ver log de acesso continua sem ver — o mural não abre porta " +
+      "nova. Técnico e estagiário nem enxergam esta aba.</span></div>";
+
+    h += '<div class="logh"><div class="kpis">' + kpis.map(function (k) {
+      var on = (k.id === "falha" && est.logSens && est.lane === "acesso") ||
+               (k.id === "perm" && est.logSens && est.lane === "acao");
+      return '<button type="button" class="kpi ' + k.cls + '" data-kpi="' + k.id + '"' +
+        (on ? ' aria-pressed="true"' : ' aria-pressed="false"') + "><b>" + k.n +
+        "</b><em>" + esc(k.rot) + "</em></button>";
+    }).join("") + "</div>";
+
+    h += escolhaDePeriodo();
+
+    // Os numeros que estavam nos dois quadradinhos apagados vivem aqui agora.
+    var nTudo = contaLogs(function () { return true; });
+    var nAcesso = contaLogs(function (x) { return x.lane === "acesso"; });
+    var nAcao = contaLogs(function (x) { return x.lane === "acao"; });
+    var nSens = contaLogs(function (x) { return x.sens; });
+    h += '<div class="lgt">' +
+      ['<button type="button" data-lane="" aria-pressed="' + (!est.lane && !est.logSens) +
+       '">Tudo <b>' + nTudo + '</b></button>',
+       '<button type="button" data-lane="acesso" aria-pressed="' +
+       (est.lane === "acesso") + '">Só acessos <b>' + nAcesso + '</b></button>',
+       '<button type="button" data-lane="acao" aria-pressed="' +
+       (est.lane === "acao") + '">Só ações <b>' + nAcao + '</b></button>',
+       '<button type="button" data-sens="1" aria-pressed="' + est.logSens +
+       '">Só o que merece olho <b>' + nSens + '</b></button>'].join("") + "</div>" +
+      '<p class="lgn" id="log-conta"></p></div>';
+
+    var xs = logsVisiveis();
+    var mostra = xs.slice(0, est.logLim);
+    h += '<div class="lgl">' + (mostra.length ? mostra.map(function (x) {
+      return '<div class="lg lg--' + x.tom + '">' + avatar(x.quem, "sm") +
+        '<span class="lg__q">' + esc(x.quem) + "</span>" +
+        '<span class="lg__o">' + esc(x.oque) + "</span>" +
+        '<span class="lg__a">' + esc(x.alvo) + "</span>" +
+        (x.sens ? '<span class="lg__sel">' +
+          (x.lane === "acesso" ? "segurança" : "permissão") + "</span>" : "") +
+        (x.ip ? '<span class="lg__ip">' + esc(x.ip) + "</span>" : "") +
+        '<span class="lg__d">' + esc(dataCurta(x.quando)) + " · " + esc(x.hora) +
+        "</span></div>";
+    }).join("") : '<p class="vazio" style="padding:26px">Nenhum registro com esse filtro.</p>');
+    if (xs.length > est.logLim) {
+      h += '<button type="button" class="lgm" id="log-mais">ver mais ' +
+        Math.min(PAGINA_LOG, xs.length - est.logLim) + " de " + xs.length +
+        "</button>";
+    }
+    h += "</div></div>";
+
+    document.getElementById("feed").innerHTML = h;
+    // A contagem anda com a lista, nao no alto da tela.
+    document.getElementById("conta").innerHTML = "";
+    var lc = document.getElementById("log-conta");
+    if (lc) {
+      var quando = "";
+      if (est.logDe && est.logAte) {
+        quando = est.logDe === est.logAte
+          ? "em " + dataLonga(est.logDe)
+          : "de " + dataLonga(est.logDe) + " a " + dataLonga(est.logAte);
+      } else if (est.logDe) { quando = "desde " + dataLonga(est.logDe); }
+      else if (est.logAte) { quando = "até " + dataLonga(est.logAte); }
+      lc.innerHTML = "<b>" + xs.length + "</b> linha" + (xs.length === 1 ? "" : "s") +
+        (quando ? " " + esc(quando) : "") +
+        (est.quem ? " · de " + esc(est.quem) : "") +
+        (xs.length > est.logLim ? " · mostrando as " + est.logLim +
+                                  " mais recentes" : "");
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll("[data-kpi]"), function (b) {
+      b.addEventListener("click", function () {
+        var k = b.getAttribute("data-kpi");
+        est.logLim = PAGINA_LOG;
+        if (k === "acao") { est.lane = est.lane === "acao" ? "" : "acao"; est.logSens = false; }
+        else if (k === "") { est.lane = est.lane === "acesso" ? "" : "acesso"; est.logSens = false; }
+        else if (k === "falha") { est.logSens = !est.logSens; est.lane = "acesso"; }
+        else if (k === "excl") { est.lane = "acao"; est.logSens = false; est.busca = "apagou"; }
+        else if (k === "perm") { est.lane = "acao"; est.logSens = true; }
+        pintarLogs();
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-lane]"), function (b) {
+      b.addEventListener("click", function () {
+        est.lane = b.getAttribute("data-lane"); est.logSens = false;
+        est.logLim = PAGINA_LOG; pintarLogs();
+      });
+    });
+    var sb = document.querySelector("[data-sens]");
+    if (sb) sb.addEventListener("click", function () {
+      est.logSens = !est.logSens; est.logLim = PAGINA_LOG; pintarLogs();
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-atalho]"),
+      function (b) {
+        b.addEventListener("click", function () {
+          var v = b.getAttribute("data-atalho");
+          est.logLim = PAGINA_LOG;
+          if (v === "hoje") { est.logDe = D.hoje; est.logAte = D.hoje; }
+          else if (v === "7d") { est.logDe = diasAtras(6); est.logAte = D.hoje; }
+          else if (v === "30d") { est.logDe = diasAtras(29); est.logAte = D.hoje; }
+          pintarLogs();
+        });
+      });
+
+    var abreCal = document.querySelector("[data-calabrir]");
+    if (abreCal) {
+      abreCal.addEventListener("click", function () {
+        est.calAberto = !est.calAberto;
+        pintarLogs();
+      });
+    }
+
+    var limpaTudo = document.querySelector("[data-limpatudo]");
+    if (limpaTudo) {
+      limpaTudo.addEventListener("click", function () {
+        est.lane = ""; est.logSens = false;
+        est.logDe = ""; est.logAte = "";
+        est.busca = ""; est.quem = "";
+        var q = document.getElementById("q");
+        if (q) q.value = "";
+        est.logLim = PAGINA_LOG;
+        pintarLogs();
+      });
+    }
+
+    // O CALENDARIO DA CASA. Ele nao avisa quando muda — o popup de filtros
+    // tambem le' os campos depois do clique. O setTimeout(0) espera o
+    // componente escrever nos <input> antes de eu ler.
+    var host = document.querySelector(".per__pan [data-mkcal]");
+    if (host && window.mkMontarCalendario) {
+      window.mkMontarCalendario(host);
+
+      var slot = host.querySelector("[data-mkcal-slot]");
+      if (slot && !slot.children.length) {
+        var lp = document.createElement("button");
+        lp.type = "button";
+        lp.className = "mkfp__limpar-data";
+        lp.textContent = "Limpar data";
+        lp.disabled = !est.logDe && !est.logAte;
+        lp.addEventListener("click", function () {
+          if (host.mkCal) host.mkCal.limpar();
+          est.logDe = ""; est.logAte = "";
+          est.logLim = PAGINA_LOG;
+          pintarLogs();
+        });
+        slot.appendChild(lp);
+      }
+
+      host.addEventListener("click", function (ev) {
+        if (!ev.target.closest(".mkcal__d")) return;   // so' o clique num dia
+        setTimeout(function () {
+          var f = host.closest("form");
+          if (!f) return;
+          est.logDe = (f.querySelector('[name="vence_desde"]') || {}).value || "";
+          est.logAte = (f.querySelector('[name="vence_ate"]') || {}).value || "";
+          est.logLim = PAGINA_LOG;
+          pintarLogs();
+        }, 0);
+      });
+    }
+    var mais = document.getElementById("log-mais");
+    if (mais) mais.addEventListener("click", function () {
+      est.logLim += PAGINA_LOG; pintarLogs();
+    });
+  }
+
+  // ------------------------------------------------------------- a conversa
+  // A aba "Usuários" virou o chat. A lista traz TODO MUNDO com acesso, não
+  // só quem já falou: chat que só mostra quem te escreveu não serve para
+  // começar conversa.
+  function pintarConversas() {
+    var alvo = document.getElementById("feed");
+    var lista = (D.conversas || []).filter(function (c) {
+      var q = est.busca.trim();
+      return !q || chave(c.nome).indexOf(chave(q)) >= 0;
+    });
+
+    var h = '<div class="cv' + (est.conversaCom ? " cv--aberta" : "") + '">' +
+      '<div class="cv__l">' + (lista.length ? lista.map(function (c) {
+        return '<button type="button" class="cvp" data-cv="' + c.id + '"' +
+          (est.conversaCom === c.id ? ' aria-selected="true"' : "") + ">" +
+          '<span class="pp pp--' + c.faixa + '" style="animation:none">' +
+          avatar(c.nome) + (c.su ? '<span class="pp__su">★</span>' : "") +
+          "</span>" +
+          '<span class="cvp__t"><span class="cvp__n">' + esc(c.nome) + "</span>" +
+          '<span class="cvp__u">' + (c.ultima
+            ? (c.ultima_minha ? "você: " : "") + esc(c.ultima)
+            : "<em>" + esc(tempoDe(c.mins)) + "</em>") + "</span></span>" +
+          (c.nao_lidas ? '<span class="cvp__b">' + c.nao_lidas + "</span>"
+                       : '<span class="cvp__d">' + esc(c.quando) + "</span>") +
+          "</button>";
+      }).join("") : '<p class="vazio" style="padding:20px">ninguém com esse nome</p>') +
+      "</div>";
+
+    h += '<div class="cv__c">';
+    if (!est.conversaCom) {
+      h += '<div class="cv__vazio">' + ico("balao") +
+        "<span>Escolha uma pessoa para conversar.<br>A mensagem pode citar " +
+        "um registro do sistema — a conversa fica do lado da coisa " +
+        "conversada.</span></div>";
+    } else {
+      var quem = lista.filter(function (c) { return c.id === est.conversaCom; })[0] ||
+                 { nome: "" };
+      h += '<div class="cv__cab">' +
+        '<button type="button" class="cv__volta" id="cv-volta">← pessoas</button>' +
+        avatar(quem.nome, "sm") + "<b>" + esc(quem.nome) + "</b>" +
+        '<span style="font-size:11.6px;color:var(--md-on-surface-variant, ' +
+        'var(--on-surface-variant))">' + esc(tempoDe(quem.mins)) + "</span></div>" +
+        '<div class="cv__m" id="cv-m">' +
+        (est.conversa === null
+          ? '<p class="vazio">carregando…</p>'
+          : (est.conversa.length
+             ? est.conversa.map(msgHtml).join("")
+             : '<p class="vazio">Nenhuma mensagem ainda. Diga o primeiro.</p>')) +
+        "</div>" +
+        '<div class="cv__esc"><textarea id="cv-t" rows="1" ' +
+        'placeholder="Escreva uma mensagem…"></textarea>' +
+        '<button type="button" class="esc__anx" id="cv-arq" ' +
+        'title="anexar arquivo">' + ico("clipe") + "</button>" +
+        '<button type="button" class="esc__b" id="cv-envia">' + ico("envia") +
+        "</button></div>";
+    }
+    h += "</div></div>";
+    alvo.innerHTML = h;
+
+    document.getElementById("conta").innerHTML = est.conversaCom
+      ? ""
+      : "<b>" + lista.length + "</b> pessoas no sistema" +
+        (D.nao_lidas ? " · <b>" + D.nao_lidas + "</b> mensagens não lidas" : "");
+
+    ligarConversas();
+  }
+
+  function msgHtml(m) {
+    var h = '<div class="msg' + (m.meu ? " msg--meu" : "") + '">' +
+      '<div class="msg__b">' + marcarMencoes(m.texto || "");
+    if (m.alvo_titulo) {
+      h += '<span class="msg__alvo">' + ico("seta") + esc(m.alvo_titulo) + "</span>";
+    }
+    if (m.arquivo) {
+      h += m.e_imagem
+        ? '<img src="' + esc(m.arquivo) + '" alt="' + esc(m.arquivo_nome) + '">'
+        : '<span class="msg__alvo"><a href="' + esc(m.arquivo) +
+          '" target="_blank" rel="noopener" style="color:inherit">' +
+          esc(m.arquivo_nome) + "</a></span>";
+    }
+    h += "</div>" +
+      '<span class="msg__q">' + (m.meu ? "" : esc(m.quem) + " · ") +
+      esc(m.quando) + (m.meu && m.lida ? " · lida" : "") + "</span></div>";
+    return h;
+  }
+
+  function ligarConversas() {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-cv]"), function (b) {
+      b.addEventListener("click", function () {
+        var id = +b.getAttribute("data-cv");
+        est.conversaCom = id;
+        est.conversa = null;
+        pintarConversas();
+        abrirConversa(id);
+      });
+    });
+    var v = document.getElementById("cv-volta");
+    if (v) v.addEventListener("click", function () {
+      est.conversaCom = null; est.conversa = null; pintarConversas();
+    });
+
+    var ta = document.getElementById("cv-t");
+    if (ta) {
+      ta.focus();
+      ta.addEventListener("input", function () {
+        ta.style.height = "auto";
+        ta.style.height = Math.min(120, ta.scrollHeight) + "px";
+      });
+      ta.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); mandar(); }
+      });
+      document.getElementById("cv-envia").addEventListener("click", mandar);
+      document.getElementById("cv-arq").addEventListener("click", function () {
+        var i = document.getElementById("mu-cvarq");
+        if (i) { i.value = ""; i.click(); }
+      });
+    }
+    var cx = document.getElementById("cv-m");
+    if (cx) cx.scrollTop = cx.scrollHeight;
+  }
+
+  function mandar() {
+    var ta = document.getElementById("cv-t");
+    if (!ta) return;
+    var txt = ta.value.trim();
+    if (!txt) return;
+    mandarNoServidor(est.conversaCom, txt, null);
+    ta.value = "";
+    ta.style.height = "auto";
+  }
+
+  // No protótipo a conversa vive na memória da página; na tela real vai por POST.
+  function abrirConversa(id) {
+    pedir(URL_CONVERSA, { com: id }, null, function (d) {
+      est.conversa = d.mensagens;
+      D.nao_lidas = d.nao_lidas;
+      (D.conversas || []).forEach(function (c) {
+        if (c.id === id) c.nao_lidas = 0;
+      });
+      pintarConversas();
+      pintarVistas();
+    });
+    return;
+  }
+
+  function abrirSoNaMemoria(id) {
+    est.conversa = (meu.conversa[id] || []);
+    (D.conversas || []).forEach(function (c) {
+      if (c.id === id) { D.nao_lidas -= (c.nao_lidas || 0); c.nao_lidas = 0; }
+    });
+    if (D.nao_lidas < 0) D.nao_lidas = 0;
+    pintarConversas();
+    pintarVistas();
+  }
+
+  function mandarNoServidor(id, texto, arquivo) {
+    pedir(URL_MANDAR, { com: id, texto: texto || "" },
+          arquivo ? { campo: "arquivo", arquivo: arquivo.arquivo } : null,
+          function (d) {
+      (est.conversa = est.conversa || []).push(d.mensagem);
+      (D.conversas || []).forEach(function (c) {
+        if (c.id === id) {
+          c.ultima = d.mensagem.texto ||
+                     ("arquivo: " + (d.mensagem.arquivo_nome || ""));
+          c.ultima_minha = true;
+          c.quando = d.mensagem.quando;
+        }
+      });
+      pintarConversas();
+    });
+    return;
+  }
+
+  function mandarSoNaMemoria(id, texto, arquivo) {
+    var m = { id: Date.now(), meu: true, quem: est.eu, texto: texto,
+              arquivo: (arquivo ? arquivo.url : ""),
+              arquivo_nome: (arquivo ? arquivo.nome : ""),
+              e_imagem: !!(arquivo && arquivo.imagem),
+              alvo: "", alvo_titulo: "",
+              quando: new Date().toTimeString().slice(0, 5), lida: false };
+    (meu.conversa[id] = meu.conversa[id] || []).push(m);
+    est.conversa = meu.conversa[id];
+    (D.conversas || []).forEach(function (c) {
+      if (c.id === id) {
+        c.ultima = texto || ("arquivo: " + m.arquivo_nome);
+        c.ultima_minha = true;
+        c.quando = m.quando;
+      }
+    });
+    pintarConversas();
+  }
+
+  // --------------------------------------------------- lista de quem entrou
+  function pintarGente() {
+    var ps = presencaAgora();
+    var h = '<div class="feed"><div class="trava">' + ico("wifi") +
+      "<span><b>Isto era o painel “Usuários online”.</b> Online = visto nos " +
+      "últimos 5 minutos. A estrela marca superusuário; o IP é o do último acesso." +
+      "</span></div><div class=\"lgl\">";
+    h += ps.map(function (p) {
+      var tom = p.faixa === "agora" ? "ok" : (p.faixa === "sumido" ||
+                p.faixa === "nunca" ? "aviso" : "");
+      return '<div class="lg' + (tom ? " lg--" + tom : "") + '">' +
+        avatar(p.nome, "sm") + '<span class="lg__q">' + esc(p.nome) + "</span>" +
+        (p.su ? '<span class="lg__sel">superusuário</span>' :
+         (p.staff ? '<span class="lg__ip">equipe</span>' : "")) +
+        '<span class="lg__a">' + esc(FAIXA[p.faixa]) + "</span>" +
+        (p.ip ? '<span class="lg__ip">' + esc(p.ip) + "</span>" : "") +
+        '<span class="lg__d">' + esc(p.eu ? "é você" : tempoDe(p.mins)) + "</span></div>";
+    }).join("");
+    h += "</div></div>";
+    document.getElementById("feed").innerHTML = h;
+    document.getElementById("conta").innerHTML =
+      "<b>" + ps.length + "</b> pessoas com acesso ao sistema";
+  }
+
+  // ------------------------------------------- nivel 2: a linha de filtro
+  // Quatro seletores no lugar de 20 botoes. O de SITUACAO come, com optgroup,
+  // as seis abas de recorte e os cinco chips de pendencia.
+  var SIT_ROTULO = {
+    precisa: "Tudo o que está pendente", minhas: "Onde eu entro",
+    seguindo: "Que eu acompanho", conversa: "Com comentário", foto: "Com foto"
+  };
+
+  function pintarFiltros() {
+    var base = visiveis(true);          // ignora a situacao, para contar cada uma
+    function conta(sit) {
+      return base.filter(function (e) { return casaSit(e, sit); }).length;
+    }
+
+    var sit = document.getElementById("f-sit");
+    var pend = D.demandas.map(function (d) {
+      return '<option value="' + d.id + '"' + (est.sit === d.id ? " selected" : "") +
+        ">" + esc(d.rotulo) + " (" + conta(d.id) + ")</option>";
+    }).join("");
+    sit.innerHTML =
+      '<option value="">Qualquer situação</option>' +
+      '<optgroup label="Pendente">' +
+      '<option value="precisa"' + (est.sit === "precisa" ? " selected" : "") + ">" +
+      SIT_ROTULO.precisa + " (" + conta("precisa") + ")</option>" + pend +
+      "</optgroup>" +
+      '<optgroup label="Meu">' +
+      ["minhas", "seguindo"].map(function (k) {
+        return '<option value="' + k + '"' + (est.sit === k ? " selected" : "") +
+          ">" + SIT_ROTULO[k] + " (" + conta(k) + ")</option>";
+      }).join("") + "</optgroup>" +
+      '<optgroup label="Conversa">' +
+      ["conversa", "foto"].map(function (k) {
+        return '<option value="' + k + '"' + (est.sit === k ? " selected" : "") +
+          ">" + SIT_ROTULO[k] + " (" + conta(k) + ")</option>";
+      }).join("") + "</optgroup>";
+    sit.classList.toggle("on", !!est.sit);
+
+    // Um seletor, dois grupos: TIPO (o que aconteceu) e TEMA (a tag). Somar
+    // um quinto seletor era voltar ao problema de "muita coisa na tela".
+    var st = document.getElementById("f-tipo");
+    st.innerHTML = '<option value="">Qualquer tipo ou tema</option>' +
+      '<optgroup label="Tipo">' +
+      D.tipos.filter(function (t) { return t.n; }).map(function (t) {
+        return '<option value="t:' + t.id + '"' +
+          (est.tipo === t.id ? " selected" : "") + ">" + esc(t.nome) +
+          " (" + t.n + ")</option>";
+      }).join("") + "</optgroup>" +
+      '<optgroup label="Tema">' +
+      (D.temas || []).map(function (x) {
+        return '<option value="#:' + esc(x.t) + '"' +
+          (est.tema === x.t ? " selected" : "") + ">#" + esc(x.t) +
+          " (" + x.n + ")</option>";
+      }).join("") + "</optgroup>";
+    st.classList.toggle("on", !!(est.tipo || est.tema));
+
+    var lojas = {};
+    D.eventos.forEach(function (e) {
+      if (e.onde) lojas[e.onde] = (lojas[e.onde] || 0) + (e.lote || 1);
+    });
+    var ord = Object.keys(lojas).sort(function (a, b) { return lojas[b] - lojas[a]; });
+    var sl = document.getElementById("f-loja");
+    sl.innerHTML = '<option value="">Qualquer loja</option>' + ord.map(function (l) {
+      return '<option value="' + esc(l) + '"' + (est.loja === l ? " selected" : "") +
+        ">" + esc(l) + " (" + lojas[l] + ")</option>";
+    }).join("");
+    sl.classList.toggle("on", !!est.loja);
+
+    // Substitui o card "Quem move o parque": a mesma contagem, no rotulo.
+    var sq = document.getElementById("f-quem");
+    sq.innerHTML = '<option value="">Qualquer pessoa</option>' +
+      D.pessoas.map(function (pe) {
+        return '<option value="' + esc(pe.nome) + '"' +
+          (chave(est.quem) === pe.k ? " selected" : "") + ">" + esc(pe.nome) +
+          " (" + pe.n + ")</option>";
+      }).join("");
+    sq.classList.toggle("on", !!est.quem);
+  }
+
+  // ------------------------------------------------- os filtros ligados, com ✕
+  function pintarFichas() {
+    var fs = [];
+    if (est.busca.trim()) fs.push({ k: "busca", r: "busca", v: est.busca.trim() });
+    if (est.sit) {
+      var pd = D.demandas.filter(function (d) { return d.id === est.sit; })[0];
+      fs.push({ k: "sit", r: "situação", v: pd ? pd.rotulo : SIT_ROTULO[est.sit] });
+    }
+    if (est.tipo) fs.push({ k: "tipo", r: "tipo",
+                            v: (TIPO[est.tipo] || {}).nome || est.tipo });
+    if (est.tema) fs.push({ k: "tema", r: "tema", v: "#" + est.tema });
+    if (est.loja) fs.push({ k: "loja", r: "loja", v: est.loja });
+    if (est.quem) fs.push({ k: "quem", r: "pessoa", v: est.quem });
+    if (est.maquina) fs.push({ k: "maquina", r: "máquina", v: est.maquina });
+    if (est.mes) fs.push({ k: "mes", r: "mês", v: mesRotulo(est.mes) });
+
+    var alvo = document.getElementById("fichas");
+    if (!fs.length) { alvo.innerHTML = ""; return; }
+    alvo.innerHTML = fs.map(function (f) {
+      return '<button type="button" class="ficha" data-tira="' + f.k + '">' +
+        '<em>' + esc(f.r) + ":</em> " + esc(f.v) + "<span>✕</span></button>";
+    }).join("") +
+      (fs.length > 1 ? '<button type="button" class="fichas__lim" id="lim-tudo">' +
+        "limpar tudo</button>" : "");
+
+    Array.prototype.forEach.call(alvo.querySelectorAll("[data-tira]"), function (b) {
+      b.addEventListener("click", function () {
+        var k = b.getAttribute("data-tira");
+        if (k === "busca") { est.busca = ""; document.getElementById("q").value = ""; }
+        else { est[k] = ""; }
+        est.pag = 1;
+        tudo();
+      });
+    });
+    var lt = document.getElementById("lim-tudo");
+    if (lt) lt.addEventListener("click", function () {
+      est.busca = ""; est.sit = ""; est.tipo = ""; est.tema = ""; est.loja = "";
+      est.quem = ""; est.maquina = ""; est.mes = ""; est.pag = 1;
+      document.getElementById("q").value = "";
+      tudo();
+    });
+  }
+
+  // ------------------------------------ mencao (@) — composer e comentario
+  var popMen = null;
+  function fecharMencao() {
+    if (popMen) { popMen.remove(); popMen = null; }
+  }
+  function mencionar(ta, caixa) {
+    var antes = ta.value.slice(0, ta.selectionStart);
+    fecharMencao();
+    // # sugere os temas que JA' existem: tag nova todo dia com grafia
+    // diferente nao agrupa nada, e a lista mostra o que o time ja' usa.
+    var h = /#([^#\s]*)$/.exec(antes);
+    if (h) {
+      var frag = h[1];
+      // LOJA e TEMA no mesmo #: a loja era um <select> a mais no composer, e
+      // loja é só outro tipo de marca.
+      var lojas = (D.lojas_tag || []).filter(function (l) {
+        return !frag || l.t.indexOf(chave(frag)) === 0;
+      }).slice(0, 4);
+      var temas = (D.temas || []).filter(function (x) {
+        return !frag || x.t.indexOf(chave(frag)) === 0;
+      }).slice(0, 6);
+      if (!lojas.length && !temas.length) return;
+      popMen = document.createElement("div");
+      popMen.className = "mens";
+      popMen.style.cssText = "position:absolute;z-index:30";
+      popMen.innerHTML =
+        (lojas.length ? '<p class="mens__t">Loja</p>' + lojas.map(function (l) {
+          return '<button type="button" data-tag="' + esc(l.t) + '">' +
+            ico("loja") + "#" + esc(l.t) + "</button>";
+        }).join("") : "") +
+        (temas.length ? '<p class="mens__t">Tema</p>' + temas.map(function (x) {
+          return '<button type="button" data-tag="' + esc(x.t) + '">#' +
+            esc(x.t) + ' <em style="opacity:.55;font-weight:500;margin-left:auto">' +
+            x.n + "</em></button>";
+        }).join("") : "");
+      caixa.style.position = "relative";
+      caixa.appendChild(popMen);
+      Array.prototype.forEach.call(popMen.querySelectorAll("[data-tag]"), function (b) {
+        b.addEventListener("mousedown", function (ev) {
+          ev.preventDefault();
+          var t = b.getAttribute("data-tag");
+          var corte = ta.selectionStart;
+          ta.value = ta.value.slice(0, corte).replace(/#([^#\s]*)$/, "#" + t + " ") +
+                     ta.value.slice(corte);
+          fecharMencao();
+          ta.focus();
+          ta.dispatchEvent(new Event("input"));
+        });
+      });
+      return;
+    }
+
+    var m = /@([^@\s]*)$/.exec(antes);
+    if (!m) return;
+    var frag = m[1];
+    var achados = D.pessoas.filter(function (p) {
+      return !frag || chave(p.nome).indexOf(chave(frag)) === 0;
+    }).slice(0, 5);
+
+    // @all marca o time todo. Vem PRIMEIRO, e com o total do lado: chamar 13
+    // pessoas sem perceber e' o jeito de o mural virar barulho e o time
+    // desligar a notificacao.
+    var todos = "";
+    if (!frag || "all".indexOf(chave(frag)) === 0 ||
+        "todos".indexOf(chave(frag)) === 0) {
+      todos = '<button type="button" data-men="all" class="men__all">' +
+        '<span class="av av--xs cx">@</span>todo o time' +
+        '<em>' + (D.presenca || D.pessoas).length + " pessoas</em></button>";
+    }
+    if (!todos && !achados.length) return;
+
+    popMen = document.createElement("div");
+    popMen.className = "mens";
+    popMen.style.cssText = "position:absolute;z-index:30";
+    popMen.innerHTML = todos + achados.map(function (p) {
+      return '<button type="button" data-men="' + esc(p.nome) + '">' +
+        avatar(p.nome, "xs") + esc(p.nome) + "</button>";
+    }).join("");
+    caixa.style.position = "relative";
+    caixa.appendChild(popMen);
+    Array.prototype.forEach.call(popMen.querySelectorAll("[data-men]"), function (b) {
+      b.addEventListener("mousedown", function (ev) {
+        ev.preventDefault();
+        var nome = b.getAttribute("data-men");
+        var corte = ta.selectionStart;
+        ta.value = ta.value.slice(0, corte).replace(/@([^@\s]*)$/, "@" + nome + " ") +
+                   ta.value.slice(corte);
+        fecharMencao();
+        ta.focus();
+        ta.dispatchEvent(new Event("input"));
+      });
+    });
+  }
+
+  function fecharMenus() {
+    Array.prototype.forEach.call(document.querySelectorAll(".menu"), function (m) {
+      m.remove();
+    });
+  }
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest("[data-mais]")) fecharMenus();
+  });
+
+  // No protótipo grava na memória da página; na tela real vai por POST.
+  function salvarPublicacao(id, texto) {
+    var e = achar(id);
+    if (!e) return;
+    pedir(URL_EDITAR, { id: e.pub, texto: texto, patrimonio: e.maquina || "",
+                        unidade: "" }, null, function (d) {
+      var P = d.publicacao;
+      var linhas = (P.texto || "").split("\n");
+      e.titulo = linhas[0].slice(0, 120);
+      e.fala = linhas.slice(1).join("\n").trim();
+      e.status = "editada";
+      e.mencionados = P.mencionados;
+      est.editando = null;
+      avisar("Publicação atualizada.");
+      tudo();
+    });
+    return;
+  }
+
+  function salvarSoNaMemoria(id, texto) {
+    var e = achar(id);
+    if (!e) return;
+    var linhas = texto.split("\n");
+    e.titulo = linhas[0].slice(0, 120);
+    e.fala = linhas.slice(1).join("\n").trim();
+    e.status = "editada";
+    est.editando = null;
+    avisar("Publicação atualizada.");
+    tudo();
+  }
+
+  function apagarPublicacao(id) {
+    if (!window.confirm("Apagar esta publicação? Os comentários dela vão junto.")) {
+      return;
+    }
+    var e = achar(id);
+    pedir(URL_APAGAR, { id: (e && e.pub) || "" }, null, function () {
+      D.eventos = D.eventos.filter(function (x) { return x.id !== id; });
+      delete meu.coment[id];
+      delete meu.fotos[id];
+      avisar("Publicação apagada.");
+      tudo();
+    });
+    return;
+  }
+
+  // Fica aqui só porque o corpo antigo (que mexia na memória da página)
+  // continua abaixo; nada chama esta função.
+  function apagarSoNaMemoria(id) {
+    D.eventos = D.eventos.filter(function (e) { return e.id !== id; });
+    delete meu.coment[id];
+    delete meu.fotos[id];
+    avisar("Publicação apagada.");
+    tudo();
+  }
+
+  // ------------------------------------------------- publicar no servidor
+  // No protótipo grava na memória da página; na tela real vai por POST.
+  function publicarNoServidor() {
+    var fd = { texto: pub.texto.trim(), patrimonio: pub.maquina,
+               unidade: pub.loja || "" };
+    pedir(URL_PUBLICAR, fd, pub.foto ? { campo: "foto", arquivo: pub.foto.arquivo } : null,
+          function (d) {
+      var P = d.publicacao;
+      var linhas = (P.texto || "").split("\n");
+      D.eventos.unshift({
+        id: "pub" + P.id, tipo: "aviso", data: D.hoje, hora: P.quando.slice(-5),
+        titulo: linhas[0].slice(0, 120),
+        fala: linhas.slice(1).join("\n").trim(),
+        onde: P.loja, autor: P.autor, maquina: P.patrimonio, maquinas: [],
+        status: (P.editada ? "editada" : ""), trilha: [], papel: null,
+        precisa: "", lote: 1, dias: 0, url: "/parque/mural/",
+        mencionados: P.mencionados, meu: true, editavel: true, pub: P.id
+      });
+      if (P.foto) {
+        (meu.fotos["pub" + P.id] = meu.fotos["pub" + P.id] || []).push({
+          url: P.foto, leg: "Foto da publicação", quem: P.autor,
+          quando: P.quando, nova: true });
+      }
+      pub = { aberto: false, texto: "", maquina: "", loja: "", foto: null,
+              enviando: false };
+      avisar(P.patrimonio
+        ? "Publicado. Também entrou na ficha de " + P.patrimonio + "."
+        : "Publicado no mural.");
+      tudo();
+    });
+    setTimeout(function () {
+      if (pub.enviando) { pub.enviando = false; pintarComposer(); }
+    }, 8000);
+    return;
+  }
+
+  function publicarSoNaMemoria() {
+    var linhas = pub.texto.trim().split("\n");
+    var tagsDoTexto = (pub.texto.match(/#([0-9A-Za-zÀ-ÿ_-]{2,32})/g) || [])
+      .map(function (x) { return chave(x.slice(1)).replace(/[^a-z0-9]+/g, "-"); });
+    // A loja sai da #tag; a maquina sai do registro citado.
+    var lojaDaTag = (D.lojas_tag || []).filter(function (l) {
+      return tagsDoTexto.indexOf(l.t) >= 0; })[0];
+    var nova = {
+      id: "pub" + (Date.now() % 1000000), tipo: "aviso",
+      data: D.hoje, hora: new Date().toTimeString().slice(0, 5),
+      titulo: linhas[0].slice(0, 120),
+      fala: linhas.slice(1).join("\n").trim(),
+      onde: (lojaDaTag ? lojaDaTag.nome : (pub.alvo ? pub.alvo.onde : "")),
+      autor: est.eu,
+      maquina: (pub.alvo ? pub.alvo.maquina : ""), maquinas: [], status: "",
+      alvo: (pub.alvo ? pub.alvo.id : ""),
+      alvo_titulo: (pub.alvo ? pub.alvo.titulo : ""),
+      arquivo: (pub.arquivo ? pub.arquivo.url : ""),
+      arquivo_nome: (pub.arquivo ? pub.arquivo.nome : ""),
+      e_imagem: !!(pub.arquivo && pub.arquivo.imagem),
+      tags: ["publicacao"].concat(tagsDoTexto),
+      trilha: [], papel: null, precisa: "", lote: 1, dias: 0,
+      url: "/parque/mural/", meu: true, editavel: true, pub: 1
+    };
+    D.eventos.unshift(nova);
+    if (pub.arquivo && pub.arquivo.imagem) {
+      (meu.fotos[nova.id] = meu.fotos[nova.id] || []).push({
+        url: pub.arquivo.url, leg: pub.arquivo.nome, quem: est.eu,
+        quando: "agora", nova: true });
+    }
+    pub = { aberto: false, texto: "", alvo: null, arquivo: null,
+            enviando: false, sugestoes: [] };
+    tudo();
+  }
+
+  // ------------------------------------------------- o painel de filtro
+  // O numero na bolinha do botao. A BUSCA nao conta: ela esta visivel no
+  // proprio campo, ao lado.
+  function quantosFiltros() {
+    return [est.sit, est.tipo, est.tema, est.loja, est.quem, est.maquina,
+            est.mes].filter(Boolean).length;
+  }
+
+  function pintarBotaoFiltro() {
+    var bt = document.getElementById("f-bt");
+    if (!bt) return;
+    var n = quantosFiltros();
+    bt.classList.toggle("fbt--on", n > 0);
+    var b = bt.querySelector("b");
+    if (n && !b) { bt.insertAdjacentHTML("beforeend", "<b>" + n + "</b>"); }
+    else if (n && b) { b.textContent = n; }
+    else if (b) { b.remove(); }
+
+    var q = document.getElementById("f-quantos");
+    if (q) {
+      q.textContent = n
+        ? n + (n === 1 ? " filtro ligado" : " filtros ligados") +
+          (est.vista === "mural" ? " · " + visiveis().length + " no feed" : "")
+        : "nenhum filtro ligado";
+    }
+  }
+
+  function abrirPainel(abrir) {
+    var pan = document.getElementById("f-pan");
+    var bt = document.getElementById("f-bt");
+    if (!pan || !bt) return;
+    pan.hidden = !abrir;
+    bt.setAttribute("aria-expanded", String(!!abrir));
+  }
+
+  (function ligarPainel() {
+    var bt = document.getElementById("f-bt");
+    var pan = document.getElementById("f-pan");
+    if (!bt || !pan) return;
+    bt.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      abrirPainel(pan.hidden);
+    });
+    pan.addEventListener("click", function (ev) { ev.stopPropagation(); });
+    document.addEventListener("click", function () { abrirPainel(false); });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") abrirPainel(false);
+    });
+    document.getElementById("f-fecha").addEventListener("click", function () {
+      abrirPainel(false);
+    });
+    document.getElementById("f-limpa").addEventListener("click", function () {
+      est.sit = ""; est.tipo = ""; est.tema = ""; est.loja = "";
+      est.quem = ""; est.maquina = ""; est.mes = ""; est.pag = 1;
+      tudo();
+    });
+  })();
+
+  function tudo() {
+    pintarPresenca(); pintarVistas(); pintarComposer(); pintarFiltros();
+    pintarBotaoFiltro(); pintarFichas(); pintarFeed();
+  }
+
+  // Os quatro seletores. O <select> sobrevive ao repinte (so' as <option>
+  // trocam), por isso o ligador roda uma vez so'.
+  [["f-sit", "sit"], ["f-tipo", "tipo"], ["f-loja", "loja"],
+   ["f-quem", "quem"]].forEach(function (par) {
+    document.getElementById(par[0]).addEventListener("change", function (ev) {
+      var v = ev.target.value;
+      // O seletor de tipo carrega os dois eixos, com prefixo no valor.
+      if (par[1] === "tipo") {
+        est.tipo = ""; est.tema = "";
+        if (v.indexOf("t:") === 0) { est.tipo = v.slice(2); }
+        else if (v.indexOf("#:") === 0) { est.tema = v.slice(2); }
+      } else {
+        est[par[1]] = v;
+      }
+      est.pag = 1;
+      tudo();
+    });
+  });
+
+  // A BUSCA FILTRA TUDO ENQUANTO SE DIGITA: o feed, a lista de acessos, a de
+  // usuarios, a contagem das tres abas e a contagem dentro de cada seletor.
+  // 90ms para nao repintar a cada tecla e ainda parecer instantaneo. Sem
+  // botao de limpar: a ficha "busca: xyz ✕" faz isso, junto com os outros.
+  var q = document.getElementById("q");
+  var atraso;
+  q.addEventListener("input", function () {
+    clearTimeout(atraso);
+    atraso = setTimeout(function () {
+      est.busca = q.value;
+      est.logLim = PAGINA_LOG;
+      est.pag = 1;
+      tudo();
+    }, 90);
+  });
+  q.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape") { q.value = ""; est.busca = ""; tudo(); }
+  });
+
+  document.getElementById("mu-cvarq").addEventListener("change", function (ev) {
+    var arq = ev.target.files && ev.target.files[0];
+    if (!arq || !est.conversaCom) return;
+    var ext = (arq.name.split(".").pop() || "").toLowerCase();
+    mandarNoServidor(est.conversaCom, "", {
+      arquivo: arq, nome: arq.name, url: URL.createObjectURL(arq),
+      imagem: ["png", "jpg", "jpeg", "webp", "gif"].indexOf(ext) >= 0
+    });
+  });
+
+  document.getElementById("mu-pubfoto").addEventListener("change", function (ev) {
+    var arq = ev.target.files && ev.target.files[0];
+    if (!arq) return;
+    var ext = (arq.name.split(".").pop() || "").toLowerCase();
+    pub.arquivo = {
+      arquivo: arq, nome: arq.name, url: URL.createObjectURL(arq),
+      imagem: ["png", "jpg", "jpeg", "webp", "gif"].indexOf(ext) >= 0
+    };
+    pub.aberto = true;
+    pintarComposer();
+  });
+
+  // ------------------------------------------- os dois seletores de arquivo
+  // A FOTO vira comentário com foto. O PAPEL vai para o Arquivo pelo mesmo
+  // endpoint que a tela de Arquivo usa — uma porta só para papel, com a
+  // permissão dela.
+  document.getElementById("mu-foto").addEventListener("change", function (ev) {
+    var arq = ev.target.files && ev.target.files[0];
+    var id = est.foco;
+    if (!arq || !id) return;
+    pedir(URL_COMENTAR, { chave: id, legenda: "Foto do serviço" },
+          { campo: "foto", arquivo: arq }, function (d) {
+      if (d.foto) (meu.fotos[id] = meu.fotos[id] || []).push(
+        Object.assign({ nova: true }, d.foto));
+      if (d.comentario && (d.comentario.texto || "").trim()) {
+        (meu.coment[id] = meu.coment[id] || []).push(d.comentario);
+      }
+      meu.seguindo[id] = true;
+      avisar("Foto publicada no mural.");
+      pintarFeed(); pintarVistas(); pintarFiltros();
+    });
+  });
+
+  document.getElementById("mu-papel").addEventListener("change", function (ev) {
+    var arq = ev.target.files && ev.target.files[0];
+    var id = est.foco;
+    if (!arq || !id) return;
+    var e = achar(id);
+    if (!e || !e.papel) { avisar("Este acontecimento não pede papel."); return; }
+    pedir(URL_ANEXAR, { alvo: e.papel.alvo, tipo: e.papel.doc,
+                        descricao: e.papel.nome },
+          { campo: "arquivo", arquivo: arq }, function () {
+      meu.papel[id] = true;
+      avisar(e.papel.nome + " arquivado. A pendência saiu da lista.");
+      pintarFeed(); pintarVistas(); pintarFiltros();
+    });
+  });
+
+  // voltar ao topo
+  var topo = document.getElementById("ao-topo");
+  topo.addEventListener("click", function () {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  window.addEventListener("scroll", function () {
+    topo.classList.toggle("aoTopo--on", window.scrollY > 640);
+  }, { passive: true });
+
+  // Fechar o aviso do dia. A chave guardada e' o FATO (nivel + numero): mudou
+  // o fato, o aviso volta sozinho. Sem isso, quem fecha numa terca nao ve' que
+  // na quinta o numero dobrou — e um aviso que some para sempre e' pior do que
+  // nao existir. localStorage pode estourar (janela anonima, cookie bloqueado),
+  // entao toda leitura e escrita vai protegida e o padrao e' MOSTRAR.
+  var dia = document.getElementById("mu-dia");
+  var diaMin = document.getElementById("mu-dia-min");
+  if (dia && diaMin) {
+    var CHAVE_DIA = "mu.dia.visto";
+    var fato = dia.getAttribute("data-chave");
+    var verDia = function (aberto) { dia.hidden = !aberto; diaMin.hidden = aberto; };
+    var lembrado = null;
+    try { lembrado = localStorage.getItem(CHAVE_DIA); } catch (e) { lembrado = null; }
+    verDia(lembrado !== fato);
+    var xDia = document.getElementById("mu-dia-x");
+    if (xDia) {
+      xDia.addEventListener("click", function () {
+        try { localStorage.setItem(CHAVE_DIA, fato); } catch (e) { }
+        verDia(false);
+      });
+    }
+    diaMin.addEventListener("click", function () {
+      try { localStorage.removeItem(CHAVE_DIA); } catch (e) { }
+      verDia(true);
+    });
+  }
+
+  // A faixa do estado do dia aponta para o feed SEM sair da tela: acende o
+  // mesmo filtro por tema que os cards ja' usam. O botao mora no cabecalho,
+  // fora do container que o ligador do feed varre a cada repinte — por isso
+  // ele tem atributo proprio (`data-mu-tema`) e e' ligado UMA vez, aqui.
+  var btDia = document.querySelector("[data-mu-tema]");
+  if (btDia) {
+    btDia.addEventListener("click", function () {
+      var t = btDia.getAttribute("data-mu-tema");
+      est.tema = est.tema === t ? "" : t;
+      est.pag = 1;
+      est.vista = "mural";          // o filtro e' do feed; a aba de logs nao o usa
+      tudo();
+      var alvo = document.getElementById("mu-feed") || document.getElementById("feed");
+      if (alvo) {
+        window.scrollTo({
+          top: Math.max(0, alvo.getBoundingClientRect().top + window.pageYOffset - 90),
+          behavior: "smooth"
+        });
+      }
+    });
+  }
+
+  tudo();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,207 @@
+{% load i18n static unfold %}
+{% comment %}
+Gráficos analíticos da tela "Dashboard" (não da "Início").
+
+REMODELAGEM 09/2026 — contrato: DESIGN-SYSTEM.md (Material Design 3).
+Grade de 12 colunas com proporções pensadas — o gráfico que exige leitura fina
+ocupa 8, o de composição ocupa 4. Cabeçalho de painel igual em todos:
+título · contagem · dica.
+
+MIGRAÇÃO PARA M3 (§5 — a essência é REMOVER):
+  · `--ui-*` → papéis `--md-*`;
+  · saiu a borda de 1px em volta de CADA painel: o painel é
+    `surface-container-low` sobre o `surface` da página — separação por TOM;
+  · saiu a linha embaixo do cabeçalho do painel (só separava);
+  · saiu a borda-pílula da contagem: virou chip de número tonal
+    (`primary-container` / `on-primary-container`; `error-container` quando é
+    alerta), sempre no par X / on-X;
+  · título 15px/700 → title-medium (16/24/500); dica → body-small;
+  · nenhum degradê: as cores das séries são chapadas e vêm do
+    `apps/dashboard.py` na escala tonal do verde da marca.
+
+Hooks intactos: data-chart-nav / data-options / data-type / data-value,
+canvas.chart (renderizado pelo Chart.js do unfold), #rank-unidades e o
+json_script "rank-unidades-data". Todo "nada aqui" é .mkpro-empty.
+{% endcomment %}
+<style>
+  /* ---- Escopo: prefixo .mkdc. Cor SÓ por papel --md-*. ---- */
+  .mkdc { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
+  .mkdc * { box-sizing: border-box; }
+  .mkdc svg { display: block; }
+
+  /* Cartão M3 "filled": superfície tonal, SEM borda e SEM sombra. */
+  .mkdc-panel {
+    display: flex; flex-direction: column; min-width: 0;
+    background: var(--md-surface-container-low);
+    border: 0;
+    border-radius: var(--md-shape-md);
+    padding: 16px;
+  }
+  .mkdc-panel--8 { grid-column: span 8; }
+  .mkdc-panel--4 { grid-column: span 4; }
+  .mkdc-panel--12 { grid-column: span 12; }
+  @media (max-width: 1100px) { .mkdc-panel { grid-column: span 12; } }
+
+  /* Cabeçalho de painel: título · contagem · dica. Sem régua embaixo. */
+  .mkdc-panel__head {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px;
+    margin-bottom: 16px; border: 0;
+  }
+  .mkdc-panel__tt {
+    margin: 0; font: 500 16px/24px var(--md-font); letter-spacing: .15px;
+    color: var(--md-on-surface);
+  }
+  /* Chip de número (§2): contêiner tonal, nunca um contorno. */
+  .mkdc-panel__n {
+    display: inline-flex; align-items: center; height: 24px; padding: 0 8px;
+    border: 0; border-radius: var(--md-shape-sm);
+    background: var(--md-primary-container); color: var(--md-on-primary-container);
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .mkdc-panel__n--alerta {
+    background: var(--md-error-container); color: var(--md-on-error-container);
+  }
+  .mkdc-panel__hint {
+    flex: 1 1 100%; margin: 0;
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px;
+    color: var(--md-on-surface-variant);
+  }
+
+  /* Caixas de gráfico: três alturas, e só três. */
+  .mkdc-box { position: relative; width: 100%; height: 260px; }
+  .mkdc-box--alto { height: 320px; }
+  .mkdc-box--rosca { height: 260px; padding: 4px 0; }
+
+  .mkdc .mkpro-empty { margin-top: 4px; }
+</style>
+
+<div class="mkdc">
+
+  {% comment %} ---- Operação: manutenção no tempo + onde o parque dói ---- {% endcomment %}
+  <div class="mkdc-panel mkdc-panel--8">
+    <div class="mkdc-panel__head">
+      <h3 class="mkdc-panel__tt">Manutenção preventiva por mês</h3>
+      <span class="mkdc-panel__n{% if total_preventiva_pendente %} mkdc-panel__n--alerta{% endif %}">{{ total_preventiva_pendente }} pendentes</span>
+      <p class="mkdc-panel__hint">Ano corrente · realizadas contra pendentes, no ciclo de 60 dias.</p>
+    </div>
+    {% if tem_reparos %}
+      <div class="mkdc-box mkdc-box--alto">
+        <canvas class="chart" data-options="{{ chart_opcoes_qtd }}" data-type="line" data-value="{{ chart_qtd }}"></canvas>
+      </div>
+    {% else %}
+      <div class="mkpro-empty">
+        <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+        <p class="mkpro-empty__title">Nenhuma máquina cadastrada</p>
+        <p class="mkpro-empty__hint">Cadastre as máquinas em Parque → Baias / Computadores para acompanhar preventivas realizadas e pendentes mês a mês.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="mkdc-panel mkdc-panel--4">
+    <div class="mkdc-panel__head">
+      <h3 class="mkdc-panel__tt">Unidades críticas</h3>
+      <p class="mkdc-panel__hint">Passe o mouse para ver as baias · clique para abrir a unidade.</p>
+    </div>
+    {% if tem_ranking %}
+      <div class="mkdc-box mkdc-box--alto">
+        <canvas id="rank-unidades"></canvas>
+      </div>
+      {{ ranking_data|json_script:"rank-unidades-data" }}
+    {% else %}
+      <div class="mkpro-empty">
+        <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg></span>
+        <p class="mkpro-empty__title">Nenhuma máquina crítica</p>
+        <p class="mkpro-empty__hint">Todo o parque está fora da faixa crítica de desempenho. Se alguma máquina cair, a unidade dela aparece aqui.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  {% comment %} ---- Onde estão as máquinas · onde dá problema ---- {% endcomment %}
+  <div class="mkdc-panel mkdc-panel--4" data-chart-nav='{{ nav_situacao|safe }}'>
+    <div class="mkdc-panel__head">
+      <h3 class="mkdc-panel__tt">Situação das baias</h3>
+      <p class="mkdc-panel__hint">Clique numa fatia para abrir as máquinas daquele estado.</p>
+    </div>
+    <div class="mkdc-box mkdc-box--rosca">
+      <canvas class="chart" data-options="{{ chart_opcoes_pizza }}" data-type="pie" data-value="{{ chart_situacao }}"></canvas>
+    </div>
+  </div>
+
+  <div class="mkdc-panel mkdc-panel--8" data-chart-nav='{{ nav_chamados|safe }}'>
+    <div class="mkdc-panel__head">
+      <h3 class="mkdc-panel__tt">Chamados por unidade</h3>
+      <p class="mkdc-panel__hint">Onde dá mais problema · clique numa barra para abrir os chamados da unidade.</p>
+    </div>
+    {% if tem_chamados %}
+      <div class="mkdc-box">
+        <canvas class="chart" data-options="{{ chart_opcoes }}" data-type="bar" data-value="{{ chart_chamados }}"></canvas>
+      </div>
+    {% else %}
+      <div class="mkpro-empty">
+        <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
+        <p class="mkpro-empty__title">Nenhum chamado registrado</p>
+        <p class="mkpro-empty__hint">Abra chamados em Parque → Reparos. O ranking de unidades com mais problemas se monta sozinho a partir deles.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  {% comment %} ---- O que está implantado ---- {% endcomment %}
+  <div class="mkdc-panel mkdc-panel--8">
+    <div class="mkdc-panel__head">
+      <h3 class="mkdc-panel__tt">Componentes no parque</h3>
+      <span class="mkdc-panel__n">{{ total_pecas }}</span>
+      <p class="mkdc-panel__hint">Derivado do hardware das máquinas · RAM contada em pentes de 4 GB.</p>
+    </div>
+    {% if tem_pecas %}
+      <div class="mkdc-box" data-chart-nav='{{ nav_pecas|safe }}'>
+        <canvas class="chart" data-options="{{ chart_opcoes }}" data-type="bar" data-value="{{ chart_pecas }}"></canvas>
+      </div>
+    {% else %}
+      <div class="mkpro-empty">
+        <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></span>
+        <p class="mkpro-empty__title">Nenhuma máquina com hardware cadastrado</p>
+        <p class="mkpro-empty__hint">Preencha as specs (processador, memória, disco) em Parque → Baias / Computadores.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="mkdc-panel mkdc-panel--4">
+    <div class="mkdc-panel__head">
+      <h3 class="mkdc-panel__tt">Notebooks por score</h3>
+      <span class="mkdc-panel__n">{{ total_notebooks }}</span>
+      <p class="mkdc-panel__hint">Por classe de desempenho · clique numa classe para ver os notebooks.</p>
+    </div>
+    {% if tem_notebooks %}
+      <div class="mkdc-box mkdc-box--rosca" data-chart-nav='{{ nav_notebooks|safe }}'>
+        <canvas class="chart" data-options="{{ chart_opcoes_rosca }}" data-type="doughnut" data-value="{{ chart_notebooks }}"></canvas>
+      </div>
+    {% else %}
+      <div class="mkpro-empty">
+        <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="12" rx="2"/><path d="M2 20h20"/></svg></span>
+        <p class="mkpro-empty__title">Nenhum notebook cadastrado</p>
+        <p class="mkpro-empty__hint">Cadastre notebooks em Parque → Notebooks para ver a distribuição por classe de score.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  {% comment %} ---- Consumo ---- {% endcomment %}
+  <div class="mkdc-panel mkdc-panel--12" data-chart-nav='{{ nav_perif|safe }}'>
+    <div class="mkdc-panel__head">
+      <h3 class="mkdc-panel__tt">Consumo de periférico por unidade</h3>
+      <p class="mkdc-panel__hint">Mouse, teclado, monitor e afins · conta a troca lançada num reparo.</p>
+    </div>
+    {% if tem_perif %}
+      <div class="mkdc-box">
+        <canvas class="chart" data-options="{{ chart_opcoes }}" data-type="bar" data-value="{{ chart_perif }}"></canvas>
+      </div>
+    {% else %}
+      <div class="mkpro-empty">
+        <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 6v4"/></svg></span>
+        <p class="mkpro-empty__title">Nenhuma troca de periférico registrada</p>
+        <p class="mkpro-empty__hint">Mouse, teclado, monitor e afins entram aqui quando a troca é lançada num reparo.</p>
+      </div>
+    {% endif %}
+  </div>
+
+</div>

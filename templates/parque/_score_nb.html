@@ -1,0 +1,40 @@
+{% comment %}Card de notebook no design do score, clicável → animação de laptop. Espera `nb`.{% endcomment %}
+<button type="button"
+  class="baia baia--notebook baia--cl-{{ nb.classe_desempenho|slugify }}"
+  data-pcstatus="notebook"
+  data-nome="{{ nb }}"
+  data-colaborador="{{ nb.usuario|default:'—' }}"
+  data-patrimonio="{{ nb.serial|default:'' }}"
+  data-status="{{ nb.get_status_display }}"
+  data-so="{{ nb.so_efetivo|default:'—' }}"
+  data-cpu="{{ nb.cpu_efetivo|default:'—' }}"
+  data-placa="{{ nb.placa_mae|default:'—' }}"
+  data-ram="{{ nb.ram_efetivo|default:'—' }}"
+  data-disco="{{ nb.disco_efetivo|default:'—' }}"
+  data-gpu="{{ nb.tel_gpu|default:'' }}"
+  data-uptime="{% if nb.tel_uptime_seg %}{{ nb.tel_uptime_humano }}{% endif %}"
+  data-local="{{ nb.tel_local|default:'' }}"
+  data-mouse="—" data-teclado="—" data-webcam="—" data-headset="—" data-monitor="—" data-leitor="—"
+  data-manutencao="0"
+  data-desempenho="{{ nb.indice_desempenho|default_if_none:'' }}"
+  data-classe="{{ nb.classe_desempenho }}"
+  data-tel="{{ nb.telemetria_status }}"
+  data-diag='{{ nb.diagnostico_json|safe }}'
+  data-edit="{% url 'admin:parque_notebook_change' nb.pk %}">
+  <div class="baia__top">
+    <span class="baia__icone"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg></span>
+    <span class="baia__tel baia__tel--{{ nb.telemetria_status }}"
+          title="Telemetria: {% if nb.telemetria_status == 'ativo' %}ativa (coleta recente){% elif nb.telemetria_status == 'inativo' %}parada (sem coleta recente){% else %}sem agente instalado{% endif %}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><circle cx="12" cy="12" r="2"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2"/></svg></span>
+    {% if nb.indice_desempenho is not None %}
+      <span class="baia__score mkpro-tabular" title="Índice de desempenho {{ nb.indice_desempenho }} — {{ nb.classe_desempenho }}">{{ nb.indice_desempenho }}</span>
+    {% endif %}
+  </div>
+  <div class="baia__nome">{{ nb.marca }} {{ nb.modelo }}</div>
+  {% if nb.usuario %}<div class="baia__ocupante">{{ nb.usuario }}</div>{% endif %}
+  {% if nb.resumo_specs != '—' %}<div class="baia__specs">{{ nb.resumo_specs }}</div>{% endif %}
+  <div class="baia__perifs" aria-label="Periféricos">
+    <span class="baia__perif is-sim" title="Mouse"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 6v4"/></svg></span>
+    <span class="baia__perif is-sim" title="Webcam (embutida)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><path d="m22 8-6 4 6 4z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg></span>
+  </div>
+  <div class="baia__classe">Notebook{% if nb.classe_desempenho != '—' %} · {{ nb.classe_desempenho }}{% endif %}</div>
+</button>

@@ -1,0 +1,209 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+{% with qs_uni=uni_sel_val|urlencode %}
+<style>
+  /* =========================================================================
+     preventiva_tabela — mesmo SEGMENTED BUTTON do Material Design 3 da família.
+     A TABELA usa o data table global (make-m3.css §6: cabeçalho grudento em
+     label-medium, divisor `outline-variant`, sem zebra, hover como state layer
+     de 8%, número à direita); aqui só entra o que é desta tela.
+
+     O que SAIU (DESIGN-SYSTEM.md §5): a caixa de abas em pílula com sombra, a
+     borda e a sombra da moldura da tabela, o ACENTO DE 3px de urgência na 1ª
+     coluna (a informação já está no chip de status), as bordas do ícone, do
+     score e dos chips, o peso 800 no score, o peso 700 nos números e nos
+     botões, e a borda tracejada do estado vazio.
+     O que ENTROU (§4): status por CHIP TONAL (par cor + on-cor), score em chip
+     tonal com número peso 400, e ações em tonal (a que tem peso) + text button.
+     Escopado em .pvtx; cor por var(--md-*).
+     ====================================================================== */
+  .pvtx { display: flex; flex-direction: column; gap: 16px; }
+  .pvtx *, .pvtx *::before, .pvtx *::after { box-sizing: border-box; }
+  .pvtx svg { display: block; }
+  .pvtx .num { font-variant-numeric: tabular-nums; }
+
+  /* --- botões: base de layout do sistema M3 + o text button -------------- */
+  .pvtx .pvx-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  .pvtx .pvx-btn svg { width: 18px; height: 18px; flex: none; }
+  /* `#main` na frente vence o `!important` do CSS histórico (§9.2). */
+  #main .pvtx-txt {
+    background: transparent !important; color: var(--md-primary) !important;
+    padding: 0 12px !important;
+  }
+
+  /* --- segmented button -------------------------------------------------- */
+  .pvtx-topnav { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .pvtx-seg {
+    display: flex; max-width: 100%; overflow-x: auto;
+    border: 1px solid var(--md-outline); border-radius: var(--md-shape-full);
+    background: transparent;
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  .pvtx-seg::-webkit-scrollbar { display: none; }
+  .pvtx-seg__i {
+    position: relative; overflow: hidden; flex: 0 0 auto;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 40px; padding: 0 16px;
+    border: 0; border-left: 1px solid var(--md-outline);
+    background: transparent; color: var(--md-on-surface); text-decoration: none;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; white-space: nowrap;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .pvtx-seg__i:first-child { border-left: 0; }
+  .pvtx-seg__i::before {
+    content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0;
+    pointer-events: none; transition: opacity var(--md-dur-short) var(--md-ease-standard);
+  }
+  .pvtx-seg__i:hover::before { opacity: .08; }
+  .pvtx-seg__i:active::before { opacity: .12; }
+  .pvtx-seg__i.is-active { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+  .pvtx-seg__i svg { width: 18px; height: 18px; flex: none; }
+  .pvtx-seg__i .pvtx-seg__ck { display: none; }
+  .pvtx-seg__i.is-active .pvtx-seg__ck { display: block; }
+  .pvtx-seg__i.is-active .pvtx-seg__ic { display: none; }
+
+  /* --- moldura da tabela: superfície tonal, sem borda e sem sombra ------- */
+  .pvtx-wrap {
+    background: var(--md-surface-container-low);
+    border: 0; border-radius: var(--md-shape-lg); box-shadow: none; overflow-x: auto;
+  }
+  .pvtx table.pvtx-table { width: 100%; min-width: 940px; }
+  .pvtx-table th.num, .pvtx-table td.num { text-align: right; }
+  .pvtx-table td.num { font-weight: 400; }
+
+  .pvtx-maqcel { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .pvtx-ic {
+    width: 40px; height: 40px; flex: none; border: 0; border-radius: var(--md-shape-full);
+    display: grid; place-items: center;
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+  }
+  .pvtx-ic svg { width: 18px; height: 18px; }
+  .pvtx-maq { font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface); }
+  .pvtx-spec {
+    display: block; margin-top: 2px; white-space: normal; max-width: 240px;
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+  }
+  .pvtx-mut { color: var(--md-on-surface-variant) !important; }
+
+  /* Score: chip tonal, número em PESO 400 (§3). */
+  .pvtx-score {
+    display: inline-block; min-width: 40px; text-align: center;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; font-variant-numeric: tabular-nums;
+    border: 0; border-radius: var(--md-shape-sm); padding: 4px 8px;
+    background: var(--md-surface-container-high); color: var(--md-on-surface);
+  }
+  .pvtx-score--critico { background: var(--md-st-crit-cont); color: var(--md-st-crit); }
+  .pvtx-score--baixo { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+  .pvtx-score--bom, .pvtx-score--otimo { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+  .pvtx-score--none { background: transparent; color: var(--md-outline); }
+
+  /* Status: contêiner tonal — a cor está no par cor + on-cor, não numa bolinha. */
+  .pvtx-chip {
+    display: inline-flex; align-items: center;
+    min-height: 24px; padding: 0 8px; border: 0; border-radius: var(--md-shape-sm);
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; text-transform: uppercase;
+  }
+  .pvtx-chip--pendente { background: var(--md-st-crit-cont); color: var(--md-st-crit); }
+  .pvtx-chip--vencida { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+  .pvtx-chip--proxima { background: var(--md-st-attn-cont); color: var(--md-st-attn); }
+  .pvtx-chip--em_dia { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+
+  .pvtx-mini {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 4px;
+    min-height: 24px; padding: 0 8px; border: 0; border-radius: var(--md-shape-sm);
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+  }
+  .pvtx-mini svg { width: 12px; height: 12px; flex: none; }
+
+  .pvtx-acts { display: flex; gap: 8px; justify-content: flex-end; }
+  .pvtx-vazio { padding: 8px !important; }
+</style>
+
+<div class="pvtx">
+
+  {# --- cabeçalho da família: text button de voltar + segmented button --- #}
+  <div class="pvtx-topnav">
+    <a data-mk-voltar class="pvx-btn pvtx-txt" href="{{ voltar_url }}"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg> {{ voltar_nome }}</a>
+    <div class="pvtx-seg" role="tablist" aria-label="Vistas da preventiva">
+      <a class="pvtx-seg__i" role="tab" aria-selected="false" href="?vista=tarefas{% if uni_sel_val %}&unidade={{ qs_uni }}{% endif %}{% for s in setor_sel_vals %}&setor={{ s|urlencode }}{% endfor %}"><svg class="pvtx-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="pvtx-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Tarefas</a>
+      <a class="pvtx-seg__i" role="tab" aria-selected="false" href="?vista=calendario{% if uni_sel_val %}&unidade={{ qs_uni }}{% endif %}{% for s in setor_sel_vals %}&setor={{ s|urlencode }}{% endfor %}"><svg class="pvtx-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="pvtx-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/></svg> Calendário</a>
+      <a class="pvtx-seg__i is-active" role="tab" aria-selected="true" href="?vista=tabela{% if uni_sel_val %}&unidade={{ qs_uni }}{% endif %}{% for s in setor_sel_vals %}&setor={{ s|urlencode }}{% endfor %}"><svg class="pvtx-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="pvtx-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg> Tabela</a>
+      <a class="pvtx-seg__i" role="tab" aria-selected="false" href="?vista=grupos"><svg class="pvtx-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="pvtx-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="8" r="3"/><circle cx="17" cy="8" r="3"/><path d="M2 20a5 5 0 0 1 10 0M12 20a5 5 0 0 1 10 0"/></svg> Grupos</a>
+      <a class="pvtx-seg__i" role="tab" aria-selected="false" href="?vista=ranking"><svg class="pvtx-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="pvtx-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg> Ranking</a>
+    </div>
+  </div>
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · Preventiva</p>
+    <h1 class="mkpro-head__title">Todas as máquinas</h1>
+    <p class="mkpro-head__sub">Ordenadas por urgência de preventiva · <b>Concluir</b> registra o serviço (descrição + checklist).</p>
+  </header>
+
+  {% comment %}O gráfico fica SÓ na vista Tarefas (decisão do dono): repetido em
+  Tabela e Calendário, ele mostrava a mesma informação três vezes e empurrava
+  o conteúdo da tela para baixo.{% endcomment %}
+  {% include "parque/_filtros.html" with uni_lbl="Unidade" setor_lbl="Setor" keep="vista=tabela" %}
+
+  <div class="pvtx-wrap">
+    <table class="pvtx-table">
+      <thead>
+        <tr>
+          <th>Máquina</th><th>Loja</th><th>Setor</th><th>Colaborador</th>
+          <th>Patrimônio</th><th>Score</th><th class="num">Dias s/ prev.</th>
+          <th>Vencimento</th><th>Status</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in itens %}
+          <tr class="pvtx-row--{{ it.status }}">
+            <td>
+              <div class="pvtx-maqcel">
+                <span class="pvtx-ic">{% if it.eh_notebook %}<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>{% else %}<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8"/></svg>{% endif %}</span>
+                <span><span class="pvtx-maq">{{ it.titulo }}</span>{% if it.resumo and it.resumo != '—' %}<span class="pvtx-spec">{{ it.resumo }}</span>{% endif %}</span>
+              </div>
+            </td>
+            <td class="pvtx-mut">{{ it.unidade }}</td>
+            <td class="pvtx-mut">{{ it.setor }}</td>
+            <td>{{ it.colaborador|default:"—" }}</td>
+            <td class="pvtx-mut num">{{ it.patrimonio|default:"—" }}</td>
+            <td>{% if it.score is not None %}<span class="pvtx-score pvtx-score--{{ it.classe|slugify }}">{{ it.score }}</span>{% else %}<span class="pvtx-score pvtx-score--none">—</span>{% endif %}</td>
+            <td class="num">{{ it.dias }}</td>
+            <td class="num">{{ it.vencimento|date:'d/m/Y' }}{% if it.adiar_pendente %}<br><span class="pvtx-mini"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 22h14M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.41L12 12l-4.41 4.42A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.41L12 12l4.41-4.42A2 2 0 0 0 17 6.17V2"/></svg> adiar pendente</span>{% elif it.adiada_ate %}<br><span class="pvtx-mini"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/></svg> adiada</span>{% endif %}</td>
+            <td><span class="pvtx-chip pvtx-chip--{{ it.status }}">{{ it.status_label }}</span></td>
+            <td>
+              {# Ações repetidas: a de peso é TONAL; a secundária, text button. #}
+              <div class="pvtx-acts">
+                {% if not it.adiar_pendente %}
+                <button type="button" class="pvx-btn pvtx-txt" data-adiar-open
+                        data-kind="{{ it.kind }}" data-pk="{{ it.pk }}" data-nome="{{ it.colaborador|default:it.titulo }}"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4M21 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h6"/><path d="M3 10h6"/><circle cx="17.5" cy="17.5" r="4.5"/><path d="M17.5 15.7v1.8l1.3.9"/></svg> Adiar</button>
+                {% endif %}
+                <button type="button" class="pvx-btn pvx-btn--soft" data-pv-open
+                        data-kind="{{ it.kind }}" data-pk="{{ it.pk }}" data-nome="{{ it.colaborador|default:it.titulo }}"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Concluir</button>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="10" class="pvtx-vazio">
+            <div class="mkpro-empty">
+              <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+              <p class="mkpro-empty__title">Nenhuma máquina neste recorte</p>
+              <p class="mkpro-empty__hint">Ajuste os filtros de unidade e setor acima para ver as máquinas do parque.</p>
+            </div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% include "parque/_preventiva_concluir_modal.html" %}
+{% include "parque/_adiar_modal.html" %}
+{% endwith %}
+{% endblock %}

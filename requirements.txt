@@ -1,0 +1,47 @@
+# ITAM Make Distribuidora — dependências
+# Todas com licença permissiva (BSD/MIT/Apache). Sem copyleft.
+
+# --- Core (Fase 0) ---
+Django>=5.2,<6.0          # 5.2 LTS (suporte estendido)
+django-environ>=0.11
+
+# --- Visual do admin (tema clean + Material, cores Make) ---
+django-unfold==0.97.1
+
+# --- Foto do colaborador ---
+# O Django EXIGE Pillow para validar um ImageField: sem ele, o `check` falha
+# com fields.E210 e a migracao nem roda (aconteceu ao instalar no servidor —
+# aqui o Pillow estava instalado a mao e o erro ficou escondido).
+Pillow>=10.0
+
+# --- Etiquetas de patrimônio (código de barras + QR, SVG; não precisa de Pillow) ---
+python-barcode>=0.16
+qrcode>=8.0
+
+# --- Segurança: anti-brute-force no login (bloqueio por tentativas) ---
+django-axes>=8.0
+
+# --- Criptografia E2EE da telemetria (RSA+AES do agente → servidor) ---
+cryptography>=42.0
+
+# --- Banco em produção (VPS / Fase 8) ---
+psycopg[binary]>=3.1
+
+# --- Servidor LOCAL de produção (Windows, rede interna) ---
+waitress>=3.0            # servidor WSGI de produção para Windows (no lugar do runserver)
+whitenoise>=6.6          # serve os arquivos estáticos com DEBUG=False (sem --insecure)
+
+# Dependências adicionadas conforme as fases avançam:
+# --- Fase 5: importação ---
+# qrcode>=7.4
+# django-import-export>=4.0
+# WeasyPrint>=62
+# --- Fase 6: jobs agendados ---
+# django-q2>=1.7
+# --- Fase 7: API REST ---
+# djangorestframework>=3.15
+# django-filter>=24.0
+# --- Hardening (Fase 8) --- (django-axes já ativo acima)
+
+# Import de planilha .xlsx (manage.py import_notebooks / import_planilha).
+openpyxl==3.1.5

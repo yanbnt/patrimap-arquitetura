@@ -1,0 +1,62 @@
+{% extends 'admin/base.html' %}
+{% load i18n static unfold %}
+
+{% block bodyclass %}{{ block.super }} make-dashboard{% endblock %}
+
+{% block branding %}
+    {% include "unfold/helpers/site_branding.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="make-dash">
+  <div class="make-dash-bg" aria-hidden="true">{% include "admin/_make_doodles_bg.html" %}</div>
+  <div class="make-dash-inner">
+    <style>
+      /* Prefixo .mkdf — só o cabeçalho desta tela (a grade vive no _dash_charts).
+         MIGRAÇÃO M3: `--ui-*` → `--md-*`. O "Voltar ao Início" era um botão com
+         contorno e superfície próprios; virou BOTÃO DE TEXTO (§4) — sai a borda,
+         sai o fundo, fica só a tinta `primary` e o state layer. */
+      .mkdf-head { grid-template-columns: minmax(0, 1fr) auto; align-items: center; margin-bottom: 20px; }
+      .mkdf-head .mkpro-head__eyebrow,
+      .mkdf-head .mkpro-head__title,
+      .mkdf-head .mkpro-head__sub { grid-column: 1; }
+      .mkdf-head .mkpro-head__actions { grid-column: 2; grid-row: 1 / 4; align-self: center; margin: 0; }
+      .mkdf-head__back {
+        position: relative; overflow: hidden;
+        display: inline-flex; align-items: center; gap: 8px;
+        height: 40px; padding: 0 16px;
+        border: 0; border-radius: var(--md-shape-full);
+        background: transparent; color: var(--md-primary);
+        font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+        text-decoration: none; white-space: nowrap;
+      }
+      /* State layer de 8% / 12% — a interação do M3 não troca a cor de fundo. */
+      .mkdf-head__back::before {
+        content: ""; position: absolute; inset: 0; background: currentColor;
+        opacity: 0; transition: opacity var(--md-dur-short) var(--md-ease-standard);
+      }
+      .mkdf-head__back:hover::before { opacity: .08; }
+      .mkdf-head__back:active::before { opacity: .12; }
+      .mkdf-head__back svg { width: 18px; height: 18px; display: block; position: relative; }
+      @media (max-width: 720px) {
+        .mkdf-head { grid-template-columns: 1fr; }
+        .mkdf-head .mkpro-head__actions { grid-column: 1; grid-row: auto; margin-top: 8px; }
+      }
+    </style>
+    {% comment %}Cabeçalho de tela no padrão .mkpro-head (DESIGN-SYSTEM.md §3).{% endcomment %}
+    <header class="mkpro-head mkdf-head">
+      <p class="mkpro-head__eyebrow">Painel · Análise</p>
+      <h1 class="mkpro-head__title">Dashboard</h1>
+      <p class="mkpro-head__sub">Sete leituras do parque de TI · clique num gráfico para abrir a lista por trás do número.</p>
+      <div class="mkpro-head__actions">
+        {% url 'admin:index' as mkdf_home %}
+        <a class="mkdf-head__back" href="{{ mkdf_home|default:'/admin/' }}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+          Voltar ao Início
+        </a>
+      </div>
+    </header>
+    {% include "admin/_dash_charts.html" %}
+  </div>
+</div>
+{% endblock %}

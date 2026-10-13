@@ -1,0 +1,195 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<style>
+  /* =========================================================================
+     aprovacoes — FILA DE DECISÃO em Material Design 3. Cada linha diz o que
+     muda, quem pediu e traz as duas decisões. As views de decisão exigem POST
+     (CSRF) — por isso cada botão é um formulário com token CSRF e `next` de
+     volta para esta tela (isso NÃO mudou).
+
+     O que SAIU (DESIGN-SYSTEM.md §5): a borda e a sombra de cada seção, a
+     borda inferior do cabeçalho da seção, a borda do contador, as bordas dos
+     botões, o peso 700 nos rótulos e nos botões, e a borda tracejada do
+     estado vazio.
+     O que ENTROU (§4): seção em `surface-container-low` com cabeçalho em
+     `surface-container`, linhas separadas por divisor `outline-variant` e
+     hover como state layer de 8%; NEGAR como text button em `error` e
+     AUTORIZAR como TONAL — a decisão se repete em cada linha, então nenhuma
+     delas é filled. Escopado em .aprv; cor por var(--md-*).
+     ====================================================================== */
+  .aprv { display: flex; flex-direction: column; gap: 16px; }
+  .aprv *, .aprv *::before, .aprv *::after { box-sizing: border-box; }
+  .aprv svg { display: block; }
+
+  /* --- botões: base de layout do sistema M3 + os text buttons ------------ */
+  .aprv .pvx-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  .aprv .pvx-btn svg { width: 18px; height: 18px; flex: none; }
+  /* `#main` na frente vence o `!important` do CSS histórico (§9.2). */
+  #main .aprv-txt {
+    background: transparent !important; color: var(--md-primary) !important;
+    padding: 0 12px !important;
+  }
+  /* Text button destrutivo: o par `error` (§2). */
+  #main .aprv-txt--no {
+    background: transparent !important; color: var(--md-error) !important;
+    padding: 0 12px !important;
+  }
+
+  .aprv-sec {
+    background: var(--md-surface-container-low);
+    border: 0; border-radius: var(--md-shape-lg); box-shadow: none; overflow: hidden;
+  }
+  /* Cabeçalho da seção: separa por TOM, não por linha. */
+  .aprv-sec__head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px; border: 0;
+    background: var(--md-surface-container);
+  }
+  .aprv-sec__tit { margin: 0; font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface); }
+  .aprv-sec__q {
+    margin-left: auto; min-height: 24px; display: inline-flex; align-items: center; padding: 0 8px;
+    border: 0; border-radius: var(--md-shape-sm);
+    background: var(--md-secondary-container); color: var(--md-on-secondary-container);
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; font-variant-numeric: tabular-nums;
+  }
+
+  .aprv-row {
+    display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.1fr) minmax(0, 1fr) auto;
+    align-items: center; gap: 16px;
+    padding: 12px 16px; border-bottom: 1px solid var(--md-outline-variant);
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .aprv-row:last-child { border-bottom: 0; }
+  /* State layer de 8% (§1.4) em vez de trocar a cor de fundo. */
+  .aprv-row:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+  .aprv-row--head {
+    padding-top: 12px; padding-bottom: 12px; background: transparent;
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px; color: var(--md-on-surface-variant);
+  }
+  .aprv-row--head:hover { background: transparent; }
+  @media (max-width: 900px) {
+    .aprv-row { grid-template-columns: 1fr; gap: 8px; }
+    .aprv-row--head { display: none; }
+  }
+
+  .aprv-what { font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant); min-width: 0; }
+  .aprv-what b { color: var(--md-on-surface); font-weight: 500; }
+  .aprv-what .aprv-arrow { color: var(--md-on-surface-variant); margin: 0 6px; }
+  .aprv-who {
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface);
+    min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  }
+  .aprv-mut {
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant);
+    min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .aprv-acoes { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .aprv-acoes form { margin: 0; }
+</style>
+
+<div class="aprv">
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · Fluxo de aprovação</p>
+    <h1 class="mkpro-head__title">Aprovações pendentes</h1>
+    <p class="mkpro-head__sub"><span class="mkpro-num">{{ total }}</span> pedido{{ total|pluralize }} esperando sua decisão · transferências de computador e movimentações de baia.</p>
+    <div class="mkpro-head__actions">
+      <a data-mk-voltar class="pvx-btn aprv-txt" href="{{ voltar_url }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg> {{ voltar_nome }}
+      </a>
+    </div>
+  </header>
+
+  {% if total == 0 %}
+    <div class="mkpro-empty">
+      <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg></span>
+      <p class="mkpro-empty__title">Nenhuma solicitação pendente</p>
+      <p class="mkpro-empty__hint">Novos pedidos de transferência ou de movimentação de baia caem nesta fila — o sino do topo avisa quando chegam.</p>
+    </div>
+  {% endif %}
+
+  {% if transferencias %}
+  <section class="aprv-sec">
+    <div class="aprv-sec__head">
+      <span class="mkpro-chip mkpro-chip--sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></span>
+      <h2 class="aprv-sec__tit">Transferências de computador</h2>
+      <span class="aprv-sec__q">{{ transferencias|length }}</span>
+    </div>
+
+    <div class="aprv-row aprv-row--head">
+      <span>Origem → Destino</span><span>Colaborador</span><span>Solicitante</span><span></span>
+    </div>
+
+    {% for t in transferencias %}
+    <div class="aprv-row">
+      <span class="aprv-what"><b>{{ t.baia_origem|default:"?" }}</b><span class="aprv-arrow">→</span><b>{{ t.baia_destino|default:"?" }}</b></span>
+      <span class="aprv-who">{{ t.colaborador_destino|default:t.colaborador_saida|default:"—" }}</span>
+      <span class="aprv-mut">{{ t.registrado_por|default:"—" }}</span>
+      <span class="aprv-acoes">
+        <form method="post" action="{% url 'parque_decidir_transferencia' t.pk 'negar' %}">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button type="submit" class="pvx-btn aprv-txt--no" onclick="return confirm('Negar esta transferência?')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg> Negar
+          </button>
+        </form>
+        <form method="post" action="{% url 'parque_decidir_transferencia' t.pk 'autorizar' %}">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button type="submit" class="pvx-btn pvx-btn--soft">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Autorizar
+          </button>
+        </form>
+      </span>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if movimentacoes %}
+  <section class="aprv-sec">
+    <div class="aprv-sec__head">
+      <span class="mkpro-chip mkpro-chip--sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg></span>
+      <h2 class="aprv-sec__tit">Movimentações de baia</h2>
+      <span class="aprv-sec__q">{{ movimentacoes|length }}</span>
+    </div>
+
+    <div class="aprv-row aprv-row--head">
+      <span>Movimentação</span><span>Tipo</span><span>Solicitante</span><span></span>
+    </div>
+
+    {% for m in movimentacoes %}
+    <div class="aprv-row">
+      <span class="aprv-what">
+        {% if m.tipo == "trocar" %}<b>{{ m.baia }}</b><span class="aprv-arrow">↔</span><b>{{ m.baia_parceira }}</b>
+        {% else %}<b>{{ m.baia }}</b>: {{ m.setor_origem|default:"?" }}<span class="aprv-arrow">→</span><b>{{ m.setor_destino|default:"?" }}</b>{% endif %}
+      </span>
+      <span class="aprv-who">{% if m.tipo == "trocar" %}Troca de PC{% else %}Mover baia{% endif %}</span>
+      <span class="aprv-mut">{{ m.solicitante|default:"—" }}</span>
+      <span class="aprv-acoes">
+        <form method="post" action="{% url 'parque_decidir_solicitacao' m.pk 'negar' %}">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button type="submit" class="pvx-btn aprv-txt--no" onclick="return confirm('Negar esta solicitação?')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg> Negar
+          </button>
+        </form>
+        <form method="post" action="{% url 'parque_decidir_solicitacao' m.pk 'autorizar' %}">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button type="submit" class="pvx-btn pvx-btn--soft">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Autorizar
+          </button>
+        </form>
+      </span>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

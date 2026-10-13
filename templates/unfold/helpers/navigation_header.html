@@ -1,0 +1,26 @@
+{% load i18n unfold static %}
+{% comment %}
+Cabeçalho da gaveta: NÃO tem mais marca.
+
+Decisão do dono (04/09/2026): "tira essa merda de ITAM Make e bota o ícone do
+usuário lá". O raciocínio dele antes: "ela não tá sendo útil pra gente ali" —
+quem está dentro do sistema já sabe em que sistema está, e aquele bloco custava
+uma faixa inteira de altura no topo da gaveta.
+
+Então o cartão de usuário (`unfold/helpers/navigation_user.html`) sobe e passa a
+ser o primeiro bloco da gaveta. O menu dele — trocar senha e SAIR — vem junto,
+intacto: é por isso que o cartão foi PROMOVIDO em vez de reescrito aqui. Perder
+o caminho do "Sair" seria regressão grave.
+
+Sobra só o X de fechar, e apenas abaixo de 1280px: nessa faixa a gaveta é
+sobreposta e ele é o jeito de fechá-la por dentro. Acima disso a gaveta está
+sempre visível e este bloco não aparece (make-m3.css §19.14).
+{% endcomment %}
+
+<div class="mkbrand-wrap mkbrand-wrap--vazia {% element_classes 'navigation_header' %}">
+    <button type="button" class="mkbrand__close xl:hidden!"
+            aria-label="{% trans 'Fechar menu' %}" title="{% trans 'Fechar menu' %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+</div>

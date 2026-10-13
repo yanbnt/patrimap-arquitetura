@@ -1,0 +1,177 @@
+{% comment %}
+Bloco de sessão/usuário no alto da gaveta de navegação; o menu abre para baixo.
+
+A ESTRUTURA não pode mudar: o make-m3.css §3 estiliza o cartão do usuário pela
+POSIÇÃO (`#nav-sidebar-inner > div:nth-child(2) > div.cursor-pointer`) — mexer na
+árvore aqui apaga o estilo da gaveta.
+
+MIGRAÇÃO PARA M3 (DESIGN-SYSTEM.md §1, §4 e §5):
+  · `--ui-*` → papéis `--md-*`;
+  · o menu perdeu o CONTORNO de 1px: agora ele sobe um nível de tom
+    (`surface-container-high` sobre a gaveta em `surface-container-low`) e
+    mantém só a sombra de quem realmente flutua (menu — §1);
+  · o item do menu passou a label-large com state layer de 8% no hover, no lugar
+    da troca de cor de fundo, e o raio saiu dos 11px que o CSS histórico impõe a
+    todo `<a>` da gaveta para os 8px da escala;
+  · nome do usuário em title-small (500, era 650) e e-mail em body-small.
+{% endcomment %}
+<style>
+  /* Prefixo .mknu. Cor SÓ por papel --md-*. */
+  {% comment %}
+  O chevron `<>` saiu: o dono perguntou "essas setas do lado é oq?" e pediu
+  para tirar. Era o único indicador de que o cartão abre um menu — o papel
+  disso agora é do `aria-haspopup`/`aria-expanded` para leitor de tela e do
+  realce de fundo quando o menu está aberto, para quem vê. O espaço foi para
+  o nome e o e-mail, que antes cortavam.
+  {% endcomment %}
+  #nav-sidebar .mknu-menu {
+    background: var(--md-surface-container-high) !important;
+    border: 0 !important;
+    outline: 0;
+    border-radius: var(--md-shape-md) !important;
+    box-shadow: var(--md-elev-2) !important;
+    padding: 8px !important;
+    overflow: hidden;
+  }
+  {% comment %}
+  A gaveta força a sua tinta em tudo que está dentro dela
+  (`#page #nav-sidebar [class*="text-font"]`) e o CSS histórico força border-color
+  em qualquer borda. Dentro deste menu isso tem de ser desfeito: daí os dois ids
+  na frente e o :not() a mais, sem tocar em nenhum arquivo de CSS.
+  {% endcomment %}
+  #page #nav-sidebar .mknu-menu * { color: var(--md-on-surface) !important; }
+  #page #nav-sidebar .mknu-menu *:not(svg):not(path):not(.material-symbols-outlined) {
+    border-color: var(--md-outline-variant) !important;
+  }
+  #page #nav-sidebar .mknu-menu a,
+  #page #nav-sidebar .mknu-menu button,
+  #page #nav-sidebar .mknu-menu > div {
+    font: 500 14px/20px var(--md-font) !important;
+    letter-spacing: .1px !important;
+    border-radius: var(--md-shape-sm) !important;
+  }
+  /* State layer de 8% / 12% — a interação do M3. */
+  #page #nav-sidebar .mknu-menu a:hover,
+  #page #nav-sidebar .mknu-menu button:hover {
+    background: color-mix(in srgb, var(--md-on-surface) 8%, transparent) !important;
+  }
+  #page #nav-sidebar .mknu-menu a:active,
+  #page #nav-sidebar .mknu-menu button:active {
+    background: color-mix(in srgb, var(--md-on-surface) 12%, transparent) !important;
+  }
+  #nav-sidebar .mknu-name { font: 500 14px/20px var(--md-font); letter-spacing: .1px; }
+  /* Cargo · unidade: mesma métrica do e-mail que estava aqui (body-small). */
+  #nav-sidebar .mknu-papel {
+    font: 400 12px/16px var(--md-font);
+    letter-spacing: .4px;
+    color: var(--md-on-surface-variant) !important;
+  }
+  /* Cabeçalho do menu da conta: identifica, não clica. */
+  #page #nav-sidebar .mknu-menu .mknu-conta {
+    font: 400 12px/16px var(--md-font) !important;
+    letter-spacing: .4px !important;
+    color: var(--md-on-surface-variant) !important;
+    padding: 6px 10px 10px !important;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--md-outline-variant);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: default;
+  }
+  #page #nav-sidebar .mknu-menu .mknu-conta:hover { background: transparent !important; }
+  #nav-sidebar .mknu-mail {
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px;
+    color: var(--md-on-surface-variant) !important;
+  }
+</style>
+{% comment %}
+A linha de baixo (`border-b border-base-200`) saiu: era borda que só separava, e
+no M3 quem separa o bloco do usuário dos itens da gaveta é o TOM do cartão
+(§5, item 1). O `x-data` e a árvore de posição seguem iguais.
+{% endcomment %}
+<div class="px-6 py-3 relative mb-2" x-data="{ openUserLinks: false }">
+    <nav class="mknu-menu absolute flex flex-col leading-none top-[73px] left-3 right-3 z-50" x-cloak x-show="openUserLinks" x-transition x-on:click.outside="openUserLinks = false">
+        {% comment %}
+        O e-mail saiu do cartão e virou o cabeçalho do menu: é aqui que ele
+        serve — para confirmar "em qual conta eu estou" antes de trocar senha ou
+        sair. Não é item clicável, e é o que a ordem canônica pede (Vercel,
+        Linear): identidade, depois preferências, depois sair.
+        {% endcomment %}
+        {% if request.user.email %}
+            <div class="mknu-conta">{{ request.user.email }}</div>
+        {% endif %}
+
+        {% include "unfold/helpers/theme_switch.html" %}
+
+        {% include "unfold/helpers/language_switch.html" %}
+
+        {% if extra_userlinks %}
+            {{ extra_userlinks }}
+        {% endif %}
+
+        {% include "unfold/helpers/account_links.html" %}
+    </nav>
+
+    {% comment %}
+    Continua sendo uma <div>, e isso é de propósito: as DUAS camadas de CSS
+    miram `div.cursor-pointer` (make-m3.css §3 e make-admin.css), então trocar a
+    tag por <button> apagaria a aparência do cartão em silêncio.
+
+    O que entrou aqui é acessibilidade, não estilo. Este cartão é o ÚNICO
+    caminho para trocar de tema, trocar a senha e SAIR — e uma <div> sem
+    `tabindex` não recebe foco: quem navega por teclado não tinha como chegar ao
+    "Sair". Agora tem: papel de botão, foco na ordem natural, Enter e Espaço
+    abrindo o menu, Esc fechando, e `aria-expanded` dizendo o estado.
+    {% endcomment %}
+    <div class="cursor-pointer flex flex-row gap-3 items-center min-h-[64px] -mx-6 -my-3 px-6 py-3 hover:bg-base-100 dark:hover:bg-base-800"
+         role="button" tabindex="0"
+         aria-haspopup="menu"
+         x-bind:aria-expanded="openUserLinks ? 'true' : 'false'"
+         x-on:click="openUserLinks = !openUserLinks"
+         x-on:keydown.enter.prevent="openUserLinks = !openUserLinks"
+         x-on:keydown.space.prevent="openUserLinks = !openUserLinks"
+         x-on:keydown.escape="openUserLinks = false"
+         x-bind:class="{'bg-base-100 dark:bg-base-800': openUserLinks}">
+        {% include "unfold/helpers/avatar.html" with user=request.user %}
+
+        <div class="flex flex-col select-none min-w-0">
+            <div class="mknu-name text-important truncate">
+                {{ request.user.get_full_name|default:request.user.get_username }}
+            </div>
+
+            {% comment %}
+            A segunda linha diz CARGO · UNIDADE, não o e-mail.
+
+            Motivo: o e-mail é o dado menos útil para quem já está logado (ele
+            sabe qual é o seu), e é justamente o que não cabe — a largura de
+            texto disponível é ~186px e um e-mail corporativo daqui tem 39
+            caracteres, então saía sempre com "…". Cargo e unidade são dados que
+            o dono NÃO tinha em nenhum lugar da navegação.
+
+            Vem de `Person` (apps/orgs/models.py): `job_title` e `location`.
+            Usa `location.name` e não o `__str__`, que devolve "Pai › Filho" e
+            estouraria a linha. Cai para o grupo e, por último, para o e-mail —
+            usuário sem colaborador vinculado não fica com a linha vazia.
+
+            Acessar um OneToOne reverso inexistente levanta `ObjectDoesNotExist`,
+            que tem `silent_variable_failure = True`: o template resolve para
+            vazio em vez de estourar. Custo: 2 consultas indexadas por request
+            (o Django guarda o objeto relacionado na instância).
+            {% endcomment %}
+            {% with col=request.user.colaborador %}
+                {% if col.job_title or col.location %}
+                    <div class="mknu-papel truncate">
+                        {% if col.job_title %}{{ col.job_title }}{% endif %}
+                        {% if col.job_title and col.location %} · {% endif %}
+                        {% if col.location %}{{ col.location.name }}{% endif %}
+                    </div>
+                {% elif request.user.groups.all.0 %}
+                    <div class="mknu-papel truncate">{{ request.user.groups.all.0.name }}</div>
+                {% elif request.user.email %}
+                    <div class="mknu-papel truncate">{{ request.user.email }}</div>
+                {% endif %}
+            {% endwith %}
+        </div>
+    </div>
+</div>

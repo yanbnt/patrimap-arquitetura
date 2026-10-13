@@ -1,0 +1,417 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+{% with qs_uni=uni_sel_val|urlencode %}
+<style>
+  /* =========================================================================
+     preventiva_calendario — mesmo SEGMENTED BUTTON do Material Design 3 das
+     outras telas da família (grupo com borda `outline` externa, divisores
+     internos, item ativo em `secondary-container` com ícone de CHECK).
+
+     O que SAIU (DESIGN-SYSTEM.md §5): a caixa de abas em pílula com sombra, a
+     borda e a sombra da barra do mês e da grade, as bordas dos botões de
+     navegação, a borda do contador do dia, a borda + filete de 3px de cada
+     evento, o peso 700 nos rótulos e o degradê do painel do dia.
+
+     O que ENTROU (§4): grade em superfície tonal com divisor `outline-variant`
+     (a única linha do M3), status por CHIP TONAL (par cor + on-cor), HOJE com
+     anel de 2px em `primary`, e o painel do dia como DIÁLOGO — container-high,
+     raio 28, sombra nível 3.
+
+     Escopado em .pvxc (o overlay do dia fica FORA, com seletores por id).
+     ====================================================================== */
+  .pvxc { display: flex; flex-direction: column; gap: 16px; }
+  .pvxc *, .pvxc *::before, .pvxc *::after { box-sizing: border-box; }
+  .pvxc svg { display: block; }
+  .pvxc .num { font-variant-numeric: tabular-nums; }
+
+  /* --- botões: base de layout do sistema M3 + o text button -------------- */
+  .pvxc .pvx-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  .pvxc .pvx-btn svg { width: 18px; height: 18px; flex: none; }
+  /* `#main` na frente vence o `!important` do CSS histórico (§9.2). */
+  #main .pvxc-txt {
+    background: transparent !important; color: var(--md-primary) !important;
+    padding: 0 12px !important;
+  }
+
+  /* --- segmented button -------------------------------------------------- */
+  .pvxc-topnav { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .pvxc-seg {
+    display: flex; max-width: 100%; overflow-x: auto;
+    border: 1px solid var(--md-outline); border-radius: var(--md-shape-full);
+    background: transparent;
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  .pvxc-seg::-webkit-scrollbar { display: none; }
+  .pvxc-seg__i {
+    position: relative; overflow: hidden; flex: 0 0 auto;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 40px; padding: 0 16px;
+    border: 0; border-left: 1px solid var(--md-outline);
+    background: transparent; color: var(--md-on-surface); text-decoration: none;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; white-space: nowrap;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .pvxc-seg__i:first-child { border-left: 0; }
+  .pvxc-seg__i::before {
+    content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0;
+    pointer-events: none; transition: opacity var(--md-dur-short) var(--md-ease-standard);
+  }
+  .pvxc-seg__i:hover::before { opacity: .08; }
+  .pvxc-seg__i:active::before { opacity: .12; }
+  .pvxc-seg__i.is-active { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+  .pvxc-seg__i svg { width: 18px; height: 18px; flex: none; }
+  .pvxc-seg__i .pvxc-seg__ck { display: none; }
+  .pvxc-seg__i.is-active .pvxc-seg__ck { display: block; }
+  .pvxc-seg__i.is-active .pvxc-seg__ic { display: none; }
+
+  /* --- barra do mês + legenda -------------------------------------------- */
+  .pvxc-calbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+    background: var(--md-surface-container-low);
+    border: 0; border-radius: var(--md-shape-lg); box-shadow: none; padding: 12px 16px;
+  }
+  .pvxc-monthnav { display: inline-flex; align-items: center; gap: 4px; }
+  /* Icon button M3: 40px, pílula, sem contêiner, state layer de 8%/12%. */
+  .pvxc-nav__btn {
+    position: relative; overflow: hidden;
+    width: 40px; height: 40px; display: grid; place-items: center; cursor: pointer;
+    border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-on-surface-variant); text-decoration: none;
+  }
+  .pvxc-nav__btn::before {
+    content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0;
+    pointer-events: none; transition: opacity var(--md-dur-short) var(--md-ease-standard);
+  }
+  .pvxc-nav__btn:hover::before { opacity: .08; }
+  .pvxc-nav__btn:active::before { opacity: .12; }
+  .pvxc-nav__btn svg { width: 20px; height: 20px; }
+  .pvxc-nav__mes {
+    min-width: 152px; text-align: center;
+    font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface);
+  }
+  /* Outlined button: 1px outline, texto primary. */
+  .pvxc-hoje {
+    position: relative; overflow: hidden;
+    min-height: 40px; display: inline-flex; align-items: center; padding: 0 24px;
+    border: 1px solid var(--md-outline); border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary); text-decoration: none;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+  }
+  .pvxc-hoje::before {
+    content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0;
+    pointer-events: none; transition: opacity var(--md-dur-short) var(--md-ease-standard);
+  }
+  .pvxc-hoje:hover::before { opacity: .08; }
+  .pvxc-legenda {
+    margin-left: auto; display: flex; flex-wrap: wrap; gap: 16px;
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+  }
+  .pvxc-legenda span { display: inline-flex; align-items: center; gap: 8px; }
+  .pvxc-dot { width: 8px; height: 8px; border-radius: var(--md-shape-full); }
+  .pvxc-dot--pendente { background: var(--md-st-crit); }
+  .pvxc-dot--vencida { background: var(--md-st-warn); }
+  .pvxc-dot--proxima { background: var(--md-st-attn); }
+  .pvxc-dot--em_dia { background: var(--md-st-ok); }
+
+  /* --- grade -------------------------------------------------------------- */
+  .pvxc-cal {
+    background: var(--md-surface-container-low);
+    border: 0; border-radius: var(--md-shape-lg); box-shadow: none; overflow: hidden;
+  }
+  .pvxc-wkrow {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    background: transparent; border-bottom: 1px solid var(--md-outline-variant);
+  }
+  .pvxc-wkday {
+    padding: 12px 12px;
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: uppercase; color: var(--md-on-surface-variant);
+  }
+  .pvxc-row { display: grid; grid-template-columns: repeat(7, 1fr); }
+  /* Divisor de 1px em outline-variant: é o "grid" do data table do M3. */
+  .pvxc-cell {
+    position: relative; min-height: 116px; padding: 8px;
+    border-right: 1px solid var(--md-outline-variant);
+    border-bottom: 1px solid var(--md-outline-variant);
+    display: flex; flex-direction: column; gap: 6px; background: transparent;
+  }
+  .pvxc-cell:nth-child(7n) { border-right: 0; }
+  .pvxc-row:last-child .pvxc-cell { border-bottom: 0; }
+  .pvxc-cell--fora { background: var(--md-surface-container); }
+  .pvxc-cell--fora .pvxc-cell__num { color: var(--md-outline); }
+  .pvxc-cell--fds .pvxc-cell__num { color: var(--md-on-surface-variant); }
+  .pvxc-cell--click { cursor: pointer; transition: background-color var(--md-dur-short) var(--md-ease-standard); }
+  /* State layer de 8% (§1.4) em vez de trocar a cor de fundo. */
+  .pvxc-cell--click:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+  .pvxc-cell--click:focus-visible { outline: 3px solid var(--md-primary); outline-offset: -3px; }
+  /* HOJE: anel em primary por dentro, sem mexer no fluxo da grade. */
+  .pvxc-cell--hoje::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    box-shadow: inset 0 0 0 2px var(--md-primary);
+  }
+  .pvxc-cell--hoje .pvxc-cell__num { color: var(--md-primary); }
+  .pvxc-cell__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .pvxc-cell__num {
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+    color: var(--md-on-surface); font-variant-numeric: tabular-nums;
+  }
+  .pvxc-cell__qtd {
+    min-width: 24px; min-height: 20px; padding: 0 8px; display: grid; place-items: center;
+    border: 0; border-radius: var(--md-shape-sm);
+    background: var(--md-secondary-container); color: var(--md-on-secondary-container);
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; font-variant-numeric: tabular-nums;
+  }
+  .pvxc-cell__ev { display: flex; flex-direction: column; gap: 4px; }
+  /* Evento = chip tonal: o par contêiner + on-contêiner do status. */
+  .pvxc-ev {
+    display: flex; align-items: center; gap: 6px; overflow: hidden;
+    border: 0; border-radius: var(--md-shape-sm); padding: 4px 8px;
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+  }
+  .pvxc-ev svg { width: 12px; height: 12px; flex: none; }
+  .pvxc-ev__txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pvxc-ev--pendente { background: var(--md-st-crit-cont); color: var(--md-st-crit); }
+  .pvxc-ev--vencida { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+  .pvxc-ev--proxima { background: var(--md-st-attn-cont); color: var(--md-st-attn); }
+  .pvxc-ev--em_dia { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+  .pvxc-ev--mais {
+    justify-content: center;
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+  }
+
+  /* --- celular ------------------------------------------------------------ */
+  /* Medido em 375px: a grade do mês media 404px numa caixa de 315px, e o
+     `overflow: hidden` do `.pvxc-cal` (o que recorta o raio de 16px) escondia
+     os 89px que sobravam — a coluna de domingo não aparecia, e a célula de
+     sábado ia de 374 a 408px, fora da janela.
+
+     A causa é a armadilha do mínimo automático: `repeat(7, 1fr)` é
+     `repeat(7, minmax(auto, 1fr))`, e esse `auto` vale o min-content da
+     célula — 8+8px de padding mais o chip de quantidade e o texto do evento
+     dão ~58px por coluna, 404px nas sete. Não é a faixa que estoura: é o
+     conteúdo que se recusa a encolher.
+
+     São três correções, e as três são necessárias:
+     · `minmax(0, 1fr)` solta a FAIXA;
+     · `min-width: 0` solta a CÉLULA, que como item de grid também nasce com
+       mínimo = min-content;
+     · e o conteúdo tem de caber em 45px (315/7): chip de evento com texto é
+       impossível nessa largura, então ele vira uma barrinha de cor (a cor já
+       É o status) e a contagem do dia fica em número, sem caixa. O dia segue
+       clicável e o diálogo do dia continua mostrando tudo. */
+  @media (max-width: 560px) {
+    .pvxc-row,
+    .pvxc-wkrow { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+    .pvxc-cell { min-width: 0; min-height: 62px; padding: 4px 2px; gap: 3px; }
+    .pvxc-wkday { padding: 8px 2px; text-align: center; font-size: 10px; letter-spacing: 0; }
+    .pvxc-cell__top { justify-content: center; gap: 2px; }
+    .pvxc-cell__num { font-size: 13px; }
+    .pvxc-cell__qtd {
+      min-width: 0; min-height: 0; padding: 0;
+      background: none; color: var(--md-primary);
+      font-size: 10px; font-weight: 700;
+    }
+    .pvxc-cell__ev { gap: 2px; }
+    .pvxc-ev { padding: 0; height: 4px; border-radius: 2px; overflow: hidden; }
+    .pvxc-ev svg,
+    .pvxc-ev__txt,
+    .pvxc-ev--mais { display: none; }
+  }
+
+  /* --- painel do dia = DIÁLOGO M3 (fica FORA do .pvxc: seletores por id) -- */
+  #pv-day .pvday__panel {
+    background: var(--md-surface-container-high) !important;
+    border: 0 !important; border-radius: var(--md-shape-xl) !important;
+    box-shadow: var(--md-elev-3) !important;
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+    padding: 24px;
+  }
+  /* Scrim chapado do M3 (o CSS histórico punha blur aqui). */
+  #pv-day .pvday__backdrop {
+    background: rgba(0, 0, 0, .32);
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  #pv-day .pvday__tit { font: 400 24px/32px var(--md-font) !important; letter-spacing: 0; color: var(--md-on-surface) !important; }
+  #pv-day .pvday__hint {
+    font: 400 14px/20px var(--md-font) !important; letter-spacing: .25px;
+    color: var(--md-on-surface-variant) !important; margin-bottom: 16px;
+  }
+  /* Icon button M3 (sem contêiner) e seta em contêiner tonal. */
+  #pv-day .pvday__x {
+    position: relative; overflow: hidden;
+    width: 40px; height: 40px; font-size: 20px; border: 0;
+    border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-on-surface-variant);
+  }
+  #pv-day .pvday__x::before {
+    content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0;
+    pointer-events: none; transition: opacity var(--md-dur-short) var(--md-ease-standard);
+  }
+  #pv-day .pvday__x:hover::before { opacity: .08; }
+  #pv-day .pvday__arrow {
+    position: relative; overflow: hidden;
+    width: 40px; height: 40px; border: 0; border-radius: var(--md-shape-full);
+    background: var(--md-surface-container-highest); color: var(--md-on-surface-variant);
+  }
+  #pv-day .pvday__arrow::before {
+    content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0;
+    pointer-events: none; transition: opacity var(--md-dur-short) var(--md-ease-standard);
+  }
+  #pv-day .pvday__arrow:hover::before { opacity: .08; }
+  /* ícone do card de notebook do store oculto (clonado p/ o carrossel) */
+  .pvxc-nbico { width: 20px; height: 20px; }
+  /* "Concluir preventiva" do carrossel: ação repetida → TONAL, não filled. */
+  #pv-cards .pvscreen__ok, #pv-day .pvscreen__ok {
+    position: relative; overflow: hidden;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 40px; padding: 0 16px; cursor: pointer;
+    border: 0; border-radius: var(--md-shape-full);
+    background: var(--md-secondary-container); color: var(--md-on-secondary-container);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+  }
+  #pv-day .pvscreen__ok::before {
+    content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0;
+    pointer-events: none; transition: opacity var(--md-dur-short) var(--md-ease-standard);
+  }
+  #pv-day .pvscreen__ok:hover::before { opacity: .08; }
+  #pv-cards .pvscreen__ok svg, #pv-day .pvscreen__ok svg { width: 18px; height: 18px; flex: none; display: block; }
+</style>
+
+<div class="pvxc">
+
+  {# --- cabeçalho da família: text button de voltar + segmented button --- #}
+  <div class="pvxc-topnav">
+    <a data-mk-voltar class="pvx-btn pvxc-txt" href="{{ voltar_url }}"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg> {{ voltar_nome }}</a>
+    <div class="pvxc-seg" role="tablist" aria-label="Vistas da preventiva">
+      <a class="pvxc-seg__i" role="tab" aria-selected="false" href="?vista=tarefas{% if uni_sel_val %}&unidade={{ qs_uni }}{% endif %}{% for s in setor_sel_vals %}&setor={{ s|urlencode }}{% endfor %}"><svg class="pvxc-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="pvxc-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Tarefas</a>
+      <a class="pvxc-seg__i is-active" role="tab" aria-selected="true" href="?vista=calendario{% if uni_sel_val %}&unidade={{ qs_uni }}{% endif %}{% for s in setor_sel_vals %}&setor={{ s|urlencode }}{% endfor %}"><svg class="pvxc-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="pvxc-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/></svg> Calendário</a>
+      <a class="pvxc-seg__i" role="tab" aria-selected="false" href="?vista=tabela{% if uni_sel_val %}&unidade={{ qs_uni }}{% endif %}{% for s in setor_sel_vals %}&setor={{ s|urlencode }}{% endfor %}"><svg class="pvxc-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="pvxc-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg> Tabela</a>
+      <a class="pvxc-seg__i" role="tab" aria-selected="false" href="?vista=grupos"><svg class="pvxc-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="pvxc-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="8" r="3"/><circle cx="17" cy="8" r="3"/><path d="M2 20a5 5 0 0 1 10 0M12 20a5 5 0 0 1 10 0"/></svg> Grupos</a>
+      <a class="pvxc-seg__i" role="tab" aria-selected="false" href="?vista=ranking"><svg class="pvxc-seg__ck" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><svg class="pvxc-seg__ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg> Ranking</a>
+    </div>
+  </div>
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · Preventiva</p>
+    <h1 class="mkpro-head__title">Calendário de vencimentos</h1>
+    <p class="mkpro-head__sub">Ciclo de 60 dias por máquina · clique num dia para ver as máquinas e concluir a preventiva.</p>
+  </header>
+
+  {% comment %}O gráfico fica SÓ na vista Tarefas (decisão do dono): repetido em
+  Tabela e Calendário, ele mostrava a mesma informação três vezes e empurrava
+  o conteúdo da tela para baixo.{% endcomment %}
+  {% include "parque/_filtros.html" with uni_lbl="Unidade" setor_lbl="Setor" keep="vista=calendario" %}
+
+  <div class="pvxc-calbar">
+    <div class="pvxc-monthnav">
+      <a class="pvxc-nav__btn" href="?vista=calendario&ano={{ prev.ano }}&mes={{ prev.mes }}{% if uni_sel_val %}&unidade={{ qs_uni }}{% endif %}{% for s in setor_sel_vals %}&setor={{ s|urlencode }}{% endfor %}" aria-label="Mês anterior"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></a>
+      <span class="pvxc-nav__mes">{{ primeiro_dia|date:"F Y"|capfirst }}</span>
+      <a class="pvxc-nav__btn" href="?vista=calendario&ano={{ prox.ano }}&mes={{ prox.mes }}{% if uni_sel_val %}&unidade={{ qs_uni }}{% endif %}{% for s in setor_sel_vals %}&setor={{ s|urlencode }}{% endfor %}" aria-label="Próximo mês"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></a>
+    </div>
+    <a class="pvxc-hoje" href="?vista=calendario{% if uni_sel_val %}&unidade={{ qs_uni }}{% endif %}{% for s in setor_sel_vals %}&setor={{ s|urlencode }}{% endfor %}">Hoje</a>
+    <div class="pvxc-legenda">
+      <span><i class="pvxc-dot pvxc-dot--pendente"></i> Pendente</span>
+      <span><i class="pvxc-dot pvxc-dot--vencida"></i> Vencida</span>
+      <span><i class="pvxc-dot pvxc-dot--proxima"></i> Próxima</span>
+      <span><i class="pvxc-dot pvxc-dot--em_dia"></i> Em dia</span>
+    </div>
+  </div>
+
+  {% if no_mes_total == 0 %}
+    <div class="mkpro-alert" role="status">
+      <span class="mkpro-alert__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg></span>
+      <div><strong>Nenhuma preventiva vence em {{ primeiro_dia|date:"F Y" }}.</strong> Use as setas do mês para navegar ou volte para <b>Hoje</b>.</div>
+    </div>
+  {% endif %}
+
+  <div class="pvxc-cal">
+    <div class="pvxc-wkrow">
+      {% for d in dias_semana %}<div class="pvxc-wkday">{{ d }}</div>{% endfor %}
+    </div>
+    {% for semana in semanas %}
+      <div class="pvxc-row">
+        {% for c in semana %}
+          <div class="pvxc-cell{% if not c.no_mes %} pvxc-cell--fora{% endif %}{% if c.fds %} pvxc-cell--fds{% endif %}{% if c.hoje %} pvxc-cell--hoje{% endif %}{% if c.eventos %} pvxc-cell--click{% endif %}"
+               {% if c.eventos %}data-cal-cell data-diakey="{{ c.data|date:'Y-m-d' }}" data-dia="{{ c.data|date:'D, d/m/Y' }}" role="button" tabindex="0"{% endif %}>
+            <div class="pvxc-cell__top">
+              <span class="pvxc-cell__num">{{ c.num }}</span>
+              {% if c.eventos %}<span class="pvxc-cell__qtd">{{ c.eventos|length }}</span>{% endif %}
+            </div>
+            {% if c.eventos %}
+            <div class="pvxc-cell__ev">
+              {% for it in c.eventos|slice:":3" %}
+                <span class="pvxc-ev pvxc-ev--{{ it.status }}">
+                  {% if it.eh_notebook %}<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>{% else %}<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8"/></svg>{% endif %}
+                  <span class="pvxc-ev__txt">{{ it.colaborador|default:it.titulo }}</span>
+                </span>
+              {% endfor %}
+              {% if c.eventos|length > 3 %}<span class="pvxc-ev pvxc-ev--mais">+{{ c.eventos|length|add:"-3" }} máquinas</span>{% endif %}
+            </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+{# Overlay do dia (carrossel de cards reais) — preenchido pelo JS a partir do #pv-cards. #}
+<div class="pvday" id="pv-day" hidden>
+  <div class="pvday__backdrop" data-pvday-close></div>
+  <div class="pvday__panel" role="dialog" aria-modal="true" aria-label="Máquinas do dia">
+    <div class="pvday__head">
+      <h2 class="pvday__tit" id="pv-day-tit">Máquinas do dia</h2>
+      <button type="button" class="pvday__x" data-pvday-close aria-label="Fechar">×</button>
+    </div>
+    <div class="pvday__hint">Clique num card para ver a tela da máquina · arraste para o lado ↔</div>
+    <div class="pvday__carwrap">
+      <button type="button" class="pvday__arrow pvday__arrow--prev" data-pv-scroll="prev" aria-label="Anterior">‹</button>
+      <div class="pvcar" id="pv-day-car"></div>
+      <button type="button" class="pvday__arrow pvday__arrow--next" data-pv-scroll="next" aria-label="Próximo">›</button>
+    </div>
+  </div>
+</div>
+
+{# Store OCULTO dos cards reais por dia (o JS clona no carrossel ao abrir). #}
+<div id="pv-cards" hidden>
+  {% for semana in semanas %}{% for c in semana %}{% if c.eventos %}
+    <div class="pv-daycards" data-daycards="{{ c.data|date:'Y-m-d' }}">
+      {% for it in c.eventos %}
+        <div class="pv-slot">
+          {% if it.card_baia %}
+            {% include "parque/_baia.html" with b=it.card_baia %}
+          {% else %}
+            <button type="button" class="baia baia--notebook baia--cl-{{ it.classe|slugify }}"
+              data-nome="{{ it.titulo }}" data-colaborador="{{ it.colaborador|default:'—' }}"
+              data-patrimonio="{{ it.patrimonio }}" data-status="Notebook"
+              data-so="—" data-cpu="{{ it.resumo }}" data-placa="—" data-ram="—" data-disco="—"
+              data-mouse="—" data-teclado="—" data-webcam="—" data-headset="—" data-monitor="—" data-leitor="—"
+              data-pcstatus="notebook" data-tipo="notebook"
+              data-desempenho="{{ it.score|default_if_none:'' }}" data-classe="{{ it.classe }}" data-diag="[]">
+              <div class="baia__top"><span class="baia__icone"><svg class="pvxc-nbico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg></span>
+                {% if it.score is not None %}<span class="baia__score">{{ it.score }}</span>{% endif %}</div>
+              <div class="baia__nome">{{ it.titulo }}</div>
+              {% if it.resumo and it.resumo != '—' %}<div class="baia__specs">{{ it.resumo }}</div>{% endif %}
+              <div class="baia__classe">Notebook{% if it.classe != '—' %} · {{ it.classe }}{% endif %}</div>
+            </button>
+          {% endif %}
+          <button type="button" class="pvscreen__ok" data-pv-open
+                  data-kind="{{ it.kind }}" data-pk="{{ it.pk }}" data-nome="{{ it.colaborador|default:it.titulo }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg> Concluir preventiva</button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}{% endfor %}{% endfor %}
+</div>
+
+{# Monitor (mesmo do mapa) — o clique num card abre esta "tela". #}
+{% include "parque/_zoom.html" %}
+
+{% include "parque/_preventiva_concluir_modal.html" %}
+{% endwith %}
+{% endblock %}

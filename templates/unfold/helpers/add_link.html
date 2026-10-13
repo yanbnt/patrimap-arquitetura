@@ -1,0 +1,31 @@
+{% load i18n admin_urls %}
+{% comment %}
+Override Make do "+" do topo.
+
+Diferença em relação ao unfold: o botão NÃO aparece quando a tela já é um
+formulário de adicionar. O dono notou o problema real ("o botão de adicionar
+continua visível, tornando possível entrar num loop infinito de adição"): o
+`change_form.html` do unfold inclui este parcial sem testar nada, e o `+` da
+tela de adicionar leva para... a tela de adicionar.
+
+A variável `add` existe no contexto do changeform (True no add, False no
+change) e não existe na changelist — então `{% if not add %}` mantém o botão na
+lista e na edição, e o esconde só onde ele não faz sentido.
+{% endcomment %}
+{% if cl %}
+    {% url cl.opts|admin_urlname:"add" as add_url %}
+    {% blocktranslate with name=cl.opts.verbose_name asvar title %}Add {{ name }}{% endblocktranslate %}
+{% else %}
+    {% url opts|admin_urlname:"add" as add_url %}
+    {% blocktranslate with name=opts.verbose_name asvar title %}Add {{ name }}{% endblocktranslate %}
+{% endif %}
+
+{% if add_url and not add %}
+    {% if cl.model_admin.show_add_link or adminform.model_admin.show_add_link %}
+        <div class="flex flex-row items-center">
+            <a href="{% add_preserved_filters add_url is_popup to_field %}" class="addlink bg-primary-600 flex items-center h-[38px] justify-center -my-1 rounded-full w-[38px] hover:bg-primary-600/80" title="{{ title }}">
+                <span class="material-symbols-outlined text-white">add</span>
+            </a>
+        </div>
+    {% endif %}
+{% endif %}

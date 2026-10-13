@@ -1,0 +1,135 @@
+{% comment %}
+Modal de ADIAR preventiva (nova data + justificativa). O JS (initAdiar) preenche
+kind/pk/nome ao abrir. Envia para parque_solicitar_adiamento — o pedido nasce
+PENDENTE e vai para a aprovação do supervisor (regra de negócio inalterada).
+
+CAMPOS E COMPORTAMENTO IDÊNTICOS: só o visual mudou.
+
+O bloco de estilo abaixo é o DIÁLOGO do Material Design 3 (DESIGN-SYSTEM.md §4):
+surface-container-high, raio 28px, sombra nível 3, título headline-small, corpo
+body-medium e rodapé com as ações à DIREITA — cancelar como text button e
+confirmar por último. Fica no próprio parcial para o diálogo ficar certo em
+qualquer tela que o inclua (o mesmo bloco vale para `.pvdlg` de todas elas).
+{% endcomment %}
+<style>
+  /* Diálogo M3. O que SAIU: a borda de 1px do cartão, a borda do chip de ícone,
+     a borda do botão de fechar, a borda de 1px do cancelar, o peso 700 no
+     título e o raio de 16px. O que ENTROU: tom -high, raio 28, sombra nível 3,
+     state layer de 8%/12% e ações alinhadas à direita. */
+  .pvdlg { position: fixed; inset: 0; z-index: 2100; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .pvdlg[hidden] { display: none; }
+  /* Scrim chapado do M3 (o CSS histórico punha blur aqui). */
+  .pvdlg__backdrop {
+    position: absolute; inset: 0; background: rgba(0, 0, 0, .32);
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  /* `#main` na frente vence os `.dark .pvdlg-*` do CSS histórico (§9.2). */
+  #main .pvdlg__card {
+    position: relative; z-index: 1; width: min(560px, 100%); max-height: 88vh; overflow-y: auto;
+    background: var(--md-surface-container-high); color: var(--md-on-surface);
+    border: 0; border-radius: var(--md-shape-xl); box-shadow: var(--md-elev-3);
+    padding: 24px;
+  }
+  .pvdlg__head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
+  .pvdlg__ico {
+    width: 40px; height: 40px; flex: none; border: 0; border-radius: var(--md-shape-full);
+    display: grid; place-items: center;
+    background: var(--md-secondary-container); color: var(--md-on-secondary-container);
+  }
+  .pvdlg__ico svg { width: 20px; height: 20px; display: block; }
+  .pvdlg__headtxt { flex: 1; min-width: 0; }
+  #main .pvdlg__tit { margin: 0; font: 400 24px/32px var(--md-font); letter-spacing: 0; color: var(--md-on-surface); }
+  .pvdlg__sub { margin: 4px 0 0; font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant); }
+  /* Botão de ícone: sem contêiner, state layer de 8%/12%. */
+  #main .pvdlg__x {
+    position: relative; overflow: hidden;
+    width: 40px; height: 40px; flex: none; cursor: pointer; font-size: 20px; line-height: 1;
+    display: grid; place-items: center; border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-on-surface-variant);
+  }
+  #main .pvdlg__x::before {
+    content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0;
+    pointer-events: none; transition: opacity var(--md-dur-short) var(--md-ease-standard);
+  }
+  /* O histórico pintava fundo e cor no :hover — aqui quem age é o state layer. */
+  #main .pvdlg__x:hover { background: transparent; color: var(--md-on-surface-variant); }
+  #main .pvdlg__x:hover::before { opacity: .08; }
+  #main .pvdlg__x:active::before { opacity: .12; }
+  .pvdlg__body { display: flex; flex-direction: column; margin: 0; }
+  /* Rótulo ACIMA em label-medium; ajuda EMBAIXO em body-small. */
+  #main .pvdlg__lbl {
+    display: block; margin-bottom: 4px; text-transform: none;
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px; color: var(--md-on-surface-variant);
+  }
+  .pvdlg__lbl + .pvdlg__ta { margin-bottom: 0; }
+  .pvdlg__help { margin: 4px 0 20px; font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); }
+  /* Campo outlined: 56px, raio 4, 1px outline (2px primary no foco). */
+  #main .pvdlg__ta {
+    width: 100%; min-height: 56px; padding: 16px; resize: vertical; box-sizing: border-box;
+    border: 1px solid var(--md-outline); border-radius: var(--md-shape-xs);
+    background: transparent; color: var(--md-on-surface);
+    font-family: var(--md-font); font-size: 16px; line-height: 24px; letter-spacing: .5px;
+    box-shadow: none;
+    transition: border-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  #main .pvdlg__ta:hover { border-color: var(--md-on-surface); }
+  #main .pvdlg__ta:focus, #main .pvdlg__ta:focus-visible {
+    outline: none; border-color: var(--md-primary); box-shadow: inset 0 0 0 1px var(--md-primary);
+  }
+  .pvchk { display: grid; gap: 8px; margin: 4px 0 20px; }
+  #main .pvchk__item {
+    display: flex; align-items: center; gap: 12px; cursor: pointer;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface);
+  }
+  #main .pvchk__item input { width: 18px; height: 18px; flex: none; accent-color: var(--md-primary); }
+  /* Rodapé M3: ações à DIREITA, confirmar por último. */
+  .pvdlg__actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 24px; }
+  .pvdlg__cancel, .pvdlg__ok {
+    position: relative; overflow: hidden;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 40px; cursor: pointer; border: 0;
+    border-radius: var(--md-shape-full);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; text-transform: none;
+  }
+  .pvdlg__cancel::before, .pvdlg__ok::before {
+    content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0;
+    pointer-events: none; transition: opacity var(--md-dur-short) var(--md-ease-standard);
+  }
+  .pvdlg__cancel:hover::before, .pvdlg__ok:hover::before { opacity: .08; }
+  .pvdlg__cancel:active::before, .pvdlg__ok:active::before { opacity: .12; }
+  /* Text button: sem contêiner. `#main` vence o !important histórico (§9.2). */
+  #main .pvdlg__cancel { background: transparent !important; color: var(--md-primary) !important; padding: 0 12px !important; }
+  /* Filled: a confirmação do diálogo. */
+  #main .pvdlg__ok { background: var(--md-primary) !important; color: var(--md-on-primary) !important; padding: 0 24px !important; }
+  .pvdlg__ok svg, .pvdlg__cancel svg { width: 18px; height: 18px; flex: none; display: block; }
+</style>
+
+<div class="pvdlg" id="adiar-modal" hidden>
+  <div class="pvdlg__backdrop" data-adiar-close></div>
+  <div class="pvdlg__card" role="dialog" aria-modal="true" aria-labelledby="adiar-tit">
+    <div class="pvdlg__head">
+      <span class="pvdlg__ico"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4M21 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h6"/><path d="M3 10h6"/><circle cx="17.5" cy="17.5" r="4.5"/><path d="M17.5 15.7v1.8l1.3.9"/></svg></span>
+      <div class="pvdlg__headtxt">
+        <h2 class="pvdlg__tit" id="adiar-tit">Adiar preventiva</h2>
+        <p class="pvdlg__sub" id="adiar-maq">—</p>
+      </div>
+      <button type="button" class="pvdlg__x" data-adiar-close aria-label="Fechar">×</button>
+    </div>
+    <form method="post" action="{% url 'parque_solicitar_adiamento' %}" class="pvdlg__body">
+      {% csrf_token %}
+      <input type="hidden" name="kind" id="adiar-kind">
+      <input type="hidden" name="pk" id="adiar-pk">
+      <label class="pvdlg__lbl" for="adiar-data">Nova data-limite</label>
+      <input type="date" id="adiar-data" name="nova_data" class="pvdlg__ta" required>
+      <p class="pvdlg__help">Precisa ser uma data futura.</p>
+      <label class="pvdlg__lbl" for="adiar-just">Justificativa (o supervisor vai ler)</label>
+      <textarea id="adiar-just" name="justificativa" rows="3" class="pvdlg__ta" required
+                placeholder="Por que a preventiva precisa ser adiada?"></textarea>
+      <p class="pvdlg__help">O pedido fica pendente até o supervisor aprovar.</p>
+      <div class="pvdlg__actions">
+        <button type="button" class="pvdlg__cancel" data-adiar-close>Cancelar</button>
+        <button type="submit" class="pvdlg__ok"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4M21 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h6"/><path d="M3 10h6"/><circle cx="17.5" cy="17.5" r="4.5"/><path d="M17.5 15.7v1.8l1.3.9"/></svg> Pedir adiamento</button>
+      </div>
+    </form>
+  </div>
+</div>

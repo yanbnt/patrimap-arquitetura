@@ -1,0 +1,304 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  {% comment %}
+    transferencias.html — MATERIAL DESIGN 3 (DESIGN-SYSTEM.md §4 e §5).
+
+    Lista de processo: o que importa é o estado de cada movimentação. Migrado de
+    `--ui-*` para `--md-*`. O que SAIU:
+      · a moldura de 1px da tabela e todo o CSS de célula desta tela — a data
+        table do M3 (linha alta, divisor `outline-variant`, sem zebra, hover em
+        state layer de 8%) é global;
+      · o filete de 3px da linha pendente: virou TOM (fundo tonal âmbar na
+        linha), que é como o M3 marca estado de linha;
+      · a pílula de situação com borda e bolinha: virou CHIP TONAL, o par
+        `--md-st-*-cont` (fundo) + `--md-st-*` (texto);
+      · a ação da linha, que era um botão com contorno: virou TEXT BUTTON —
+        uma ação por linha, sem contêiner;
+      · os pesos 650/700 em texto pequeno (máximo 500 em rótulo, 400 no corpo).
+
+    O diálogo de decisão passou a ser o do M3: `surface-container-high`, raio
+    28px, sombra nível 3, ações à direita com o confirmar por último e o
+    cancelar como text button.
+
+    Hooks preservados: #tr-tabela, #tr-all, .tr-chk[form=tr-bulk-form],
+    .tr-row--pend + data-aut/-neg/-tipo/-origem/-destino/-csaida/-cdest,
+    #tr-bulk-form e o modal (#tr-modal, #tr-decide-form, #tr-modal-info,
+    #tr-obs, #tr-modal-x/-cancel/-aut/-negar) com as classes que o JS liga.
+  {% endcomment %}
+  .tf { display: grid; gap: 16px; }
+
+  .tf-back {
+    justify-self: start; display: inline-flex; align-items: center; gap: 8px;
+    height: 40px; padding: 0 16px 0 12px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; text-decoration: none;
+  }
+  .tf-back:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .tf-back svg { width: 18px; height: 18px; flex: none; }
+
+  .tf-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 40px; padding: 0 24px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: var(--md-secondary-container); color: var(--md-on-secondary-container);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; text-decoration: none;
+    cursor: pointer; white-space: nowrap;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .tf-btn:hover { background: color-mix(in srgb, var(--md-on-secondary-container) 8%, var(--md-secondary-container)); }
+  .tf-btn svg { width: 18px; height: 18px; flex: none; }
+  .tf-btn--ok { background: var(--md-action); color: var(--md-on-action); }
+  .tf-btn--ok:hover { background: color-mix(in srgb, var(--md-on-action) 8%, var(--md-action)); }
+
+  /* ---------- Filtro: A MESMA barra de toda tela de lista ----------
+     Eram chips `.tf-chip`, um por loja, direto na linha — e só unidade. Agora é
+     o botão "Filtrar" + popup do sistema (host = pai da `.flt-bar`), com
+     Unidade, Tipo e Situação. Acabamento igual ao de `.tbd-fbar`
+     (make-m3.css §32), aqui porque aquela regra lista as classes uma a uma. */
+  .tf-bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px;
+    margin: 0; padding: 10px 12px;
+    background: var(--md-surface);
+    border: 1px solid var(--md-outline-variant);
+    border-radius: var(--md-shape-lg);
+  }
+  .tf-bar .fltx-active { flex: 1 0 100%; order: 99; margin: 2px 0 0 !important; }
+
+  /* ---------- Data table (o estilo de célula é global) ---------- */
+  .tf-tbl {
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-low); overflow: auto; max-width: 100%;
+  }
+  .tf-tbl table { width: 100%; min-width: 940px; }
+  .tf-tbl .tr-col-chk { width: 48px; }
+  .tf-tbl .tr-col-chk input { width: 18px; height: 18px; accent-color: var(--md-primary); cursor: pointer; }
+
+  /* A fila que espera decisão se lê de relance — por TOM, não por filete. */
+  .tf-tbl tr.tr-row--pend td { background: color-mix(in srgb, var(--md-st-warn) 10%, transparent); }
+
+  .tf-tipo { display: inline-flex; align-items: center; gap: 8px; color: var(--md-on-surface); }
+  .tf-tipo svg { width: 18px; height: 18px; flex: none; color: var(--md-on-surface-variant); }
+  .tf-data { white-space: nowrap; color: var(--md-on-surface-variant) !important; }
+
+  /* Rota: origem e destino numa célula só. */
+  .tf-rota { display: grid; grid-template-columns: auto 18px auto; gap: 4px 8px; align-items: center; }
+  .tf-rota__de, .tf-rota__para { min-width: 0; }
+  .tf-rota__para { color: var(--md-on-surface); }
+  .tf-rota__de { color: var(--md-on-surface-variant); }
+  .tf-rota__seta { color: var(--md-on-surface-variant); display: grid; place-items: center; }
+  .tf-rota__seta svg { width: 18px; height: 18px; display: block; }
+
+  .tf-pes { display: grid; gap: 2px; }
+  .tf-pes span { font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); }
+  .tf-pes i {
+    font-style: normal; font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: uppercase; color: var(--md-on-surface-variant); margin-right: 6px;
+  }
+
+  /* Situação: chip tonal do M3. */
+  .tf-st {
+    display: inline-flex; align-items: center; height: 24px; padding: 0 8px;
+    border: 0; border-radius: var(--md-shape-sm); white-space: nowrap;
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px;
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+  }
+  .tf-st--ok { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+  .tf-st--warn { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+  .tf-st--run { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+  .tf-st--off { background: var(--md-surface-container-high); color: var(--md-on-surface-variant); }
+
+  /* Ação da linha: text button. */
+  .tf-acao { text-align: right; white-space: nowrap; width: 1%; }
+  .tf-link {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 40px; padding: 0 12px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; text-decoration: none;
+  }
+  .tf-link:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .tf-link svg { width: 18px; height: 18px; flex: none; }
+  .tf-vazio-cel { padding: 16px !important; }
+
+  /* ---------- Diálogo de decisão (mesmos hooks, componente M3) ---------- */
+  .tr-modal__card {
+    background: var(--md-surface-container-high); border: 0;
+    border-radius: var(--md-shape-xl); box-shadow: var(--md-elev-3);
+    color: var(--md-on-surface);
+  }
+  .tr-modal__title {
+    color: var(--md-on-surface); font: 400 24px/32px var(--md-font); letter-spacing: 0;
+  }
+  .tr-modal__info {
+    background: var(--md-surface-container-highest); border: 0;
+    border-radius: var(--md-shape-md); color: var(--md-on-surface-variant);
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+  }
+  .tr-modal__lbl {
+    color: var(--md-on-surface-variant); font: 500 12px/16px var(--md-font); letter-spacing: .5px;
+  }
+  .tr-modal__lbl span { color: var(--md-on-surface-variant); font-weight: 400; }
+  .tr-modal__ta {
+    background: transparent; border: 1px solid var(--md-outline);
+    border-radius: var(--md-shape-xs); color: var(--md-on-surface);
+  }
+  .tr-modal__close { color: var(--md-on-surface-variant); }
+  .tr-modal__btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 40px; padding: 0 24px; border: 0;
+    border-radius: var(--md-shape-full);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; cursor: pointer;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .tr-modal__btn svg { width: 18px; height: 18px; flex: none; }
+  .tr-modal__btn--cancel {
+    margin-right: 0; background: transparent; color: var(--md-primary); padding: 0 12px;
+  }
+  .tr-modal__btn--cancel:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .tr-modal__btn--negar { background: transparent; color: var(--md-error); padding: 0 12px; }
+  .tr-modal__btn--negar:hover { background: color-mix(in srgb, var(--md-error) 8%, transparent); filter: none; }
+  .tr-modal__btn--aut { background: var(--md-action); color: var(--md-on-action); }
+  .tr-modal__btn--aut:hover { background: color-mix(in srgb, var(--md-on-action) 8%, var(--md-action)); }
+</style>
+
+<div class="tf">
+  <a data-mk-voltar class="tf-back" href="{{ voltar_url }}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+    {{ voltar_nome }}
+  </a>
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · Movimentações</p>
+    <h1 class="mkpro-head__title">Transferências e movimentações</h1>
+    <p class="mkpro-head__sub">Tudo que saiu do lugar — entre lojas, dentro da loja, notebooks e peças · <span class="mkpro-num">{{ total }}</span> registros. Marque uma linha para autorizar ou excluir.</p>
+    <div class="mkpro-head__actions">
+      <a class="tf-btn" href="{% url 'parque_autorizadas_kanban' %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M3 21V10l6 4v-4l6 4V5h6v16"/></svg>
+        Assistência externa
+      </a>
+      <a class="tf-btn tf-btn--ok" href="{% url 'parque_enviar_autorizada' %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        Enviar p/ autorizada
+      </a>
+    </div>
+  </header>
+
+  <div class="tf-bar">
+    {% include "parque/_filtros.html" %}
+  </div>
+
+  {# Form do lote: os checkboxes (form="tr-bulk-form") pertencem a ele, fora da tabela #}
+  <form id="tr-bulk-form" method="post" action="{% url 'parque_excluir_transferencias_lote' %}"
+        onsubmit="return confirm('Excluir as transferências selecionadas? As de peças devolvem os itens à origem.');">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  </form>
+
+  <div class="tf-tbl">
+    <table id="tr-tabela">
+      <thead>
+        <tr>
+          <th class="tr-col-chk"><input type="checkbox" id="tr-all" title="Selecionar todas"></th>
+          <th>Tipo</th>
+          <th>Data</th>
+          <th>Origem → destino</th>
+          <th>Colaboradores</th>
+          <th>Situação</th>
+          <th>Registrado por</th>
+          <th class="tf-acao">Ação</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in linhas %}
+          <tr {% if r.decide_aut and pode_decidir %}class="tr-row--pend" data-aut="{{ r.decide_aut }}" data-neg="{{ r.decide_neg }}" data-tipo="{{ r.tipo }}" data-origem="{{ r.origem }}" data-destino="{{ r.destino }}" data-csaida="{{ r.csaida|default:'' }}" data-cdest="{{ r.cdest|default:'' }}"{% endif %}>
+            <td class="tr-col-chk">
+              <input type="checkbox" class="tr-chk" name="itens" value="{{ r.tipo_key }}:{{ r.pk }}" form="tr-bulk-form">
+            </td>
+            <td>
+              <span class="tf-tipo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  {% if r.icone == 'swap' %}<path d="M3 8h14M13 4l4 4-4 4"/><path d="M21 16H7M11 12l-4 4 4 4"/>
+                  {% elif r.icone == 'laptop' %}<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/>
+                  {% elif r.icone == 'box' %}<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>
+                  {% elif r.icone == 'puzzle' %}<rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>
+                  {% elif r.icone == 'factory' %}<path d="M3 21h18"/><path d="M3 21V10l6 4v-4l6 4V5h6v16"/>
+                  {% else %}<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                  {% endif %}
+                </svg>
+                {{ r.tipo }}
+              </span>
+            </td>
+            <td class="tf-data">{{ r.data|date:"d/m/Y"|default:"—" }}</td>
+            <td>
+              <span class="tf-rota">
+                <span class="tf-rota__de">{{ r.origem }}</span>
+                <span class="tf-rota__seta" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                </span>
+                <span class="tf-rota__para">{{ r.destino }}</span>
+              </span>
+            </td>
+            <td>
+              <span class="tf-pes">
+                <span><i>Saída</i>{{ r.csaida|default:"—" }}</span>
+                <span><i>Destino</i>{{ r.cdest|default:"—" }}</span>
+              </span>
+            </td>
+            <td>
+              <span class="tf-st {% if r.status == 'pendente' %}tf-st--warn{% elif r.status == 'autorizada' or r.status == 'recebida' or r.status == 'enviada' or r.status == 'finalizado' %}tf-st--ok{% elif r.status == 'negada' or r.status == 'cancelada' or r.status == 'devolvida' %}tf-st--off{% else %}tf-st--run{% endif %}">{{ r.situacao }}</span>
+            </td>
+            <td>{{ r.por|default:"—" }}</td>
+            <td class="tf-acao">
+              {% if r.detalhe %}
+                <a class="tf-link" href="{{ r.detalhe }}">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+                  Andamento
+                </a>
+              {% elif r.protocolo %}
+                <a class="tf-link" href="{{ r.protocolo }}" target="_blank" rel="noopener">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M8 17h8v4H8z"/></svg>
+                  Protocolo
+                </a>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8" class="tf-vazio-cel">
+            <div class="mkpro-empty mkpro-empty--slim">
+              <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 18V6a1 1 0 0 0-1-1H2v13h3"/><path d="M14 9h4l4 4v5h-3"/><circle cx="7.5" cy="18" r="2"/><circle cx="17.5" cy="18" r="2"/><path d="M9.5 18h6"/></svg></span>
+              <p class="mkpro-empty__title">Nenhuma movimentação registrada</p>
+              <p class="mkpro-empty__hint">Transferências entre lojas, movimentações internas e envios de peça aparecem aqui assim que a primeira for feita.</p>
+            </div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ---------- Modal: autorizar / negar transferência (com observação) ---------- #}
+{% if pode_decidir %}
+<div class="tr-modal" id="tr-modal" aria-hidden="true">
+  <div class="tr-modal__card">
+    <button type="button" class="tr-modal__close" id="tr-modal-x" aria-label="Fechar">×</button>
+    <h2 class="tr-modal__title">Autorizar transferência</h2>
+    <div class="tr-modal__info" id="tr-modal-info"></div>
+    <form method="post" id="tr-decide-form">
+      {% csrf_token %}
+      <label class="tr-modal__lbl" for="tr-obs">Observação <span>(opcional — ao negar, vira o motivo)</span></label>
+      <textarea id="tr-obs" name="observacao" class="tr-modal__ta" rows="3"
+                placeholder="Ex.: liberado conforme solicitação do gerente…"></textarea>
+      <div class="tr-modal__acoes">
+        <button type="button" class="tr-modal__btn tr-modal__btn--cancel" id="tr-modal-cancel">Cancelar</button>
+        <button type="button" class="tr-modal__btn tr-modal__btn--negar" id="tr-modal-negar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg> Negar</button>
+        <button type="button" class="tr-modal__btn tr-modal__btn--aut" id="tr-modal-aut"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg> Autorizar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,247 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+{# Data de hoje em ISO — serve para marcar visualmente o prazo vencido no cartão. #}
+{% now "Y-m-d" as rkb_hoje %}
+<style>
+  /* =========================================================================
+     reparos_kanban — QUADRO DE CHAMADOS em Material Design 3.
+
+     O que SAIU (DESIGN-SYSTEM.md §5): a caixa da coluna (borda + fundo), o
+     filete de 3px de status, a borda e o filete lateral do cartão, a sombra do
+     cartão, as bordas do rodapé e das tags, o peso 700 em rótulo pequeno e a
+     borda tracejada do estado vazio.
+
+     O que ENTROU (§4): cartão FILLED — surface-container-low, raio 12, sem
+     borda e sem sombra, hover um tom acima; status da coluna como CHIP TONAL no
+     cabeçalho; atraso como chip error-container + on-error-container; e UMA
+     ação por cartão como TEXT BUTTON — o filled é só da ação principal da tela.
+
+     Botões: sistema global (.pvx-btn + --ok/--soft/--ghost). Aqui só o text
+     button, que não tem classe global. Escopado em .rkb; cor por var(--md-*).
+     ====================================================================== */
+  .rkb { display: flex; flex-direction: column; gap: 16px; }
+  .rkb *, .rkb *::before, .rkb *::after { box-sizing: border-box; }
+  .rkb svg { display: block; }
+  .rkb-num { font-variant-numeric: tabular-nums; }
+
+  /* --- botões: base de layout do sistema M3 + o text button -------------- */
+  .rkb .pvx-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    cursor: pointer; text-decoration: none;
+  }
+  .rkb .pvx-btn svg { width: 18px; height: 18px; flex: none; }
+  /* `#main` na frente vence o `!important` do CSS histórico (§9.2). */
+  #main .rkb-txt {
+    background: transparent !important; color: var(--md-primary) !important;
+    padding: 0 12px !important;
+  }
+
+  /* --- o quadro --------------------------------------------------------- */
+  .rkb-board {
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(268px, 1fr);
+    gap: 16px; align-items: start; overflow-x: auto; padding-bottom: 8px;
+  }
+  @media (max-width: 1100px) { .rkb-board { grid-auto-columns: minmax(258px, 82vw); } }
+
+  /* Coluna sem caixa: quem separa é o espaço, não a linha (§5.1). */
+  .rkb-col {
+    --rkb-tone: var(--md-on-surface-variant);
+    --rkb-cont: var(--md-surface-container-high);
+    display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  }
+  .rkb-col--abertos     { --rkb-tone: var(--md-st-crit); --rkb-cont: var(--md-st-crit-cont); }
+  .rkb-col--cotacao     { --rkb-tone: var(--md-st-warn); --rkb-cont: var(--md-st-warn-cont); }
+  .rkb-col--manutencao  { --rkb-tone: var(--md-st-attn); --rkb-cont: var(--md-st-attn-cont); }
+  .rkb-col--finalizados { --rkb-tone: var(--md-st-ok);   --rkb-cont: var(--md-st-ok-cont); }
+
+  /* Status da coluna = chip tonal (era um filete de 3px no topo). */
+  .rkb-col__head { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
+  .rkb-col__name {
+    display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px;
+    border-radius: var(--md-shape-sm);
+    background: var(--rkb-cont); color: var(--rkb-tone);
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px; text-transform: uppercase;
+  }
+  .rkb-col__qtd {
+    margin-left: auto; padding-right: 4px;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+    color: var(--md-on-surface-variant); font-variant-numeric: tabular-nums;
+  }
+  .rkb-col__body { display: flex; flex-direction: column; gap: 8px; min-height: 96px; }
+
+  /* --- cartão filled ---------------------------------------------------- */
+  .rkb-card {
+    position: relative;
+    background: var(--md-surface-container-low);
+    border: 0; border-radius: var(--md-shape-md);
+    box-shadow: none;
+    padding: 12px;
+    display: flex; flex-direction: column; gap: 8px;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .rkb-card:hover { background: var(--md-surface-container); }
+
+  /* O link cobre o cartão inteiro; tags e ação ficam acima dele (z-index). */
+  .rkb-card__hit { text-decoration: none; color: inherit; display: block; }
+  .rkb-card__hit::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+  .rkb-card__hit:focus-visible { outline: none; }
+  .rkb-card__hit:focus-visible::after { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+
+  .rkb-card__who {
+    display: flex; align-items: center; gap: 8px;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface);
+  }
+  .rkb-card__who svg { width: 18px; height: 18px; flex: none; color: var(--md-on-surface-variant); }
+  .rkb-card__who b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .rkb-card__where {
+    display: block; margin-top: 2px;
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .rkb-card__what {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    margin-top: 6px;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant);
+  }
+
+  /* --- tags: chips tonais, sem borda ------------------------------------ */
+  .rkb-tags { display: flex; flex-wrap: wrap; gap: 6px; position: relative; z-index: 1; }
+  .rkb-tag {
+    display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+    min-height: 24px; padding: 0 8px; border: 0; border-radius: var(--md-shape-sm);
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; text-decoration: none;
+  }
+  .rkb-tag svg { width: 12px; height: 12px; flex: none; }
+  .rkb-tag span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rkb-tag--cot { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+  .rkb-tag--orc { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+
+  /* --- rodapé: prazo + responsável -------------------------------------- */
+  .rkb-meta {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+  }
+  .rkb-meta > span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+  .rkb-meta svg { width: 14px; height: 14px; flex: none; }
+  .rkb-meta__quem { margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
+  .rkb-due { font-variant-numeric: tabular-nums; }
+  /* Atraso e conclusão viram CONTÊINER tonal (não texto colorido solto). */
+  .rkb-due--late, .rkb-due--ok {
+    min-height: 24px; padding: 0 8px; border-radius: var(--md-shape-sm);
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+  }
+  .rkb-due--late { background: var(--md-error-container); color: var(--md-on-error-container); }
+  .rkb-due--ok { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+
+  /* --- a ação (uma só por cartão, em text button) ------------------------ */
+  .rkb-do { position: relative; z-index: 1; margin: 0; }
+  .rkb-do .pvx-btn { width: 100%; }
+</style>
+
+<div class="rkb">
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · Reparos</p>
+    <h1 class="mkpro-head__title">Quadro de chamados</h1>
+    <p class="mkpro-head__sub"><span class="mkpro-num rkb-num">{{ total }}</span> chamado{{ total|pluralize }} no quadro · clique num cartão para abrir o detalhe.</p>
+    <div class="mkpro-head__actions">
+      <a data-mk-voltar class="pvx-btn rkb-txt" href="{{ voltar_url }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg> {{ voltar_nome }}
+      </a>
+      <a class="pvx-btn pvx-btn--ghost" href="{% url 'orcamentos_lista' %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg> Orçamentos
+      </a>
+      {# A ÚNICA ação filled da tela. #}
+      <a class="pvx-btn pvx-btn--ok" href="{% url 'parque_escanear_chamado' %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg> Escanear máquina
+      </a>
+    </div>
+  </header>
+
+  {% include "parque/_filtros.html" with uni_lbl="Unidade" %}
+
+  <div class="rkb-board">
+    {% for col in colunas %}
+      <section class="rkb-col rkb-col--{{ col.key }}">
+        <header class="rkb-col__head">
+          <span class="rkb-col__name">{{ col.titulo }}</span>
+          <span class="rkb-col__qtd rkb-num">{{ col.qtd }}</span>
+        </header>
+
+        <div class="rkb-col__body">
+          {% for r in col.itens %}
+            <article class="rkb-card">
+              {# 1. QUEM e ONDE — é o que o técnico procura primeiro no quadro. #}
+              <a class="rkb-card__hit" href="{% url 'parque_chamado_detalhe' r.pk %}">
+                <span class="rkb-card__who">
+                  {% if r.maquina_eh_notebook %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>{% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8"/></svg>{% endif %}
+                  <b>{{ r.maquina_titulo }}</b>
+                </span>
+                <span class="rkb-card__where">{{ r.maquina_local }}{% if r.maquina_patrimonio %} · {{ r.maquina_patrimonio }}{% endif %}</span>
+                {# 2. O QUE — o problema, secundário ao alvo. #}
+                <span class="rkb-card__what">{{ r.titulo }}</span>
+              </a>
+
+              {# 3. TIPO / PEÇA — classificação, terceiro nível: chips tonais. #}
+              <div class="rkb-tags">
+                <span class="rkb-tag rkb-tag--tipo"><span>{{ r.get_tipo_display }}</span></span>
+                {% if r.pecas_lista %}<span class="rkb-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg><span>{{ r.pecas_display }}</span></span>{% endif %}
+                {% if r.realizar_cotacao %}<span class="rkb-tag rkb-tag--cot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2 3h2.2l2.6 12.4a2 2 0 0 0 2 1.6h9.4a2 2 0 0 0 2-1.6L21.6 7H5.2"/></svg><span>Cotação</span></span>{% endif %}
+                {% if r.orcamento_id %}<a class="rkb-tag rkb-tag--orc" href="{% url 'admin:orcamentos_orcamento_change' r.orcamento_id %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg><span>Orçamento</span></a>{% endif %}
+              </div>
+
+              {# 4. PRAZO + RESPONSÁVEL — atraso em chip error-container. #}
+              <div class="rkb-meta">
+                {% if r.concluido_em %}
+                  <span class="rkb-due rkb-due--ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg> Finalizado {{ r.concluido_em|date:'d/m/Y' }}</span>
+                {% elif r.previsao_conclusao %}
+                  {% if r.previsao_conclusao|date:'Y-m-d' < rkb_hoje %}
+                    <span class="rkb-due rkb-due--late"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/></svg> Atrasado desde {{ r.previsao_conclusao|date:'d/m' }}</span>
+                  {% else %}
+                    <span class="rkb-due"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Prazo {{ r.previsao_conclusao|date:'d/m/Y' }}</span>
+                  {% endif %}
+                {% else %}
+                  <span class="rkb-due rkb-due--none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Sem prazo</span>
+                {% endif %}
+                <span class="rkb-meta__quem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> {% if r.tecnico %}{{ r.tecnico.get_full_name|default:r.tecnico.username }}{% else %}a definir{% endif %}</span>
+              </div>
+
+              {# 5. UMA ação, em text button. A view exige POST (CSRF) — por isso é form. #}
+              {% if not r.concluido_em %}
+                <form class="rkb-do" method="post" action="{% url 'parque_finalizar_reparo_admin' r.pk %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <button type="submit" class="pvx-btn rkb-txt"
+                          onclick="return confirm('Finalizar este reparo? A tarefa do Bitrix será fechada.')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Finalizar
+                  </button>
+                </form>
+              {% endif %}
+            </article>
+          {% empty %}
+            <div class="mkpro-empty mkpro-empty--slim">
+              <span class="mkpro-chip mkpro-chip--lg">{% if col.key == 'cotacao' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2 3h2.2l2.6 12.4a2 2 0 0 0 2 1.6h9.4a2 2 0 0 0 2-1.6L21.6 7H5.2"/></svg>{% elif col.key == 'manutencao' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>{% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>{% endif %}</span>
+              {% if col.key == 'abertos' %}
+                <p class="mkpro-empty__title">Nenhum chamado aberto</p>
+                <p class="mkpro-empty__hint">Chamados novos, ainda sem técnico ou prazo, aparecem aqui.</p>
+              {% elif col.key == 'cotacao' %}
+                <p class="mkpro-empty__title">Nenhum chamado aguardando peça</p>
+                <p class="mkpro-empty__hint">Chamados que dependem de peça aparecem aqui.</p>
+              {% elif col.key == 'manutencao' %}
+                <p class="mkpro-empty__title">Nenhum chamado em manutenção</p>
+                <p class="mkpro-empty__hint">Chamados com técnico e prazo definidos aparecem aqui.</p>
+              {% else %}
+                <p class="mkpro-empty__title">Nenhum chamado finalizado</p>
+                <p class="mkpro-empty__hint">Chamados concluídos ficam registrados aqui.</p>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

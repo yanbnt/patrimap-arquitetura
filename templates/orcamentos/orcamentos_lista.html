@@ -1,0 +1,359 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  {% comment %}
+    orcamentos_lista.html — MATERIAL DESIGN 3 (DESIGN-SYSTEM.md §4 e §5).
+
+    Fila de decisão. Migrado de `--ui-*` para `--md-*`. O que SAIU:
+      · a moldura de 1px da lista e o filete de 3px de status à esquerda de cada
+        linha — a separação é divisor `outline-variant` e o estado é chip tonal;
+      · a pílula de status com borda e bolinha, que virou CHIP TONAL
+        (`--md-st-*-cont` + `--md-st-*`; negado usa `error-container`);
+      · o peso 800 do valor (agora title-large em 400, tabular) e os 650/700 em
+        texto pequeno;
+      · a moldura dos botões de linha: "Ver" e "Negar" são TEXT BUTTONS,
+        "Aprovar" é o único filled;
+      · a borda da contagem nas abas — virou chip em `secondary-container`.
+
+    As abas passaram a ser as do M3: 48px, label-large, indicador de 3px em
+    `primary` na aba ativa, divisor `outline-variant` embaixo da tira.
+    Os diálogos são o componente M3: `surface-container-high`, raio 28px,
+    sombra nível 3, ações à direita e cancelar como text button.
+
+    Auditoria 4.2 (intacta): "Aprovar" é <form method="post"> com csrf + next
+    (a view exige POST); "Negar" vai pelo modal, que também é POST.
+
+    Hooks preservados: [data-orc-ver] (+ data-titulo/-desc/-valor/-fornecedor/
+    -solicitante/-link), [data-orc-negar] (+ data-pk/-titulo), [data-orc-close],
+    #orc-ver, #orc-ver-tit/-valor/-forn/-sol/-desc/-link, #orc-negar,
+    #orc-negar-tit, #orc-negar-form, #orc-negar-motivo e as classes .pvdlg*.
+  {% endcomment %}
+  .oc { display: grid; gap: 16px; }
+
+  .oc-back {
+    justify-self: start; display: inline-flex; align-items: center; gap: 8px;
+    height: 40px; padding: 0 16px 0 12px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; text-decoration: none;
+  }
+  .oc-back:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .oc-back svg { width: 18px; height: 18px; flex: none; }
+
+  /* Botões: text button de base, filled só no "Aprovar". */
+  .oc-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 40px; padding: 0 12px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    text-decoration: none; cursor: pointer; white-space: nowrap;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .oc-btn:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .oc-btn svg { width: 18px; height: 18px; flex: none; }
+  .oc-btn--ok {
+    background: var(--md-action); color: var(--md-on-action); padding: 0 24px;
+  }
+  .oc-btn--ok:hover { background: color-mix(in srgb, var(--md-on-action) 8%, var(--md-action)); }
+  .oc-btn--no { color: var(--md-error); }
+  .oc-btn--no:hover { background: color-mix(in srgb, var(--md-error) 8%, transparent); }
+
+  /* ---------- Abas por situação (tabs do M3) ---------- */
+  .oc-abas {
+    display: flex; flex-wrap: wrap; gap: 0;
+    border-bottom: 1px solid var(--md-outline-variant); padding-bottom: 0;
+  }
+  .oc-aba {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 48px; padding: 0 16px; margin-bottom: -1px;
+    border: 0; border-bottom: 3px solid transparent;
+    color: var(--md-on-surface-variant);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; text-decoration: none;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .oc-aba:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+  .oc-aba svg { width: 18px; height: 18px; flex: none; }
+  .oc-aba__qtd {
+    border: 0; border-radius: var(--md-shape-full); padding: 0 8px;
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+    font: 500 11px/20px var(--md-font); letter-spacing: .5px;
+  }
+  .oc-aba.is-on { color: var(--md-primary); border-bottom-color: var(--md-primary); }
+  .oc-aba.is-on .oc-aba__qtd {
+    background: var(--md-secondary-container); color: var(--md-on-secondary-container);
+  }
+
+  /* A linha de filtro é a MESMA das telas do parque: "Filtrar" (popup do
+     sistema, host = pai da `.flt-bar`) + busca. `.oc-bar` é o host; `.oc-busca`
+     continua sendo o formulário da busca, agora só com o campo. */
+  .oc-bar {
+    display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap;
+    padding: 10px 12px;
+    background: var(--md-surface);
+    border: 1px solid var(--md-outline-variant);
+    border-radius: var(--md-shape-lg);
+  }
+  .oc-bar .fltx-active { flex: 1 0 100%; order: 99; margin: 2px 0 0 !important; }
+  .oc-busca {
+    flex: 1 1 300px; min-width: 0;
+    display: flex; align-items: center; gap: 8px;
+    height: 42px; padding: 0 14px;
+    background: var(--md-surface-container);
+    border-radius: var(--md-shape-full);
+  }
+  .oc-busca svg { width: 19px; height: 19px; flex: none; color: var(--md-on-surface-variant); }
+  #main .oc-busca input {
+    flex: 1 1 auto; min-width: 0; max-width: none;
+    height: 42px !important; min-height: 42px !important;
+    padding: 0 !important; border: 0 !important; background: transparent !important;
+    box-shadow: none !important; outline: none !important;
+    font: 400 13.5px/42px var(--md-font) !important;
+    color: var(--md-on-surface) !important;
+  }
+
+  /* ---------- Fila de decisão: superfície tonal, divisor por linha ---------- */
+  .oc-lista {
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-low); overflow: hidden;
+  }
+  .oc-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 4px 16px; align-items: center;
+    padding: 12px 16px;
+    border: 0; border-bottom: 1px solid var(--md-outline-variant);
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .oc-item:last-child { border-bottom: 0; }
+  .oc-item:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+
+  .oc-item__tit {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface);
+  }
+  .oc-item__meta {
+    grid-column: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px;
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+  }
+  .oc-item__meta span { display: inline-flex; align-items: center; gap: 6px; }
+  .oc-item__meta svg { width: 14px; height: 14px; flex: none; }
+
+  .oc-item__valor {
+    grid-row: 1 / span 2; grid-column: 2; text-align: right;
+    font: 400 22px/28px var(--md-font); letter-spacing: 0;
+    color: var(--md-on-surface); white-space: nowrap;
+  }
+  .oc-item__acoes { grid-row: 1 / span 2; grid-column: 3; display: flex; gap: 4px; align-items: center; }
+  .oc-item__acoes form { display: inline-flex; margin: 0; }
+
+  /* Situação: chip tonal do M3, pelo estado da linha. */
+  .oc-st {
+    display: inline-flex; align-items: center; height: 24px; padding: 0 8px;
+    border: 0; border-radius: var(--md-shape-sm); white-space: nowrap;
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px;
+    background: var(--md-st-warn-cont); color: var(--md-st-warn);
+  }
+  .oc-item--aprovado .oc-st { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+  .oc-item--negado .oc-st { background: var(--md-error-container); color: var(--md-on-error-container); }
+
+  .oc-decisao {
+    grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 8px;
+    margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--md-outline-variant);
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+  }
+  .oc-decisao svg { width: 16px; height: 16px; flex: none; color: var(--md-st-ok); }
+  .oc-decisao--no svg { color: var(--md-error); }
+
+  @media (max-width: 720px) {
+    .oc-item { grid-template-columns: 1fr auto; }
+    .oc-item__valor { grid-row: auto; grid-column: 2; }
+    .oc-item__acoes { grid-row: auto; grid-column: 1 / -1; justify-content: flex-end; }
+  }
+
+  /* ---------- Diálogos (mesmos hooks, componente M3) ---------- */
+  .pvdlg[hidden] { display: none; }
+  .pvdlg__card {
+    background: var(--md-surface-container-high); border: 0;
+    border-radius: var(--md-shape-xl); box-shadow: var(--md-elev-3);
+    color: var(--md-on-surface);
+  }
+  .pvdlg__tit { color: var(--md-on-surface); font: 400 24px/32px var(--md-font); letter-spacing: 0; }
+  .pvdlg__sub {
+    color: var(--md-on-surface-variant); font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+  }
+  .pvdlg__ico { color: var(--md-primary); }
+  .pvdlg__lbl {
+    color: var(--md-on-surface-variant); font: 500 12px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: none;
+  }
+  .pvdlg__ta {
+    background: transparent; border: 1px solid var(--md-outline);
+    border-radius: var(--md-shape-xs); color: var(--md-on-surface);
+  }
+  .pvdlg__cancel {
+    height: 40px; padding: 0 12px; border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+  }
+  .pvdlg__cancel:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .pvdlg__ok {
+    height: 40px; padding: 0 24px; border: 0; border-radius: var(--md-shape-full);
+    background: var(--md-error); color: var(--md-on-error);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+  }
+  .pvdlg__ok:hover { background: color-mix(in srgb, var(--md-on-error) 8%, var(--md-error)); filter: none; }
+  .oc-ver__linha {
+    margin: 0 0 8px; font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+    color: var(--md-on-surface-variant);
+  }
+  .oc-ver__linha b { color: var(--md-on-surface); font-weight: 500; }
+  .oc-ver__desc {
+    margin: 0; padding: 16px; border: 0; border-radius: var(--md-shape-md);
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+    color: var(--md-on-surface-variant); background: var(--md-surface-container-highest);
+  }
+</style>
+
+<div class="oc">
+  <a data-mk-voltar class="oc-back" href="{{ voltar_url }}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+    {{ voltar_nome }}
+  </a>
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Compras · Orçamentos</p>
+    <h1 class="mkpro-head__title">Orçamentos</h1>
+    <p class="mkpro-head__sub">Compras de peça abertas pelos chamados. Aprove, negue ou consulte o detalhe.</p>
+  </header>
+
+  <div class="oc-abas" role="tablist">
+    {% for a in abas %}
+      <a class="oc-aba{% if a.key == situacao %} is-on{% endif %}" role="tab" href="?situacao={{ a.key }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{% if a.key == 'pendente' %}<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>{% elif a.key == 'aprovado' %}<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>{% else %}<circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/>{% endif %}</svg>
+        {{ a.titulo }}
+        <span class="oc-aba__qtd">{{ a.qtd }}</span>
+      </a>
+    {% endfor %}
+  </div>
+
+  {% comment %}Host do popup: DIV, nunca <form> — o parcial traz dentro dele o
+  formulário que o "Aplicar" envia, e form dentro de form o parser descarta.{% endcomment %}
+  <div class="oc-bar">
+    {% include "parque/_filtros.html" %}
+    <form class="oc-busca" method="get" role="search">
+      <input type="hidden" name="situacao" value="{{ situacao }}">
+      {% if request.GET.fornecedor %}<input type="hidden" name="fornecedor" value="{{ request.GET.fornecedor }}">{% endif %}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="search" name="q" value="{{ busca }}" placeholder="Buscar por título, fornecedor, solicitante…" aria-label="Buscar orçamento">
+    </form>
+  </div>
+
+  {% if not pode_decidir and situacao == 'pendente' %}
+  <div class="mkpro-alert" role="status">
+    <span class="mkpro-alert__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+    <div><strong>Você só pode consultar.</strong> Apenas <b>Gerente</b> e <b>Supervisor</b> aprovam ou negam orçamentos.</div>
+  </div>
+  {% endif %}
+
+  {% if itens %}
+  <div class="oc-lista">
+    {% for o in itens %}
+    <div class="oc-item oc-item--{{ o.status }}">
+      <div class="oc-item__tit">
+        <span class="oc-st">{{ o.get_status_display }}</span>
+        {{ o.titulo }}
+      </div>
+
+      <div class="oc-item__meta">
+        {% if o.fornecedor %}<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M3 21V10l6 4v-4l6 4V5h6v16"/></svg> {{ o.fornecedor }}</span>{% endif %}
+        {% if o.solicitante %}<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> {{ o.solicitante }}</span>{% endif %}
+        {% if o.data_solicitacao %}<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> {{ o.data_solicitacao|date:'d/m/Y' }}</span>{% endif %}
+      </div>
+
+      <div class="oc-item__valor">{% if o.valor is not None %}R$ {{ o.valor }}{% else %}—{% endif %}</div>
+
+      <div class="oc-item__acoes">
+        <button type="button" class="oc-btn" data-orc-ver
+                data-titulo="{{ o.titulo }}" data-desc="{{ o.descricao }}"
+                data-valor="{% if o.valor is not None %}R$ {{ o.valor }}{% else %}—{% endif %}"
+                data-fornecedor="{{ o.fornecedor|default:'—' }}" data-solicitante="{{ o.solicitante|default:'—' }}"
+                data-link="{{ o.link_bitrix }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Ver</button>
+        {% if pode_decidir and o.status == 'pendente' %}
+          <button type="button" class="oc-btn oc-btn--no" data-orc-negar
+                  data-pk="{{ o.pk }}" data-titulo="{{ o.titulo }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg> Negar</button>
+          <form method="post" action="{% url 'orcamentos_decidir' o.pk 'aprovar' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="oc-btn oc-btn--ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg> Aprovar</button></form>
+        {% endif %}
+      </div>
+
+      {% if o.status == 'aprovado' %}
+        <p class="oc-decisao"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+          <span>Aprovado{% if o.aprovado_por %} por {{ o.aprovado_por.get_full_name|default:o.aprovado_por.username }}{% endif %}{% if o.data_aprovacao %} · {{ o.data_aprovacao|date:'d/m/Y' }}{% endif %}</span></p>
+      {% elif o.status == 'negado' %}
+        <p class="oc-decisao oc-decisao--no"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>
+          <span>Negado{% if o.motivo %} · {{ o.motivo }}{% endif %}</span></p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="mkpro-empty">
+    <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M10.5 13.2h3M10.5 15.6h3"/></svg></span>
+    <p class="mkpro-empty__title">Nenhum orçamento em <b>{{ situacao }}</b></p>
+    <p class="mkpro-empty__hint">Orçamentos são abertos automaticamente quando um chamado precisa comprar peça. Troque de aba acima para ver as outras situações.</p>
+  </div>
+  {% endif %}
+</div>
+
+{# Modal VER detalhes #}
+<div class="pvdlg" id="orc-ver" hidden>
+  <div class="pvdlg__backdrop" data-orc-close></div>
+  <div class="pvdlg__card" role="dialog" aria-modal="true">
+    <div class="pvdlg__head">
+      <span class="pvdlg__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+      <div class="pvdlg__headtxt">
+        <h2 class="pvdlg__tit" id="orc-ver-tit">Orçamento</h2>
+        <p class="pvdlg__sub" id="orc-ver-valor">—</p>
+      </div>
+      <button type="button" class="pvdlg__x" data-orc-close aria-label="Fechar">×</button>
+    </div>
+    <div class="pvdlg__body">
+      <p class="oc-ver__linha"><b>Fornecedor:</b> <span id="orc-ver-forn">—</span></p>
+      <p class="oc-ver__linha"><b>Solicitante:</b> <span id="orc-ver-sol">—</span></p>
+      <p class="oc-ver__linha"><b>Descrição:</b></p>
+      <p id="orc-ver-desc" class="oc-ver__desc">—</p>
+      <p class="oc-ver__linha" style="margin-top:10px"><a id="orc-ver-link" href="#" target="_blank" rel="noopener" hidden>Abrir tarefa no Bitrix ↗</a></p>
+      <div class="pvdlg__actions">
+        <button type="button" class="pvdlg__cancel" data-orc-close>Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Modal NEGAR (com motivo) #}
+<div class="pvdlg" id="orc-negar" hidden>
+  <div class="pvdlg__backdrop" data-orc-close></div>
+  <div class="pvdlg__card" role="dialog" aria-modal="true">
+    <div class="pvdlg__head">
+      <span class="pvdlg__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg></span>
+      <div class="pvdlg__headtxt">
+        <h2 class="pvdlg__tit">Negar orçamento</h2>
+        <p class="pvdlg__sub" id="orc-negar-tit">—</p>
+      </div>
+      <button type="button" class="pvdlg__x" data-orc-close aria-label="Fechar">×</button>
+    </div>
+    <form method="post" id="orc-negar-form" class="pvdlg__body">
+      {% csrf_token %}
+      <label class="pvdlg__lbl" for="orc-negar-motivo">Motivo (opcional)</label>
+      <textarea id="orc-negar-motivo" name="motivo" rows="3" class="pvdlg__ta"
+                placeholder="Por que está negando este orçamento?"></textarea>
+      <div class="pvdlg__actions">
+        <button type="button" class="pvdlg__cancel" data-orc-close>Cancelar</button>
+        <button type="submit" class="pvdlg__ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg> Negar orçamento</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

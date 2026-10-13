@@ -1,0 +1,45 @@
+{% load static %}
+{% comment %}
+  Lista de máquinas candidatas ao vínculo de uma coleta.
+  Incluída SÓ por parque/vincular.html — as classes .vc-* vêm do <style> de lá.
+  A semelhança é um CHIP TONAL do M3 (alta = st-ok, média = st-warn, baixa =
+  neutra), definido em vincular.html; a ação primária ("Vincular") fecha a
+  linha à direita. Nada de cor solta aqui: só os papéis --md-*.
+{% endcomment %}
+<div class="vc-tbl">
+  <table>
+    <thead>
+      <tr>
+        <th>Semelhança</th>
+        <th>Patrimônio</th>
+        <th>Colaborador</th>
+        <th>Unidade</th>
+        <th>Setor</th>
+        <th>Specs cadastradas</th>
+        <th class="vc-acao">Ação</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in linhas %}
+      <tr>
+        <td>
+          <span class="vc-score{% if l.score >= 80 %} vc-score--alta{% elif l.score >= 40 %} vc-score--media{% endif %}">{{ l.score }}%</span>
+        </td>
+        <td><b>{{ l.patrimonio }}</b></td>
+        <td>{{ l.colaborador }}</td>
+        <td>{{ l.unidade }}</td>
+        <td>{{ l.setor }}</td>
+        <td>{{ l.specs }}</td>
+        <td class="vc-acao">
+          <form method="post" action="{% url 'parque_telemetria_vincular' tel.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="tipo" value="{{ l.tipo }}">
+            <input type="hidden" name="maq_id" value="{{ l.id }}">
+            <button type="submit" class="vc-btn vc-btn--ok vc-btn--sm">Vincular</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

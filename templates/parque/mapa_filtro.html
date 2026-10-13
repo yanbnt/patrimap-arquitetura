@@ -1,0 +1,242 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+{% if transferir_url %}{% csrf_token %}{% endif %}
+<style>
+  /* ==========================================================================
+     mapa_filtro.html — prefixo .mpf-  ·  Material Design 3
+     Mesma pele M3 dos demais mapas: cabeçalho eyebrow·título·sub·ações, barra de
+     filtro sem card e SEM linha, setor como seção em superfície tonal (sem
+     borda) e o cartão da baia como FILLED CARD — hover sobe um tom, status e
+     nota em chip tonal. Saíram: moldura de setor e de cartão, filete lateral
+     colorido, peso 700/800 e maiúscula fora de overline.
+     `.mpf-skin` só existe para subir a especificidade acima do make-admin.css.
+     ========================================================================== */
+
+  /* 1. Cabeçalho */
+  .mpf-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+  .mpf-head__id { flex: 1 1 340px; min-width: 0; display: grid; gap: 4px; }
+  .mpf-sub { display: flex; flex-wrap: wrap; gap: 3px 16px; }
+  .mpf-sub span { position: relative; }
+  .mpf-sub span + span::before { content: "·"; position: absolute; left: -10px; opacity: .55; }
+  /* Outlined button do M3: 40px, pílula, 1px outline, texto primary. */
+  .mapa__voltar {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 40px; padding: 0 24px; box-sizing: border-box;
+    border: 1px solid var(--md-outline) !important; border-radius: var(--md-shape-full) !important;
+    background: transparent !important; color: var(--md-primary) !important;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    text-decoration: none; white-space: nowrap; box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .mapa__voltar:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important; color: var(--md-primary) !important; }
+  /* Segmented button do M3: contorno único, segmento ativo em secondary-container. */
+  .mapa__view {
+    display: inline-flex; gap: 0; height: 40px; padding: 0; box-sizing: border-box;
+    border: 1px solid var(--md-outline); border-radius: var(--md-shape-full);
+    background: transparent; overflow: hidden;
+  }
+  .mapa__view-btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 0 20px;
+    border-radius: var(--md-shape-full);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    color: var(--md-on-surface); text-decoration: none; background: transparent;
+  }
+  .mapa__view-btn svg { width: 18px; height: 18px; }
+  .mapa__view-btn:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+  .mapa__view-btn.is-active { background: var(--md-secondary-container); color: var(--md-on-secondary-container); box-shadow: none; }
+
+  /* 2. Barra de filtro: sem card e sem linha divisória */
+  .mpf-fbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
+    margin: 0 0 20px; padding: 0;
+  }
+
+  /* 3. Legenda de situação */
+  .mpf-leg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; margin: 0 0 20px; }
+  .mpf-leg__lbl { font: 500 11px/16px var(--md-font); letter-spacing: .5px; text-transform: uppercase; color: var(--md-on-surface-variant); }
+  .mpf-leg__i { display: inline-flex; align-items: center; gap: 8px; font: 500 12px/16px var(--md-font); letter-spacing: .5px; color: var(--md-on-surface-variant); }
+  .mpf-leg__i::before { content: ""; width: 8px; height: 8px; border-radius: var(--md-shape-full); background: var(--mpf-lc, var(--md-outline)); }
+  .mpf-leg__i--pc { --mpf-lc: var(--md-st-ok); }
+  .mpf-leg__i--nb { --mpf-lc: var(--md-primary); }
+  .mpf-leg__i--defeito { --mpf-lc: var(--md-st-crit); }
+  .mpf-leg__i--sempc { --mpf-lc: var(--md-st-warn); }
+
+  /* 4. Planta e setores — seção tonal, um degrau abaixo do cartão. */
+  .mpf-skin .mapa__planta { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 16px; }
+  .mpf-skin .mapa-unidade__titulo {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    font: 500 16px/24px var(--md-font); letter-spacing: .15px;
+    color: var(--md-on-surface); margin: 4px 0 12px; padding: 0; border: 0;
+  }
+  .mpf-skin .mapa-uni-ico { width: 24px; height: 24px; color: var(--md-on-surface-variant); }
+  .mpf-skin .mapa-unidade__setores { gap: 16px; }
+  .mpf-skin .mapa-setor {
+    background: var(--md-surface-container-lowest) !important; border: 0 !important;
+    border-radius: var(--md-shape-lg) !important; box-shadow: none !important; padding: 16px;
+  }
+  .mpf-skin .mapa-setor::before { display: none; }
+  .mpf-skin .mapa-setor__titulo {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface);
+    margin: 0 0 12px; padding: 0; border: 0;
+  }
+  .mpf-skin .mapa .mapa-setor__qtd, .mpf-skin .mapa-setor__qtd {
+    margin-left: auto; min-width: 0; height: 24px; padding: 0 8px;
+    display: inline-flex; align-items: center; border: 0; border-radius: var(--md-shape-sm);
+    background: var(--md-surface-container-high) !important; color: var(--md-on-surface-variant) !important;
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; font-variant-numeric: tabular-nums;
+  }
+
+  /* 5. Cartão da baia (M3 filled card) */
+  .mpf-skin .mapa-setor__baias, .mpf-skin .mapa-setor__baias--grid {
+    grid-template-columns: repeat(auto-fill, minmax(166px, 1fr)); gap: 8px;
+  }
+  .mpf-skin .mapa-setor__baias > .baia:not(.baia--add):not(.baia--sem_pc) { min-height: 118px; }
+  .mpf-skin .baia { --mpf-st: var(--md-on-surface-variant); --mpf-stc: var(--md-surface-container-high); --cor: var(--md-outline); }
+  .mpf-skin .baia--cl-otimo { --mpf-st: var(--md-st-ok); --mpf-stc: var(--md-st-ok-cont); --cor: var(--md-st-ok); }
+  .mpf-skin .baia--cl-bom { --mpf-st: var(--md-st-attn); --mpf-stc: var(--md-st-attn-cont); --cor: var(--md-st-attn); }
+  .mpf-skin .baia--cl-baixo { --mpf-st: var(--md-st-warn); --mpf-stc: var(--md-st-warn-cont); --cor: var(--md-st-warn); }
+  .mpf-skin .baia--cl-critico { --mpf-st: var(--md-st-crit); --mpf-stc: var(--md-st-crit-cont); --cor: var(--md-st-crit); }
+  .mpf-skin .baia:not(.baia--add) {
+    padding: 12px;
+    background: var(--md-surface-container-low) !important; border: 0 !important;
+    border-radius: var(--md-shape-md) !important; box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .mpf-skin .baia:not(.baia--add)::before { display: none; }
+  .mpf-skin .baia:not(.baia--add):hover {
+    transform: none !important; box-shadow: none !important;
+    background: var(--md-surface-container) !important;
+  }
+  .mpf-skin .baia:focus-visible { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+  .mpf-skin .baia__top { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; min-height: 20px; }
+  .mpf-skin .baia__icone { color: var(--md-on-surface-variant); font-size: 0; }
+  .mpf-skin .baia__icone svg { width: 18px; height: 18px; }
+  .mpf-skin .baia__tel { margin-left: auto; margin-right: 0; font-size: 0; }
+  .mpf-skin .baia__tel svg { width: 14px; height: 14px; }
+  .mpf-skin .baia__tel--ativo { color: var(--md-st-ok); }
+  .mpf-skin .baia__tel--inativo { color: var(--md-st-warn); }
+  .mpf-skin .baia__tel--sem { color: var(--md-outline-variant); }
+  .mpf-skin .baia__score {
+    min-width: 0; height: 20px; padding: 0 8px;
+    display: inline-flex; align-items: center; border: 0; border-radius: var(--md-shape-sm);
+    background: var(--mpf-stc) !important; color: var(--mpf-st) !important;
+    font: 500 11px/16px var(--md-font) !important; letter-spacing: .5px; font-variant-numeric: tabular-nums;
+  }
+  .mpf-skin .baia__nome {
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    color: var(--md-on-surface) !important; font-variant-numeric: tabular-nums;
+  }
+  .mpf-skin .baia__ocupante {
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; margin-top: 2px;
+    color: var(--md-on-surface-variant) !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mpf-skin .baia__specs { font: 400 12px/16px var(--md-font); letter-spacing: .4px; margin-top: 6px; color: var(--md-on-surface-variant) !important; }
+  .mpf-skin .baia__classe {
+    display: inline-flex; align-items: center; margin-top: 8px;
+    height: 20px; padding: 0 8px; border-radius: var(--md-shape-sm);
+    background: var(--mpf-stc); color: var(--mpf-st) !important;
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; text-transform: none;
+  }
+  .mpf-skin .baia__prev { margin-top: 8px; font: 500 11px/16px var(--md-font); letter-spacing: .5px; }
+  .mpf-skin .baia__prev--em_dia { color: var(--md-st-ok); }
+  .mpf-skin .baia__prev--proxima { color: var(--md-st-warn); }
+  .mpf-skin .baia__prev--vencida, .mpf-skin .baia__prev--pendente { color: var(--md-st-crit); }
+  .mpf-skin .baia__perifs { margin-top: 8px; gap: 8px; opacity: .5; transition: opacity var(--md-dur-short) var(--md-ease-standard); }
+  .mpf-skin .baia:hover .baia__perifs, .mpf-skin .baia:focus-visible .baia__perifs { opacity: 1; }
+  .mpf-skin .baia__perif { color: var(--md-on-surface-variant); font-size: 0; }
+  .mpf-skin .baia__perif svg { width: 14px; height: 14px; }
+  .mpf-skin .baia__perif.is-defeito { color: var(--md-st-crit); }
+  .mpf-skin .baia__tip {
+    background: var(--md-inverse-surface); color: var(--md-inverse-on-surface);
+    border-radius: var(--md-shape-xs); padding: 8px 12px;
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; box-shadow: var(--md-elev-2);
+  }
+
+  /* 6. Miudezas desta tela */
+  .mpf-empty { margin: 24px 0; }
+  .mpf-alert { margin: 0 0 20px; }
+
+  @media (max-width: 900px) {
+    .mpf-skin .mapa__planta { grid-template-columns: 1fr; }
+    .mpf-head { align-items: flex-start; }
+  }
+</style>
+<div class="mapa mpf-skin"{% if transferir_url %} data-transferir-url="{{ transferir_url }}" data-pode-mover="{% if pode_mover %}1{% else %}0{% endif %}"{% endif %}>
+
+  <header class="mkpro-head mpf-head">
+    <div class="mpf-head__id">
+      <p class="mkpro-head__eyebrow">Parque de máquinas · Mapa por situação</p>
+      <h1 class="mkpro-head__title">{{ titulo }}</h1>
+      <p class="mkpro-head__sub mpf-sub">
+        {% if total %}<span class="mkpro-tabular">{{ total }} baias</span>{% endif %}
+        <span>Clique num card para ver e agir</span>
+      </p>
+    </div>
+    <div class="mkpro-head__actions">
+      <a data-mk-voltar class="mapa__voltar" href="{{ voltar_url }}">← {{ voltar_nome }}</a>
+      {% if view_tabela %}
+        <div class="mapa__view">
+          <a class="mapa__view-btn {% if view_atual == 'mapa' %}is-active{% endif %}" href="{{ view_mapa }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg> Mapa</a>
+          <a class="mapa__view-btn {% if view_atual == 'tabela' %}is-active{% endif %}" href="{{ view_tabela }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18"/></svg> Tabela</a>
+        </div>
+      {% endif %}
+    </div>
+  </header>
+
+  <div class="mpf-fbar">
+    {% include "parque/_filtros.html" with uni_lbl="Unidade" %}
+    {% include "parque/_mapa_busca.html" %}
+  </div>
+
+  {% if transferir_url %}
+    <div class="mkpro-alert mpf-alert" role="status">
+      <span class="mkpro-alert__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h3"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>
+      <div><strong>Transferência entre lojas.</strong> Arraste uma <b>máquina com PC</b> até o caminhão no rodapé para enviá-la a outra loja.</div>
+    </div>
+  {% endif %}
+
+  <div class="mpf-leg">
+    <span class="mpf-leg__lbl">Situação</span>
+    <span class="mpf-leg__i mpf-leg__i--pc">Com PC</span>
+    <span class="mpf-leg__i mpf-leg__i--nb">Notebook</span>
+    <span class="mpf-leg__i mpf-leg__i--defeito">Defeito</span>
+    <span class="mpf-leg__i mpf-leg__i--sempc">Sem PC</span>
+  </div>
+
+  <div class="mapa__planta" id="mapa-planta">
+    {% for grupo in unidades_estrut %}
+      <div class="mapa-unidade" data-unidade="{{ grupo.unidade.name }}">
+        <h2 class="mapa-unidade__titulo"><svg class="mapa-uni-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 9.5 2-5.5h15l2 5.5"/><path d="M4 9.5V20h16V9.5"/><path d="M9.5 20v-6h5v6"/></svg> {{ grupo.unidade.name }}</h2>
+        <div class="mapa-unidade__setores">
+          {% for s in grupo.setores %}
+            <section class="mapa-setor">
+              <header class="mapa-setor__titulo">{{ s.setor.nome }}
+                <span class="mapa-setor__qtd mkpro-tabular">{{ s.baias|length }}</span>
+              </header>
+              <div class="mapa-setor__baias">
+                {% for b in s.baias %}
+                  {% include "parque/_baia.html" %}
+                {% endfor %}
+              </div>
+            </section>
+          {% endfor %}
+        </div>
+      </div>
+    {% empty %}
+      <div class="mkpro-empty mpf-empty">
+        <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+        <p class="mkpro-empty__title">Nenhuma máquina nesta situação</p>
+        <p class="mkpro-empty__hint">Nada a tratar por aqui. Troque a unidade no filtro acima ou volte ao mapa completo.</p>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% if transferir_url %}
+  {% include "parque/_transfer_overlays.html" %}
+{% endif %}
+{% include "parque/_zoom.html" %}
+{% endblock %}

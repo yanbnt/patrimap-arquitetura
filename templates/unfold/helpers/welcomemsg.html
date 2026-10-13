@@ -1,0 +1,62 @@
+{% load unfold i18n admin_urls %}
+{% comment %}
+Barra superior: o canto esquerdo é do VOLTAR, não do menu.
+
+Histórico curto, porque explica as cicatrizes:
+  1. Havia DOIS controles de menu com efeitos diferentes — o do tema escondia a
+     barra inteira, um meu recolhia para ícones. Viraram um só.
+  2. Esse um usava o par de ícones de gaveta do M3, e o `menu_open` (≡ com uma
+     seta) foi lido como SETA DE VOLTAR: ao lado do "Voltar ao Início" que a
+     tela já tinha, dava a impressão de dois botões de voltar. O dono pediu:
+     "tira esse de recolher menu e bota aquele de voltar no lugar dele".
+
+Então agora:
+  • O slot `#mk-voltar` recebe, por JS, o link de voltar que a própria tela
+    declara — ele SOBE para cá em vez de ser copiado, então não há duplicata
+    possível, e tela sem voltar não mostra botão.
+  • O botão de menu ficou só ABAIXO de 1280px, onde a gaveta é sobreposta e
+    começa fechada. Sem ele ali não haveria como abrir o menu. Acima disso a
+    gaveta está sempre visível (make-m3.css §19.12) e o botão não aparece.
+
+A visibilidade da gaveta é decidida por CSS + uma classe no <body> (make-m3.css
+§19.12 e make-admin.js), não pelo `sidebarOpen` do tema: acionar o
+`sidebarToggle()` dele mudava o valor mas não re-executava o `x-show`, e o
+`display: none` em linha permanecia — a gaveta não voltava e o menu ficava morto.
+{% endcomment %}
+
+<div class="flex flex-row grow font-semibold items-center min-w-0 mr-3">
+    {% comment %}
+    O slot do VOLTAR. Fica vazio no HTML e é preenchido pelo JS com o link de
+    voltar que a própria tela já declara (`.mkdf-head__back`, `.mapa__voltar`),
+    que sai de dentro da página ao subir para cá. Assim o botão é UM só: não
+    existe como duplicar, e telas sem voltar simplesmente não mostram nada.
+    {% endcomment %}
+    <a id="mk-voltar" class="mk-topbtn" hidden></a>
+
+    {% if is_nav_sidebar_enabled and not is_popup %}
+        {% comment %}
+        O botão de menu só existe ABAIXO de 1280px (classe `--estreito`, regra
+        em make-m3.css §19.8). O dono pediu para tirá-lo da barra e pôr o voltar
+        no lugar — mas nessa faixa a gaveta é SOBREPOSTA e começa fechada: sem
+        botão nenhum não haveria como abrir o menu. Acima de 1280px a gaveta
+        está sempre visível, então ali ele sai de fato.
+        {% endcomment %}
+        <button type="button" id="mk-menu-toggle" class="mk-menu-toggle mk-menu-toggle--estreito"
+                aria-controls="nav-sidebar" aria-expanded="false"
+                title="{% trans 'Abrir menu' %}" aria-label="{% trans 'Abrir menu' %}">
+            <span class="material-symbols-outlined mk-menu-toggle__ic" aria-hidden="true">menu</span>
+        </button>
+    {% endif %}
+
+    {% include "unfold/helpers/header_back_button.html" %}
+
+    <h1 class="overflow-hidden leading-5 text-important flex items-center whitespace-nowrap xl:text-base">
+        {% header_title %}
+
+        {% if cl and cl.full_result_count != cl.result_count and cl.paginator|class_name != "InfinitePaginator" %}
+            <span class="font-medium ml-2 text-subtle">
+                {% blocktranslate count counter=cl.result_count %}{{ counter }} result{% plural %}{{ counter }} results{% endblocktranslate %} (<a href="?{% if cl.is_popup %}_popup=1{% endif %}">{% if cl.show_full_result_count %}{% blocktranslate with full_result_count=cl.full_result_count %}{{ full_result_count }} total{% endblocktranslate %}{% else %}{% translate "Show all" %}{% endif %}</a>)
+            </span>
+        {% endif %}
+    </h1>
+</div>

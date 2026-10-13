@@ -1,0 +1,239 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  {% comment %}
+    enviar_autorizada.html — MATERIAL DESIGN 3 (DESIGN-SYSTEM.md §4 "Campo" e §5).
+
+    Migrado de `--ui-*` para `--md-*`. O que SAIU:
+      · as bordas de 1px dos três blocos e o divisor sob o título de cada um —
+        bloco é cartão filled (`surface-container-low`) e o título é
+        title-medium, sem caixa alta;
+      · o filete verde de 2px do subgrupo "item fora do estoque": aninhamento
+        no M3 é TOM, então o subgrupo é `surface-container`;
+      · a borda tracejada da área de anexo, que virou superfície tonal com
+        contorno de 1px e state layer no hover;
+      · a MAIÚSCULA e o peso 700 dos rótulos de campo (label-medium) — a ajuda
+        embaixo é body-small;
+      · a moldura do Cancelar (text button). O submit é o único filled.
+
+    Hooks preservados: #ea-equip / #ea-avulso (script local), [data-dz],
+    .dz-input, [data-dz-drop], [data-dz-list] (make-admin.js) e todos os
+    name= dos campos, o enctype e o método.
+  {% endcomment %}
+  .ea { display: grid; gap: 16px; max-width: 660px; }
+
+  .ea-back {
+    justify-self: start; display: inline-flex; align-items: center; gap: 8px;
+    height: 40px; padding: 0 16px 0 12px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; text-decoration: none;
+  }
+  .ea-back:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .ea-back svg { width: 18px; height: 18px; flex: none; }
+
+  .ea-form { display: grid; gap: 16px; }
+  .ea-bloco {
+    display: grid; gap: 24px; padding: 24px;
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-low);
+  }
+  .ea-bloco__tit {
+    margin: 0; border: 0; padding: 0;
+    font: 500 16px/24px var(--md-font); letter-spacing: .15px;
+    text-transform: none; color: var(--md-on-surface);
+  }
+
+  .ea-field { display: grid; gap: 8px; }
+  .ea-field__lbl {
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: none; color: var(--md-on-surface-variant);
+  }
+  .ea-field__req { color: var(--md-error); }
+  .ea-field__help {
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+  }
+  .ea-field input, .ea-field select, .ea-field textarea { width: 100%; }
+  .ea-field textarea { resize: vertical; }
+
+  /* Item fora do estoque: subgrupo aninhado — um tom acima, sem filete. */
+  .ea-sub {
+    display: grid; gap: 24px; padding: 16px;
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container);
+  }
+  .ea-sub[hidden] { display: none; }   /* o `hidden` do script tem de vencer o display:grid */
+
+  .ea-acoes { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+  .ea-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 40px; padding: 0 12px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    text-decoration: none; cursor: pointer;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .ea-btn:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .ea-btn svg { width: 18px; height: 18px; flex: none; }
+  .ea-btn--ok { background: var(--md-action); color: var(--md-on-action); padding: 0 24px; }
+  .ea-btn--ok:hover { background: color-mix(in srgb, var(--md-on-action) 8%, var(--md-action)); }
+
+  /* Área de anexo (o comportamento é do make-admin.js). */
+  .ea .dz-drop {
+    display: grid; justify-items: center; gap: 4px; width: 100%;
+    padding: 24px 16px; cursor: pointer;
+    border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; font-family: var(--md-font);
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .ea .dz-drop svg { width: 24px; height: 24px; color: var(--md-on-surface-variant); }
+  .ea .dz-drop small { font: 400 12px/16px var(--md-font); letter-spacing: .4px; }
+  .ea .dz-drop:hover, .ea .dz.is-over .dz-drop {
+    border-color: var(--md-primary); color: var(--md-primary);
+    background: color-mix(in srgb, var(--md-primary) 8%, var(--md-surface-container-high));
+  }
+  .ea .dz-item {
+    background: var(--md-surface-container-high); border: 0;
+    border-radius: var(--md-shape-sm); color: var(--md-on-surface);
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+  }
+</style>
+
+<div class="ea">
+  <a data-mk-voltar class="ea-back" href="{{ voltar_url }}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+    {{ voltar_nome }}
+  </a>
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · Assistência externa</p>
+    <h1 class="mkpro-head__title">{% if envio %}Editar envio para autorizada{% else %}Enviar equipamento para autorizada{% endif %}</h1>
+    <p class="mkpro-head__sub">{% if envio %}Corrija os dados do envio registrados anteriormente.{% else %}Registre a saída de um computador ou notebook para reparo numa autorizada / assistência técnica.{% endif %}</p>
+  </header>
+
+  {% if not autorizadas %}
+    <div class="mkpro-alert mkpro-alert--warn" role="status">
+      <span class="mkpro-alert__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/></svg></span>
+      <div><strong>Nenhuma autorizada cadastrada ainda.</strong>
+        <a href="{% url 'admin:parque_autorizada_add' %}">Cadastrar a primeira →</a></div>
+    </div>
+  {% endif %}
+
+  <form method="post" class="ea-form" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <section class="ea-bloco">
+      <h2 class="ea-bloco__tit">Para onde vai</h2>
+
+      <div class="ea-field">
+        <label class="ea-field__lbl" for="ea-aut">Autorizada / assistência <span class="ea-field__req">*</span></label>
+        <select name="autorizada" id="ea-aut" required>
+          <option value="">— selecione —</option>
+          {% for a in autorizadas %}<option value="{{ a.pk }}" {% if envio and a.pk == envio.autorizada_id %}selected{% endif %}>{{ a.nome }}{% if a.cidade %} · {{ a.cidade }}{% endif %}</option>{% endfor %}
+        </select>
+        <span class="ea-field__help">Quem vai receber e reparar o equipamento.</span>
+      </div>
+
+      <div class="ea-field">
+        <label class="ea-field__lbl" for="ea-bitrix">Código da tarefa do Bitrix <span class="ea-field__req">*</span></label>
+        <input type="text" name="bitrix_task_id" id="ea-bitrix" maxlength="40" required
+               placeholder="ex.: 12345" autocomplete="off" inputmode="numeric" value="{{ envio.bitrix_task_id|default:'' }}">
+        <span class="ea-field__help">Liga este envio à tarefa que o originou.</span>
+      </div>
+    </section>
+
+    <section class="ea-bloco">
+      <h2 class="ea-bloco__tit">O que vai</h2>
+
+      <div class="ea-field">
+        <label class="ea-field__lbl" for="ea-equip">Equipamento <span class="ea-field__req">*</span></label>
+        <select name="equipamento" id="ea-equip" required>
+          <option value="">— selecione o equipamento —</option>
+          <option value="outro" {% if equip_atual == 'outro' %}selected{% endif %}>Item fora do estoque (digitar)</option>
+          <optgroup label="Computadores">
+            {% for c in computadores %}<option value="{{ c.val }}" {% if c.val == equip_atual %}selected{% endif %}>{{ c.label }}</option>{% endfor %}
+          </optgroup>
+          <optgroup label="Notebooks">
+            {% for n in notebooks %}<option value="{{ n.val }}" {% if n.val == equip_atual %}selected{% endif %}>{{ n.label }}</option>{% endfor %}
+          </optgroup>
+        </select>
+        <span class="ea-field__help">Máquinas do parque já vêm com patrimônio e série. Para o que não está cadastrado, escolha <b>Item fora do estoque</b>.</span>
+      </div>
+
+      <div id="ea-avulso" class="ea-sub" hidden>
+        <div class="ea-field">
+          <label class="ea-field__lbl" for="ea-desc">Descrição do item <span class="ea-field__req">*</span></label>
+          <input type="text" name="equipamento_desc" id="ea-desc" maxlength="200" placeholder="ex.: Sensor IVA, roteador, no-break…" value="{% if equip_atual == 'outro' %}{{ envio.equipamento_desc }}{% endif %}">
+          <span class="ea-field__help">Como o item será identificado no protocolo.</span>
+        </div>
+
+        <div class="ea-field">
+          <label class="ea-field__lbl" for="ea-qtd">Quantidade <span class="ea-field__req">*</span></label>
+          <input type="number" name="quantidade" id="ea-qtd" min="1" step="1" value="{% if equip_atual == 'outro' %}{{ envio.quantidade }}{% else %}1{% endif %}" inputmode="numeric">
+        </div>
+
+        <div class="ea-field">
+          <label class="ea-field__lbl" for="ea-patr">Patrimônio / identificação</label>
+          <input type="text" name="patrimonio" id="ea-patr" maxlength="40" placeholder="se houver" value="{% if equip_atual == 'outro' %}{{ envio.patrimonio }}{% endif %}">
+          <span class="ea-field__help">Opcional.</span>
+        </div>
+
+        <div class="ea-field">
+          <label class="ea-field__lbl" for="ea-serial">Nº(s) de série</label>
+          <textarea name="serial" id="ea-serial" rows="3" placeholder="Ex.:&#10;SN-001&#10;SN-002&#10;SN-003">{% if equip_atual == 'outro' %}{{ envio.serial }}{% endif %}</textarea>
+          <span class="ea-field__help">Opcional — um por linha, se for mais de um item.</span>
+        </div>
+      </div>
+
+      <div class="ea-field">
+        <label class="ea-field__lbl" for="ea-problema">Problema relatado</label>
+        <textarea name="problema" id="ea-problema" rows="4" placeholder="Descreva o defeito / motivo do envio.">{{ envio.problema|default:'' }}</textarea>
+        <span class="ea-field__help">É o que a autorizada vai ler primeiro.</span>
+      </div>
+    </section>
+
+    <section class="ea-bloco">
+      <h2 class="ea-bloco__tit">Documentos</h2>
+
+      <div class="ea-field">
+        <span class="ea-field__lbl">NF de compra e Ordem de Serviço</span>
+        {% if envio and envio.notas_compra.exists %}
+          <span class="ea-field__help">Já há {{ envio.notas_compra.count }} documento(s) anexado(s) — gerencie na tela do envio. Arraste aqui para adicionar mais.</span>
+        {% endif %}
+        <div class="dz" data-dz>
+          <input type="file" name="nf_compra" class="dz-input" multiple accept=".pdf,.jpg,.jpeg,.png" hidden>
+          <button type="button" class="dz-drop" data-dz-drop>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 18v-6"/><path d="m9.5 14.5 2.5-2.5 2.5 2.5"/></svg>
+            <span class="dz-drop__txt">Arraste a NF e a OS aqui ou <b>clique para escolher</b></span>
+            <small>PDF, JPG, PNG — pode anexar vários</small>
+          </button>
+          <ul class="dz-list" data-dz-list></ul>
+        </div>
+      </div>
+
+      <div class="ea-acoes">
+        <a class="ea-btn" href="{{ voltar_url }}">Cancelar</a>
+        <button type="submit" class="ea-btn ea-btn--ok">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{% if envio %}<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>{% else %}<path d="M14 18V6a1 1 0 0 0-1-1H2v13h3"/><path d="M14 9h4l4 4v5h-3"/><circle cx="7.5" cy="18" r="2"/><circle cx="17.5" cy="18" r="2"/><path d="M9.5 18h6"/>{% endif %}</svg>
+          {% if envio %}Salvar alterações{% else %}Registrar envio{% endif %}
+        </button>
+      </div>
+    </section>
+  </form>
+</div>
+
+<script>
+(function () {
+  var sel = document.getElementById("ea-equip");
+  var box = document.getElementById("ea-avulso");
+  if (!sel || !box) return;
+  function sync() { box.hidden = sel.value !== "outro"; }
+  sel.addEventListener("change", sync);
+  sync();
+})();
+</script>
+{% endblock %}

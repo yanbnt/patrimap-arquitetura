@@ -1,0 +1,54 @@
+{% extends 'registration/_auth_base.html' %}
+{% load i18n static %}
+
+{% block auth_doctitle %}Entrar{% endblock %}
+
+{% block extrastyle %}{{ block.super }}{{ form.media }}{% endblock %}
+
+{% block auth_title %}Entrar no sistema{% endblock %}
+{% block auth_sub %}Use seu usuário ou o e-mail corporativo.{% endblock %}
+
+{% block auth_alerts %}
+  {% if form.non_field_errors %}
+    <div class="mkauth__alert mkauth__alert--error" role="alert">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
+      </svg>
+      <div>
+        {% for erro in form.non_field_errors %}<div>{{ erro }}</div>{% endfor %}
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
+
+{% block auth_body %}
+  <form action="{{ app_path }}" method="post" id="login-form" novalidate>
+    {% csrf_token %}
+
+    {% include "registration/_campo.html" with field=form.username %}
+    {% include "registration/_campo.html" with field=form.password %}
+
+    <div class="mkauth__actions">
+      <button type="submit" class="mkauth__btn">
+        Entrar
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 12h14M13 6l6 6-6 6"/>
+        </svg>
+      </button>
+    </div>
+
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+  </form>
+{% endblock %}
+
+{% block auth_foot %}
+  <div class="mkauth__foot">
+    {% url 'admin_password_reset' as password_reset_url %}
+    {% if password_reset_url %}
+      <a class="mkauth__link" href="{{ password_reset_url }}">Esqueceu sua senha?</a>
+    {% endif %}
+    <span>Dúvidas de acesso? Procure a TI.</span>
+  </div>
+{% endblock %}

@@ -1,0 +1,310 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  {% comment %}
+    vincular.html — MATERIAL DESIGN 3 (DESIGN-SYSTEM.md §4 e §5).
+
+    Migrado de `--ui-*` para `--md-*`. O que SAIU:
+      · a grade de bordas da ficha da coleta (cada célula tinha borda direita e
+        inferior): a ficha é um cartão filled e as células se separam por
+        respiro, não por linha;
+      · as bordas de 1px dos três painéis numerados e da tabela de candidatos —
+        painel em `surface-container-low`, tabela aninhada um tom acima
+        (`surface-container`), como o M3 empilha superfícies;
+      · a moldura e a bolinha do chip de semelhança, que virou chip tonal
+        (`st-ok-*` para alta, `st-warn-*` para média, neutro para baixa);
+      · a MAIÚSCULA e o peso 700 dos rótulos de campo (label-medium) e o peso
+        800 do número do painel;
+      · a moldura dos botões secundários, que viraram text buttons.
+
+    Hooks preservados: #vn-tipo, #vn-unidade, #vn-setor, #vn-colab e
+    option[data-unidade] (script local), além dos name= dos campos.
+  {% endcomment %}
+  .vc { display: grid; gap: 16px; max-width: 900px; }
+
+  .vc-back {
+    justify-self: start; display: inline-flex; align-items: center; gap: 8px;
+    height: 40px; padding: 0 16px 0 12px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; text-decoration: none;
+  }
+  .vc-back:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .vc-back svg { width: 18px; height: 18px; flex: none; }
+
+  .vc-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 40px; padding: 0 12px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    text-decoration: none; cursor: pointer; white-space: nowrap;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .vc-btn:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .vc-btn svg { width: 18px; height: 18px; flex: none; }
+  .vc-btn--ok { background: var(--md-action); color: var(--md-on-action); padding: 0 24px; }
+  .vc-btn--ok:hover { background: color-mix(in srgb, var(--md-on-action) 8%, var(--md-action)); }
+  .vc-btn--sm { padding: 0 16px; }
+  .vc-btn--ok.vc-btn--sm { padding: 0 16px; }
+
+  /* Ficha da coleta: cartão filled, células separadas por respiro. */
+  .vc-ficha {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 4px 24px; border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-low); padding: 16px;
+  }
+  .vc-ficha > div { display: grid; gap: 2px; border: 0; padding: 4px 0; }
+  .vc-ficha__lbl {
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: uppercase; color: var(--md-on-surface-variant);
+  }
+  .vc-ficha__val {
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+    color: var(--md-on-surface); word-break: break-word;
+  }
+  .vc-ficha code {
+    font: 400 12px/16px var(--md-font-mono); background: var(--md-surface-container-high);
+    border: 0; border-radius: var(--md-shape-xs); padding: 2px 6px;
+  }
+
+  /* Painéis numerados: cartão filled. */
+  .vc-panel {
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-low); padding: 24px;
+  }
+  .vc-panel__head { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+  .vc-panel__n {
+    width: 24px; height: 24px; flex: none; border-radius: var(--md-shape-full);
+    display: grid; place-items: center;
+    background: var(--md-primary-container); color: var(--md-on-primary-container);
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px;
+  }
+  .vc-panel__tit {
+    margin: 0; font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface);
+  }
+  .vc-panel__sub {
+    margin: 0 0 16px 36px; font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+    color: var(--md-on-surface-variant); max-width: 68ch;
+  }
+
+  .vc-busca { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .vc-busca input { flex: 1 1 260px; min-width: 0; }
+  .vc-nota {
+    margin: 16px 0 8px; font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+    color: var(--md-on-surface-variant);
+  }
+
+  /* Tabela de candidatos: um tom acima do painel. */
+  .vc-tbl {
+    border: 0; border-radius: var(--md-shape-sm); overflow: auto;
+    background: var(--md-surface-container);
+  }
+  .vc-tbl table { width: 100%; min-width: 720px; }
+  .vc-tbl thead th { background: var(--md-surface-container) !important; }
+  .vc-tbl td { color: var(--md-on-surface-variant) !important; }
+  .vc-tbl td b { color: var(--md-on-surface); font-weight: 500; }
+  .vc-tbl form { margin: 0; }
+  .vc-acao { text-align: right; width: 1%; white-space: nowrap; }
+
+  /* Semelhança: chip tonal do M3. */
+  .vc-score {
+    display: inline-flex; align-items: center; height: 24px; padding: 0 8px;
+    border: 0; border-radius: var(--md-shape-sm); white-space: nowrap;
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px;
+    background: var(--md-surface-container-highest); color: var(--md-on-surface-variant);
+  }
+  .vc-score--alta { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+  .vc-score--media { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+
+  /* Formulário da máquina nova */
+  .vc-form { display: grid; gap: 24px; margin-left: 36px; }
+  .vc-form__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 24px; }
+  .vc-field { display: grid; gap: 8px; }
+  .vc-field__lbl {
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: none; color: var(--md-on-surface-variant);
+  }
+  .vc-field select { width: 100%; }
+  .vc-specs {
+    margin: 0; padding: 16px; border: 0; border-radius: var(--md-shape-md);
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+    color: var(--md-on-surface-variant); background: var(--md-surface-container-high);
+  }
+  .vc-specs b { color: var(--md-on-surface); font-weight: 500; }
+  .vc-specs code {
+    font: 400 12px/16px var(--md-font-mono); background: var(--md-surface-container-lowest);
+    border: 0; border-radius: var(--md-shape-xs); padding: 2px 6px;
+  }
+  .vc-form__acao { display: flex; justify-content: flex-end; }
+  @media (max-width: 640px) {
+    .vc-panel__sub, .vc-form { margin-left: 0; }
+  }
+</style>
+
+<div class="vc">
+  <a data-mk-voltar class="vc-back" href="{{ voltar_url }}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+    {{ voltar_nome }}
+  </a>
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · Telemetria</p>
+    <h1 class="mkpro-head__title">Vincular coleta ao patrimônio</h1>
+    <p class="mkpro-head__sub">Diga de qual máquina cadastrada é esta coleta. O nº de série é gravado nela — da próxima vez o casamento é automático.</p>
+  </header>
+
+  {# ---------- O que a máquina física reportou ---------- #}
+  <div class="vc-ficha">
+    <div><span class="vc-ficha__lbl">Máquina</span><span class="vc-ficha__val">{{ tel.hostname|default:"—" }}</span></div>
+    <div><span class="vc-ficha__lbl">Serial</span><span class="vc-ficha__val"><code>{{ tel.serial }}</code></span></div>
+    <div><span class="vc-ficha__lbl">CPU</span><span class="vc-ficha__val">{{ tel.cpu_modelo|default:"—" }}{% if tel.cpu_ghz %} · {{ tel.cpu_ghz }}GHz{% endif %}</span></div>
+    <div><span class="vc-ficha__lbl">RAM</span><span class="vc-ficha__val">{% if tel.ram_gb %}{{ tel.ram_gb }}GB{% if tel.ram_tipo %} {{ tel.ram_tipo }}{% endif %}{% else %}—{% endif %}</span></div>
+    <div><span class="vc-ficha__lbl">Disco</span><span class="vc-ficha__val">{% if tel.disco_total_gb %}{{ tel.disco_tipo }} {{ tel.disco_total_gb }}GB{% if tel.particao %} · {{ tel.particao }}{% endif %}{% else %}—{% endif %}</span></div>
+    <div><span class="vc-ficha__lbl">S.O.</span><span class="vc-ficha__val">{{ tel.so|default:"—" }}</span></div>
+  </div>
+
+  {% if confirmacao %}
+    <div class="mkpro-alert mkpro-alert--warn" role="alert">
+      <span class="mkpro-alert__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/></svg></span>
+      <div>
+        <strong>Esta coleta já está vinculada.</strong>
+        A coleta {{ tel.hostname|default:tel.serial }} pertence hoje a <b>{{ confirmacao.de.patrimonio }}</b>.
+        Só continue se esta máquina física é <b>realmente</b> a {{ confirmacao.para.patrimonio }} —
+        a {{ confirmacao.de.patrimonio }} ficará <b>sem coleta</b>.
+        <form method="post" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          {% csrf_token %}
+          <input type="hidden" name="tipo" value="{{ confirmacao.tipo }}">
+          <input type="hidden" name="maq_id" value="{{ confirmacao.maq_id }}">
+          <input type="hidden" name="confirmar_mover" value="1">
+          <button type="submit" class="vc-btn vc-btn--ok vc-btn--sm">Sim, mover para {{ confirmacao.para.patrimonio }}</button>
+          <a href="{% url 'parque_telemetria_vincular' pk=tel.pk %}" class="vc-btn vc-btn--sm">Cancelar</a>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
+  {# ---------- 1. Buscar ---------- #}
+  <section class="vc-panel">
+    <div class="vc-panel__head">
+      <span class="vc-panel__n" aria-hidden="true">1</span>
+      <h2 class="vc-panel__tit">Buscar a máquina</h2>
+    </div>
+    <p class="vc-panel__sub">Por colaborador, patrimônio, nº de série, setor ou unidade.</p>
+    <form class="vc-busca" method="get">
+      <input type="search" name="q" value="{{ busca }}" autofocus
+             placeholder="Colaborador, patrimônio, serial, setor, unidade…"
+             aria-label="Buscar máquina">
+      <button type="submit" class="vc-btn">Buscar</button>
+    </form>
+    {% if busca %}
+      {% if resultados %}
+        <p class="vc-nota">{{ resultados|length }} resultado(s) para “{{ busca }}”:</p>
+        {% include "parque/_vincular_lista.html" with linhas=resultados %}
+      {% else %}
+        <div class="mkpro-empty mkpro-empty--slim" style="margin-top:12px">
+          <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
+          <p class="mkpro-empty__title">Nada encontrado para “{{ busca }}”</p>
+          <p class="mkpro-empty__hint">Tente o nome do colaborador, o patrimônio, o nº de série ou o setor.</p>
+        </div>
+      {% endif %}
+    {% endif %}
+  </section>
+
+  {# ---------- 2. Sugestões ---------- #}
+  <section class="vc-panel">
+    <div class="vc-panel__head">
+      <span class="vc-panel__n" aria-hidden="true">2</span>
+      <h2 class="vc-panel__tit">Sugestões por proximidade de hardware</h2>
+    </div>
+    <p class="vc-panel__sub">Máquinas cujas specs cadastradas mais se parecem com o que esta coleta reportou.</p>
+    {% if candidatos %}
+      {% include "parque/_vincular_lista.html" with linhas=candidatos %}
+    {% else %}
+      <div class="mkpro-empty mkpro-empty--slim">
+        <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
+        <p class="mkpro-empty__title">Nenhuma máquina com hardware parecido</p>
+        <p class="mkpro-empty__hint">Use a busca acima para achar o patrimônio, ou cadastre a máquina no passo 3.</p>
+      </div>
+    {% endif %}
+  </section>
+
+  {# ---------- 3. Criar nova ---------- #}
+  <section class="vc-panel">
+    <div class="vc-panel__head">
+      <span class="vc-panel__n" aria-hidden="true">3</span>
+      <h2 class="vc-panel__tit">Criar nova máquina</h2>
+    </div>
+    <p class="vc-panel__sub">
+      Para máquinas ainda sem patrimônio. Escolha onde ela vai ficar — o patrimônio
+      é gerado automaticamente pela unidade (PC-… ou NB-…) e as specs da coleta entram sozinhas.
+    </p>
+    <form method="post" class="vc-form">
+      {% csrf_token %}
+      <input type="hidden" name="acao" value="criar">
+      <div class="vc-form__grid">
+        <div class="vc-field">
+          <label class="vc-field__lbl" for="vn-tipo">Tipo</label>
+          <select name="novo_tipo" id="vn-tipo" required>
+            <option value="computador">Computador (PC-…)</option>
+            <option value="notebook">Notebook (NB-…)</option>
+          </select>
+        </div>
+        <div class="vc-field">
+          <label class="vc-field__lbl" for="vn-unidade">Unidade</label>
+          <select name="unidade_id" id="vn-unidade" required>
+            <option value="">— escolha —</option>
+            {% for u in unidades_novo %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="vc-field">
+          <label class="vc-field__lbl" for="vn-setor">Setor</label>
+          <select name="setor_id" id="vn-setor" required>
+            <option value="">— escolha a unidade primeiro —</option>
+            {% for s in setores_novo %}<option value="{{ s.id }}" data-unidade="{{ s.unidade_id }}" hidden>{{ s.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="vc-field">
+          <label class="vc-field__lbl" for="vn-colab">Colaborador</label>
+          <select name="colaborador_id" id="vn-colab">
+            <option value="">— sem colaborador —</option>
+            {% for c in colaboradores_novo %}<option value="{{ c.id }}" data-unidade="{{ c.unidade }}">{{ c.nome }}{% if c.unidade %} · {{ c.unidade }}{% endif %}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <p class="vc-specs">
+        Será criada com: <b>{{ tel.cpu_modelo|default:"—" }}</b>
+        {% if tel.ram_gb %}· {{ tel.ram_gb }}GB{% if tel.ram_tipo %} {{ tel.ram_tipo }}{% endif %}{% endif %}
+        {% if tel.disco_total_gb %}· {{ tel.disco_tipo }} {{ tel.disco_total_gb }}GB{% endif %}
+        {% if tel.so %}· {{ tel.so }}{% endif %} · serial <code>{{ tel.serial }}</code>{% if tel.mac_label %} · MAC {{ tel.mac_label }}{% endif %}
+      </p>
+      <div class="vc-form__acao">
+        <button type="submit" class="vc-btn vc-btn--ok">Criar e vincular</button>
+      </div>
+    </form>
+  </section>
+</div>
+
+<script>
+(function () {
+  var uni = document.getElementById("vn-unidade");
+  var setor = document.getElementById("vn-setor");
+  if (!uni || !setor) return;
+  function filtrar() {
+    var u = uni.value;
+    Array.prototype.forEach.call(setor.options, function (o) {
+      if (!o.value) return;  // placeholder
+      var ok = o.getAttribute("data-unidade") === u;
+      o.hidden = !ok;
+      if (!ok && o.selected) { o.selected = false; }
+    });
+    // reseta p/ o placeholder ao trocar de unidade
+    setor.value = "";
+  }
+  uni.addEventListener("change", filtrar);
+  filtrar();
+})();
+</script>
+{% endblock %}

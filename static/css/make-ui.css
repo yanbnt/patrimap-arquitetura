@@ -1,0 +1,388 @@
+/* =============================================================================
+   make-ui.css — SISTEMA DE INTERFACE do ITAM Make (redesign de 09/2026).
+
+   Carregado por ÚLTIMO (ver UNFOLD["STYLES"]). Contrato: DESIGN-SYSTEM.md.
+
+   Conceito: "painel de operação". A tela de login virou a linguagem do sistema
+   inteiro — trilha de navegação verde-escura da marca à esquerda, superfície de
+   trabalho clara e densa à direita, hairline de 1px no lugar de sombra, e um
+   cabeçalho de página igual em toda tela.
+
+   Referências de densidade e cromo silencioso: ferramentas de trabalho diário
+   (Linear, Stripe, Vercel). O que é NOSSO: a trilha verde, o acento lima na
+   seleção e o par eyebrow/título em toda página.
+
+   Este arquivo NÃO muda HTML nem comportamento: só superfície, tipografia,
+   espaço e estado. Remover a linha do STYLES devolve o visual anterior.
+   ========================================================================== */
+
+/* ------------------------------------------------------------- 1. Tokens */
+
+:root {
+  /* Superfícies de trabalho */
+  --ui-ground: #f4f7f5;
+  --ui-surface: #ffffff;
+  --ui-surface-2: #f7faf8;
+  --ui-surface-3: #eef4f0;
+
+  /* Tinta */
+  --ui-ink: #101c15;
+  --ui-ink-2: #40534a;
+  --ui-muted: #64786d;
+  --ui-faint: #93a89c;
+
+  /* Linhas — o sistema desenha com hairline, não com sombra */
+  --ui-line: rgba(14, 38, 25, .10);
+  --ui-line-2: rgba(14, 38, 25, .16);
+  --ui-line-3: rgba(14, 38, 25, .26);
+
+  /* Marca */
+  --ui-grn: #00a651;
+  --ui-grn-600: #00913f;
+  --ui-grn-700: #067a38;
+  --ui-lima: #cbf542;
+  --ui-nav: #0a2416;
+  --ui-nav-2: #0d2e1c;
+  --ui-nav-line: rgba(255, 255, 255, .10);
+  --ui-nav-ink: #d7e8dd;
+  --ui-nav-ink-2: rgba(215, 232, 221, .62);
+
+  /* Status */
+  --ui-crit: #d14836;
+  --ui-warn: #d08326;
+  --ui-attn: #c9a227;
+  --ui-ok: #0f8f4c;
+
+  /* Forma e ritmo */
+  --ui-r-sm: 6px;
+  --ui-r: 9px;
+  --ui-r-lg: 13px;
+  --ui-h-control: 36px;
+  --ui-shadow: 0 1px 2px rgba(14, 38, 25, .04);
+  --ui-shadow-pop: 0 12px 32px -12px rgba(14, 38, 25, .28), 0 2px 6px rgba(14, 38, 25, .06);
+
+  --ui-font: 'Figtree', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+.dark {
+  --ui-ground: #0b100d;
+  --ui-surface: #131b16;
+  --ui-surface-2: #101711;
+  --ui-surface-3: #18211b;
+  --ui-ink: #e7f0ea;
+  --ui-ink-2: #b3c6bb;
+  --ui-muted: #90a598;
+  --ui-faint: #6b8074;
+  --ui-line: rgba(255, 255, 255, .09);
+  --ui-line-2: rgba(255, 255, 255, .14);
+  --ui-line-3: rgba(255, 255, 255, .24);
+  --ui-grn-700: #4fd489;
+  --ui-nav: #071a10;
+  --ui-nav-2: #0a2114;
+  --ui-crit: #f08b7a;
+  --ui-warn: #e8ae63;
+  --ui-attn: #dcc65e;
+  --ui-ok: #4fd489;
+  --ui-shadow: 0 1px 2px rgba(0, 0, 0, .4);
+  --ui-shadow-pop: 0 16px 40px -14px rgba(0, 0, 0, .7), 0 2px 6px rgba(0, 0, 0, .4);
+}
+
+/* --------------------------------------------------- 2. Base tipográfica */
+
+body {
+  font-family: var(--ui-font) !important;
+  color: var(--ui-ink) !important;
+  font-size: 13px;
+  line-height: 1.55;
+  letter-spacing: -.002em;
+  -webkit-font-smoothing: antialiased;
+}
+
+#page { background: var(--ui-ground) !important; }
+#main { background: transparent !important; }
+
+/* Números sempre alinhados pela coluna. */
+table, .mkpro-num, .ui-num, input[type="number"] { font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------- 3. Trilha de navegação (rail) */
+
+/* O make-admin.css estiliza a sidebar com seletores tipo `#nav-sidebar-apps ol
+   li a !important`. Para vencer sem apagar nada lá, estes seletores levam o id
+   `#page` na frente: mesma regra, uma especificidade acima. */
+
+#page #nav-sidebar {
+  background: var(--ui-nav) !important;
+  border: 0 !important;
+  border-right: 1px solid rgba(0, 0, 0, .45) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--ui-nav-ink) !important;
+}
+#page .dark #nav-sidebar, .dark #page #nav-sidebar { background: var(--ui-nav) !important; }
+#page #nav-sidebar-inner { background: transparent !important; color: var(--ui-nav-ink) !important; }
+
+/* Cabeçalho: a logo é branca — vai direto sobre o verde, sem chip claro. */
+#page #nav-sidebar .make-sidebar-logo {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  justify-content: flex-start !important;
+}
+#page #nav-sidebar .make-sidebar-logo img { width: 128px; height: auto; }
+#page #nav-sidebar-inner > div:first-child {
+  border-bottom: 1px solid var(--ui-nav-line) !important;
+  background: transparent !important;
+  padding-left: 16px !important;
+}
+
+/* Títulos de grupo: micro-rótulo calmo. */
+#page #nav-sidebar-apps h2 {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: .14em !important;
+  text-transform: uppercase !important;
+  color: rgba(215, 232, 221, .40) !important;
+  margin: 16px 0 4px !important;
+  padding: 0 14px !important;
+}
+#page #nav-sidebar-apps h2::before { display: none !important; }
+#page #nav-sidebar hr { border-color: var(--ui-nav-line) !important; margin: 10px 18px !important; }
+
+/* Itens do menu. */
+#page #nav-sidebar-apps ol { padding: 0 12px !important; gap: 1px !important; }
+#page #nav-sidebar-apps ol li a {
+  position: relative;
+  height: 34px !important;
+  min-height: 34px !important;
+  margin: 0 !important;
+  padding: 0 10px !important;
+  border-radius: var(--ui-r-sm) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--ui-nav-ink-2) !important;
+  background: transparent !important;
+  transition: background .12s, color .12s;
+}
+#page #nav-sidebar-apps ol li a:hover {
+  background: rgba(255, 255, 255, .07) !important;
+  color: #ffffff !important;
+}
+#page #nav-sidebar-apps ol li a.active,
+#page #nav-sidebar a[aria-current="page"] {
+  background: rgba(0, 166, 81, .20) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+#page #nav-sidebar-apps ol li a.active::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--ui-lima);
+}
+#page #nav-sidebar-apps ol li a .material-symbols-outlined,
+#page #nav-sidebar-apps ol li a svg {
+  color: rgba(215, 232, 221, .55) !important;
+  background: transparent !important;
+  opacity: 1 !important;
+}
+#page #nav-sidebar-apps ol li a:hover .material-symbols-outlined,
+#page #nav-sidebar-apps ol li a:hover svg { color: #ffffff !important; }
+#page #nav-sidebar-apps ol li a.active .material-symbols-outlined,
+#page #nav-sidebar-apps ol li a.active svg,
+#page #nav-sidebar a[aria-current="page"] .material-symbols-outlined { color: var(--ui-lima) !important; }
+
+/* Bloco do usuário e a busca, dentro da trilha. */
+#page #nav-sidebar-inner > div:nth-child(2) > div.cursor-pointer,
+#page #nav-sidebar div:has(> #nav-filter) {
+  background: rgba(255, 255, 255, .06) !important;
+  border: 1px solid var(--ui-nav-line) !important;
+  border-radius: var(--ui-r) !important;
+  box-shadow: none !important;
+  color: var(--ui-nav-ink) !important;
+}
+#page #nav-sidebar-inner > div:nth-child(2) > div.cursor-pointer:hover {
+  background: rgba(255, 255, 255, .11) !important;
+}
+#page #nav-sidebar-inner > div:nth-child(2) > div.cursor-pointer > div:first-child {
+  background: var(--ui-grn) !important;
+  color: #06210f !important;
+  border: 0 !important;
+}
+#page #nav-sidebar input, #page #nav-sidebar #nav-filter {
+  background: transparent !important;
+  border: 0 !important;
+  color: var(--ui-nav-ink) !important;
+  font-size: 12.5px !important;
+  box-shadow: none !important;
+}
+#page #nav-sidebar input::placeholder { color: rgba(215, 232, 221, .38) !important; }
+#page #nav-sidebar *:not(.material-symbols-outlined):not(svg):not(path) {
+  border-color: var(--ui-nav-line) !important;
+}
+#page #nav-sidebar .text-font-important-light,
+#page #nav-sidebar .text-font-default-light,
+#page #nav-sidebar [class*="text-font"] { color: var(--ui-nav-ink) !important; }
+
+/* "Recolher menu" e afins no rodapé da trilha. */
+#page #nav-sidebar-inner > *:last-child a,
+#page #nav-sidebar-inner > *:last-child button { color: var(--ui-nav-ink-2) !important; }
+
+/* ------------------------------------------------ 4. Barra superior fixa */
+
+#main > header,
+#main [class*="header"]:first-child {
+  background: var(--ui-surface) !important;
+  border-bottom: 1px solid var(--ui-line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+}
+
+/* --------------------------------------------------- 5. Área de conteúdo */
+
+#content {
+  max-width: 1480px;
+  padding-top: 18px !important;
+  padding-bottom: 56px !important;
+}
+
+/* Cartões, painéis, módulos: superfície sólida + hairline. Uma só sombra. */
+.make-card, .make-score, .make-kpi, .make-loja, .estoque-card, .kanban-card,
+#main .module, #main .results, #main #changelist-filter,
+.chamado__main, .chamado__side-card,
+body.delete-confirmation #content > div:last-child {
+  background: var(--ui-surface) !important;
+  border: 1px solid var(--ui-line) !important;
+  border-radius: var(--ui-r-lg) !important;
+  box-shadow: var(--ui-shadow) !important;
+}
+.estoque-card:hover, .kanban-card:hover {
+  border-color: var(--ui-line-2) !important;
+  box-shadow: var(--ui-shadow) !important;
+  transform: none !important;
+}
+
+/* Cabeçalho de página — o par eyebrow/título que abre TODA tela. */
+.mkpro-head { margin-bottom: 18px; }
+.mkpro-head__eyebrow {
+  font-size: 10.5px !important;
+  letter-spacing: .13em !important;
+  color: var(--ui-muted) !important;
+  font-weight: 700 !important;
+}
+.mkpro-head__title {
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.025em !important;
+  color: var(--ui-ink) !important;
+}
+.mkpro-head__sub { font-size: 12.5px !important; color: var(--ui-muted) !important; }
+
+/* ---------------------------------------------------------- 6. Tabelas */
+
+#main table, .make-tbl, .tbl {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  font-size: 12.5px;
+  width: 100%;
+}
+#main thead th, .make-tbl thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--ui-surface-2) !important;
+  border-bottom: 1px solid var(--ui-line-2) !important;
+  color: var(--ui-muted) !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: .09em !important;
+  text-transform: uppercase;
+  padding: 9px 12px !important;
+  white-space: nowrap;
+}
+#main tbody td, .make-tbl tbody td {
+  border-bottom: 1px solid var(--ui-line) !important;
+  padding: 10px 12px !important;
+  vertical-align: middle;
+}
+/* Sem zebra: a hairline já separa. Zebra em tabela densa vira ruído. */
+#main tbody tr:nth-child(even) { background: transparent !important; }
+#main tbody tr:hover td { background: var(--ui-surface-2) !important; }
+#main tbody tr:last-child td { border-bottom: 0 !important; }
+
+/* --------------------------------------------- 7. Controles (botão/campo) */
+
+#main input[type="text"], #main input[type="email"], #main input[type="number"],
+#main input[type="password"], #main input[type="date"], #main input[type="search"],
+#main select, #main textarea {
+  min-height: var(--ui-h-control);
+  background: var(--ui-surface) !important;
+  border: 1px solid var(--ui-line-2) !important;
+  border-radius: var(--ui-r) !important;
+  color: var(--ui-ink) !important;
+  font-family: var(--ui-font) !important;
+  font-size: 13px !important;
+  box-shadow: none !important;
+  transition: border-color .12s, box-shadow .12s;
+}
+#main input:focus, #main select:focus, #main textarea:focus {
+  border-color: var(--ui-grn) !important;
+  box-shadow: 0 0 0 3px rgba(0, 166, 81, .16) !important;
+  outline: none !important;
+}
+#main ::placeholder { color: var(--ui-faint) !important; }
+
+.pvx-btn, .make-btn, #main .button, #main input[type="submit"] {
+  min-height: var(--ui-h-control);
+  border-radius: var(--ui-r) !important;
+  font-family: var(--ui-font) !important;
+  font-size: 12.5px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  box-shadow: none !important;
+}
+
+/* ----------------------------------------------------------- 8. Badges */
+
+.badge, .make-badge, .pvx-badge, .chip {
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  padding: 3px 8px;
+}
+
+/* --------------------------------------------------------- 9. Rolagem */
+
+#main ::-webkit-scrollbar { width: 10px; height: 10px; }
+#main ::-webkit-scrollbar-thumb {
+  background: var(--ui-line-3);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+#main ::-webkit-scrollbar-track { background: transparent; }
+
+/* ------------------------------------------------------- 10. Acabamento */
+
+/* Foco sempre visível — este é um sistema operado por teclado o dia todo. */
+a:focus-visible, button:focus-visible, [role="button"]:focus-visible,
+input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--ui-grn);
+  outline-offset: 2px;
+  border-radius: var(--ui-r-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+@media print {
+  #nav-sidebar, #main > header, .mkpro-head__actions { display: none !important; }
+  #content { max-width: none; padding: 0 !important; }
+}

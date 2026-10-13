@@ -1,0 +1,177 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  {% comment %}
+    fora_de_uso.html — MATERIAL DESIGN 3 (DESIGN-SYSTEM.md §4 e §5).
+
+    Lista de triagem. Migrado de `--ui-*` para `--md-*`. O que SAIU:
+      · a moldura de 1px da tabela e o CSS de célula desta tela — a data table
+        do M3 é global (divisor `outline-variant`, sem zebra, hover de 8%);
+      · a bolinha colorida e o hex que a view mandava nos chips de filtro: os
+        chips são filter chips do M3 e a contagem é o próprio rótulo;
+      · o hex de `motivo_cor` no chip da linha, que virou par tonal do M3
+        escolhido por `motivo_key` (desativado/notebook = crit, sem
+        colaborador = warn, em estoque = neutro);
+      · o botão com contorno da coluna Ação, que virou TEXT BUTTON;
+      · os pesos 700 em texto pequeno.
+
+    A busca virou search bar do M3 (pílula em `surface-container-high`, 56px).
+
+    Hooks preservados: #tab-body, tr.tab-row[data-edit][data-busca],
+    #tab-busca, #tab-busca-x, #tab-sem-busca, classe .tab-tabela (ordenação).
+  {% endcomment %}
+  .fu { display: grid; gap: 16px; }
+
+  .fu-back {
+    justify-self: start; display: inline-flex; align-items: center; gap: 8px;
+    height: 40px; padding: 0 16px 0 12px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; text-decoration: none;
+  }
+  .fu-back:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .fu-back svg { width: 18px; height: 18px; flex: none; }
+
+  /* ---------- Barra de filtro: A MESMA de toda tela de lista ----------
+     Antes eram chips `.fu-chip` de motivo, com a contagem em <b>, direto na
+     linha. Agora é o botão "Filtrar" + popup do sistema (host = pai da
+     `.flt-bar`), com Motivo e Unidade; a contagem foi para o rótulo da opção.
+     Acabamento igual ao de `.tbd-fbar` (make-m3.css §32), aqui porque aquela
+     regra lista as classes de host uma a uma. */
+  .fu-bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px;
+    margin: 0; padding: 10px 12px;
+    background: var(--md-surface);
+    border: 1px solid var(--md-outline-variant);
+    border-radius: var(--md-shape-lg);
+  }
+  /* "Filtrando por…" em linha própria: não empurra a busca (§21.1). */
+  .fu-bar .fltx-active { flex: 1 0 100%; order: 99; margin: 2px 0 0 !important; }
+
+  /* Busca: pílula preenchida, sem moldura (padrão das outras telas). */
+  .fu-search { position: relative; flex: 1 1 260px; min-width: 0; max-width: 420px; }
+  .fu-search svg {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    width: 19px; height: 19px; color: var(--md-on-surface-variant); pointer-events: none;
+  }
+  #main .fu-search input {
+    width: 100%; height: 42px !important; min-height: 42px !important;
+    padding: 0 44px !important;
+    background: var(--md-surface-container) !important;
+    border: 0 !important; border-radius: var(--md-shape-full) !important;
+    box-shadow: none !important;
+    font: 400 13.5px/42px var(--md-font) !important;
+    color: var(--md-on-surface) !important;
+  }
+  #main .fu-search input:focus { box-shadow: none !important; outline: none !important; }
+  .fu-search__x {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    width: 32px; height: 32px; display: grid; place-items: center;
+    border: 0; background: transparent; color: var(--md-on-surface-variant);
+    font-size: 18px; line-height: 1; cursor: pointer; border-radius: var(--md-shape-full);
+  }
+  .fu-search__x:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+
+  /* ---------- Data table (o estilo de célula é global) ---------- */
+  .fu-tbl {
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-low); overflow: auto; max-width: 100%;
+  }
+  .fu-tbl .tab-tabela { width: 100%; min-width: 800px; }
+  .fu-tbl .tab-row { cursor: pointer; }
+  .fu-tbl td.fu-resumo {
+    max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--md-on-surface-variant) !important;
+  }
+  .fu-tbl td.tab-vazio { padding: 16px !important; }
+
+  /* Motivo: chip tonal do M3 (par contêiner + on-contêiner). */
+  .fu-motivo {
+    display: inline-flex; align-items: center; height: 24px; padding: 0 8px;
+    border: 0; border-radius: var(--md-shape-sm); white-space: nowrap;
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px;
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+  }
+  .fu-motivo--crit { background: var(--md-st-crit-cont); color: var(--md-st-crit); }
+  .fu-motivo--warn { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+
+  /* Ação da linha: text button. */
+  .fu-acao { text-align: right; white-space: nowrap; width: 1%; }
+  .fu-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 40px; padding: 0 12px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; text-decoration: none;
+  }
+  .fu-btn:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+
+  .fu-nada {
+    margin: 0; padding: 24px; text-align: center;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant);
+  }
+</style>
+
+<div class="fu">
+  <a data-mk-voltar class="fu-back" href="{{ voltar_url }}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+    {{ voltar_nome }}
+  </a>
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · Estoque</p>
+    <h1 class="mkpro-head__title">{{ titulo }}</h1>
+    <p class="mkpro-head__sub">Máquinas desativadas, em estoque ou sem colaborador — a fila de troca e realocação · <span class="mkpro-num">{{ total }}</span> itens.</p>
+  </header>
+
+  <div class="fu-bar">
+    {% include "parque/_filtros.html" %}
+    <div class="fu-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="search" id="tab-busca" autocomplete="off"
+             placeholder="Filtrar nesta lista…" aria-label="Filtrar nesta lista">
+      <button type="button" id="tab-busca-x" class="fu-search__x" aria-label="Limpar busca" hidden>×</button>
+    </div>
+  </div>
+
+  <div class="fu-tbl">
+    <table class="tab-tabela">
+      <thead>
+        <tr>
+          <th>Tipo</th>
+          <th>Identificação</th>
+          <th>Local</th>
+          <th>Resumo</th>
+          <th>Motivo</th>
+          <th class="fu-acao">Ação</th>
+        </tr>
+      </thead>
+      <tbody id="tab-body">
+        {% for r in linhas %}
+          <tr class="tab-row" data-edit="{{ r.edit }}" data-busca="{{ r.busca }}" tabindex="0">
+            <td>{{ r.tipo }}</td>
+            <td class="fu-ident">{{ r.ident }}</td>
+            <td>{{ r.local }}</td>
+            <td class="fu-resumo">{{ r.resumo|default:"—" }}</td>
+            <td><span class="fu-motivo{% if r.motivo_key == 'desativado' or r.motivo_key == 'notebook' %} fu-motivo--crit{% elif r.motivo_key == 'sem_colab' %} fu-motivo--warn{% endif %}">{{ r.motivo }}</span></td>
+            <td class="fu-acao">
+              {% if r.acao_url %}<a class="fu-btn" href="{{ r.acao_url }}" onclick="event.stopPropagation();">{{ r.acao_txt }}</a>{% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="tab-vazio">
+            <div class="mkpro-empty mkpro-empty--slim">
+              <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg></span>
+              <p class="mkpro-empty__title">Nenhuma máquina fora de uso</p>
+              <p class="mkpro-empty__hint">Máquinas desativadas, em estoque ou sem colaborador aparecem aqui para troca ou realocação.</p>
+            </div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p id="tab-sem-busca" class="fu-nada" hidden>Nada encontrado para a busca.</p>
+  </div>
+</div>
+{% endblock %}

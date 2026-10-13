@@ -1,0 +1,77 @@
+{% load i18n static %}
+
+{% comment %}
+Busca da changelist. Override Make: igual ao unfold, mas SEM o atalho de teclado
+"/" no canto.
+
+MIGRAÇÃO PARA M3 (DESIGN-SYSTEM.md §4 e §5):
+  · `--ui-*` → papéis `--md-*`;
+  · a caixa era um campo com contorno de 1px e anel de foco verde translúcido.
+    Virou a SEARCH BAR do M3: pílula em `surface-container-high`, SEM borda e
+    SEM sombra — a mesma forma que o make-m3.css §3 já dá à busca da gaveta, para
+    que as duas buscas do sistema sejam o mesmo componente;
+  · o foco deixou de ser um halo de 3px e virou o contorno de 2px `primary`;
+  · texto do campo em body-large (§3), lupa de 24px em `on-surface-variant`.
+
+Hooks do Alpine (searchForm, x-ref, applyShortcut), o `name` do campo e os
+hidden de filtro: intactos.
+{% endcomment %}
+{% if cl.search_fields %}
+    <style>
+      /* Prefixo .mksf. Cor SÓ por papel --md-*; o id vence o !important do
+         make-admin.css (DESIGN-SYSTEM.md §7.2). */
+      #main #toolbar .mksf-box {
+        display: flex; align-items: center; gap: 12px;
+        height: 48px; padding: 0 16px; width: 100%;
+        background: var(--md-surface-container-high) !important;
+        border: 0 !important;
+        border-radius: var(--md-shape-full) !important;
+        box-shadow: none !important;
+        transition: background-color var(--md-dur-short) var(--md-ease-standard);
+      }
+      #main #toolbar .mksf-box:focus-within {
+        outline: 2px solid var(--md-primary) !important;
+        outline-offset: -2px;
+      }
+      @media (min-width: 1024px) { #main #toolbar .mksf-box { width: 22rem; } }
+      #main #toolbar .mksf-btn {
+        display: flex; align-items: center; border: 0; background: transparent;
+        padding: 0; cursor: pointer; color: var(--md-on-surface-variant);
+      }
+      #main #toolbar .mksf-btn:hover { color: var(--md-primary); }
+      .mksf-ic { width: 24px; height: 24px; display: block; }
+      #main #toolbar .mksf-input {
+        flex: 1 1 auto; min-width: 0; height: 100%; min-height: 0;
+        border: 0 !important; background: transparent !important; box-shadow: none !important;
+        font: 400 16px/24px var(--md-font) !important; letter-spacing: .5px !important;
+        color: var(--md-on-surface) !important;
+        padding: 0 !important;
+      }
+      #main #toolbar .mksf-input:focus { outline: none !important; box-shadow: none !important; }
+      #main #toolbar .mksf-input::placeholder { color: var(--md-on-surface-variant); }
+    </style>
+    <div id="toolbar">
+        <form {% if not cl.is_dataset %}id="changelist-search" x-data="searchForm()"{% endif %} method="get" role="search">
+            <div class="mksf-box">
+                <button type="submit" class="mksf-btn" id="searchbar-submit" aria-label="{% trans 'Buscar' %}" title="{% trans 'Buscar' %}">
+                    <svg class="mksf-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                </button>
+
+                <input type="text"
+                       x-ref="searchInput"
+                       {% if not cl.is_dataset %}x-on:keydown.window="applyShortcut($event)"{% endif %}
+                       class="mksf-input truncate"
+                       name="{{ search_var }}"
+                       value="{{ cl.query }}"
+                       {% if not cl.is_dataset %}id="searchbar"{% endif %}
+                       placeholder="{% if cl.search_help_text %}{{ cl.search_help_text }}{% else %}{% trans "Type to search" %}{% endif %}" />
+            </div>
+
+            {% for pair in cl.filter_params.items %}
+                {% for val in pair.1 %}
+                    {% if pair.0 != search_var %}<input type="hidden" name="{{ pair.0 }}" value="{{ val }}">{% endif %}
+                {% endfor %}
+            {% endfor %}
+        </form>
+    </div>
+{% endif %}

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+{% load static %}
+{% comment %}
+  termo_responsabilidade.html — DOCUMENTO IMPRESSO (papel corporativo).
+
+  TEMA CLARO ÚNICO, por decisão de projeto: isto é papel, impresso e assinado à
+  mão. Não existe versão escura, não há tokens `--ui-*` aqui e as cores são
+  pretas/brancas explícitas — a folha tem de sair igual em qualquer navegador.
+
+  O TEXTO JURÍDICO É INTOCÁVEL: cláusulas, nomes, CNPJ e ordem estão
+  preservados na íntegra. Mexeu-se só no acabamento — timbre (logo BRANCA sobre
+  #0a2416), hierarquia de títulos, tabela de equipamentos em hairline, campo de
+  assinatura com linha real e legenda "Nome legível · Data", @page A4 com
+  margem de 10mm e, na impressão, nada de sombra ou fundo chapado.
+{% endcomment %}
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>Termo de Responsabilidade #{{ t.pk }}</title>
+  <style>
+    /* Mesma família do sistema (Figtree). Estes documentos são páginas
+       independentes: não carregam o CSS do app, por isso importam a fonte. */
+    @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap');
+    :root {
+      --tr-band: #0a2416;       /* faixa do timbre (a logo é branca) */
+      --tr-lima: #cbf542;
+      --tr-ink: #000;
+      --tr-ink-soft: #4b5563;
+      --tr-hair: #a9b3ac;
+      --tr-hair-soft: #d2dad4;
+      --tr-tint: #f2f6f3;
+      --tr-verde: #00a651;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 24px;
+      font-family: Figtree, "Segoe UI", Arial, sans-serif;
+      background: #eef1ef; color: var(--tr-ink);
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+
+    /* ---------- Barra de ações (só tela) ---------- */
+    .barra-acoes { display: flex; gap: 10px; align-items: center; margin: 0 auto 16px; max-width: 210mm; }
+    .barra-acoes h1 {
+      flex: 1; margin: 0; font-size: 15px; font-weight: 700; color: #14532d;
+      font-family: Figtree, "Segoe UI", Arial, sans-serif; letter-spacing: -.01em;
+    }
+    .barra-acoes h1 small {
+      display: block; font-size: 11.5px; font-weight: 700; letter-spacing: .06em;
+      text-transform: uppercase; color: #067a38;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 0; border-radius: 10px; padding: 9px 16px; font-weight: 700;
+      font-size: 13.5px; cursor: pointer; text-decoration: none; color: #fff;
+      background: var(--tr-verde); font-family: Figtree, "Segoe UI", Arial, sans-serif;
+    }
+    .btn:hover { background: #00913f; }
+    .btn svg { width: 17px; height: 17px; flex: none; }
+    .btn--sec { background: #fff; color: #14532d; border: 1px solid #cbd8ce; }
+    .btn--sec:hover { background: var(--tr-tint); }
+
+    /* ---------- Folha A4 — documento ---------- */
+    .folha {
+      background: #fff; width: 210mm; min-height: 297mm; margin: 0 auto;
+      font-size: 11pt; line-height: 1.55;
+      border: 1px solid var(--tr-hair);
+    }
+    .doc-corpo { padding: 12mm 18mm 18mm; }
+
+    /* Timbre: logo branca sobre a faixa da marca + identificação do documento */
+    .doc-banner {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 18px; padding: 8mm 18mm; background: var(--tr-band);
+      border-bottom: 2.5px solid var(--tr-lima);
+      font-family: Figtree, "Segoe UI", Arial, sans-serif;
+    }
+    .doc-banner__logo { height: 14mm; width: auto; display: block; }
+    .doc-banner__doc { text-align: right; color: #fff; }
+    .doc-banner__kind {
+      margin: 0; font-size: 8pt; font-weight: 700; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--tr-lima);
+    }
+    .doc-banner__name { margin: 1mm 0 0; font-size: 14pt; font-weight: 800; letter-spacing: -.015em; }
+    .doc-banner__meta { margin: 1.5mm 0 0; font-size: 9pt; color: #cfe0d6; font-variant-numeric: tabular-nums; }
+    .doc-banner__meta b { color: #fff; font-weight: 700; }
+
+    /* Hierarquia do documento: título > rótulo de bloco > título de cláusula. */
+    .doc-titulo {
+      text-align: center; font-weight: 700; font-size: 13pt; text-transform: uppercase;
+      line-height: 1.35; margin: 0 0 6mm; letter-spacing: .01em;
+      padding-bottom: 4mm; border-bottom: .6pt solid var(--tr-hair);
+    }
+    .doc-p { text-align: justify; margin: 0 0 12px; }
+    .doc-label {
+      font-weight: 700; margin: 16px 0 6px; font-size: 8pt;
+      letter-spacing: .14em; text-transform: uppercase; color: var(--tr-ink-soft);
+    }
+
+    /* Tabela de equipamentos — hairline */
+    table.equip {
+      width: 100%; border-collapse: collapse; margin: 4px 0 16px; font-size: 10.5pt;
+      font-variant-numeric: tabular-nums;
+    }
+    table.equip th, table.equip td {
+      border: .6pt solid var(--tr-hair-soft); padding: 2.4mm 3mm; text-align: center; vertical-align: middle;
+    }
+    table.equip th {
+      font-weight: 700; text-transform: uppercase; font-size: 7.5pt; letter-spacing: .1em;
+      color: var(--tr-ink-soft); background: var(--tr-tint); border-color: var(--tr-hair);
+    }
+
+    .considerando { text-align: justify; margin: 0 0 12px; }
+    .clausula-titulo {
+      font-weight: 700; text-transform: uppercase; margin: 7mm 0 3mm;
+      font-size: 10pt; letter-spacing: .06em;
+      padding-bottom: 1.6mm; border-bottom: .6pt solid var(--tr-hair-soft);
+    }
+    ol.clausula { margin: 0 0 6px; padding-left: 26px; }
+    ol.clausula > li { text-align: justify; margin: 0 0 8px; }
+    ul.sub { margin: 6px 0; padding-left: 26px; list-style: disc; }
+    ul.sub > li { text-align: justify; margin: 0 0 6px; }
+
+    .doc-local { text-align: justify; margin: 24px 0 0; }
+
+    /* Campo de assinatura: linha real + legenda */
+    .assinatura { margin: 26mm auto 0; max-width: 110mm; text-align: center; }
+    .assinatura__linha { margin: 0; border-bottom: .6pt solid var(--tr-ink); }
+    .assinatura__papel {
+      margin: 2mm 0 0; font-weight: 700; font-size: 9.5pt;
+      letter-spacing: .08em; text-transform: uppercase;
+    }
+    .assinatura__cap {
+      margin: 1.2mm 0 0; text-align: center;
+      font-size: 7pt; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--tr-ink-soft);
+    }
+
+    .doc-rodape {
+      max-width: 210mm; margin: 3mm auto 0; font-size: 7.5pt; color: #6b7280;
+      display: flex; justify-content: space-between; gap: 10px;
+      font-family: Figtree, "Segoe UI", Arial, sans-serif; font-variant-numeric: tabular-nums;
+    }
+
+    /* ---------- Impressão ---------- */
+    @media print {
+      @page { size: A4 portrait; margin: 10mm; }
+      body { background: #fff; padding: 0; }
+      .barra-acoes { display: none !important; }
+      .folha { width: auto; min-height: auto; margin: 0; border: 0; }
+      .doc-banner { padding: 6mm 0; }
+      .doc-corpo { padding: 8mm 0 0; }
+      .doc-rodape { margin: 3mm 0 0; }
+      /* Sem fundo chapado: só a faixa do timbre justifica tinta. */
+      table.equip th { background: transparent; }
+      table.equip thead { display: table-header-group; }
+      .doc-banner, table.equip, .assinatura, .doc-local { page-break-inside: avoid; }
+      .doc-titulo, .clausula-titulo, .doc-label { page-break-after: avoid; }
+      ol.clausula > li, ul.sub > li, .considerando, .doc-p { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="barra-acoes">
+    <h1><small>Documento para impressão e assinatura</small>Termo de Responsabilidade nº {{ t.pk }}</h1>
+    <button class="btn" onclick="window.print()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="2"/><path d="M8 17h8v4H8z"/></svg>
+      Imprimir
+    </button>
+    {% comment %}
+    NÃO use history.back() aqui: este documento é aberto por redirect
+    depois do POST que o gerou, então "voltar" no histórico devolve o
+    formulário já enviado — reenviar dali duplica o registro. A view diz
+    para onde voltar; sem isso, o mapa do parque é o destino seguro.
+    {% endcomment %}
+    <a class="btn btn--sec" href="{{ voltar_url|default:"/parque/mapa-completo/" }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+      Voltar
+    </a>
+  </div>
+
+  <div class="folha">
+    <div class="doc-banner">
+      <img class="doc-banner__logo" src="{% static 'img/make-logo.webp' %}" alt="Make Distribuidora">
+      <div class="doc-banner__doc">
+        <p class="doc-banner__kind">Guarda e uso de equipamento</p>
+        <p class="doc-banner__name">Termo de Responsabilidade</p>
+        <p class="doc-banner__meta">Documento nº <b>{{ t.pk }}</b> · Emissão <b>{{ t.criado_em|date:"d/m/Y" }}</b></p>
+      </div>
+    </div>
+
+    <div class="doc-corpo">
+    <h1 class="doc-titulo">Termo de Responsabilidade para<br>Guarda e Uso de Equipamento Empresarial</h1>
+
+    <p class="doc-p">
+      Pelo presente termo, na qualidade de COLABORADOR(A), _______________________________________,
+      inscrito no CPF ______________________, doravante referido(a) como “COLABORADOR(A)”, declara estar ciente das
+      disposições e obrigações estipuladas neste Termo de Responsabilidade e se compromete a cumprir rigorosamente
+      todas as cláusulas nele contidas, referente à utilização dos equipamentos abaixo indicados, fornecidos pela
+      PRIME TI SOLUÇÕES TECNOLÓGICAS, inscrita no CNPJ sob o nº 58.340.141/0001-33, com sede na Rua Visconde de Piraja,
+      00414 - Ipanema, doravante referida como “EMPRESA”.
+    </p>
+
+    <p class="doc-label">EQUIPAMENTOS:</p>
+    <table class="equip">
+      <thead>
+        <tr>
+          <th>Equipamento</th>
+          <th>Marca/Modelo</th>
+          <th>Nº de Série</th>
+          <th>Data de Entrega</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Notebook</td>
+          <td>{{ equip_marca_modelo|default:"—" }}</td>
+          <td>{{ equip_serial|default:"—" }}</td>
+          <td>{{ t.criado_em|date:"d/m/Y" }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p class="considerando">
+      CONSIDERANDO que o presente Termo de Responsabilidade tem como objetivo estabelecer as condições e
+      responsabilidades inerentes ao uso dos equipamentos acima listados, cedidos em comodato ao COLABORADOR(A),
+      para uso exclusivo na prestação de serviços em favor da EMPRESA;
+    </p>
+    <p class="considerando">
+      CONSIDERANDO que a relação entre as partes é regida pelas disposições do Código Civil Brasileiro
+      (Lei nº 10.406/2002);
+    </p>
+    <p class="considerando">
+      CONSIDERANDO o compromisso da EMPRESA com os princípios do compliance e a adoção de boas práticas de
+      governança corporativa;
+    </p>
+
+    <p class="clausula-titulo">Cláusula 1 - Do Fornecimento do Equipamento</p>
+    <ol class="clausula">
+      <li>A EMPRESA fornecerá ao COLABORADOR(A) o equipamento acima indicado para utilização única e exclusiva no desempenho de suas atividades profissionais.</li>
+      <li>O COLABORADOR(A) declara estar ciente de que o uso dos equipamentos será exclusivamente para fins profissionais, relacionados às atividades da EMPRESA, e que não utilizará tais recursos para fins pessoais ou não autorizados.</li>
+    </ol>
+
+    <p class="clausula-titulo">Cláusula 2 - Da Responsabilidade pelo Uso do Equipamento</p>
+    <ol class="clausula">
+      <li>O COLABORADOR(A) compromete-se a utilizar os equipamentos de forma ética e responsável, observando as disposições da legislação brasileira aplicável.</li>
+      <li>O COLABORADOR(A) declara estar ciente de que é o único responsável pelo uso adequado dos equipamentos, bem como pelo conteúdo das informações transmitidas e armazenadas por meio desses recursos.</li>
+      <li>É expressamente vedado ao COLABORADOR(A):
+        <ul class="sub">
+          <li>Compartilhar os equipamentos com terceiros sem autorização prévia da EMPRESA;</li>
+          <li>Utilizar os equipamentos para práticas ilícitas ou atividades que possam causar danos à EMPRESA ou a terceiros;</li>
+          <li>Acessar conteúdos impróprios ou que violem a privacidade de terceiros por meio dos equipamentos;</li>
+        </ul>
+      </li>
+    </ol>
+
+    <p class="clausula-titulo">Cláusula 3 - Da Proteção de Dados Pessoais</p>
+    <ol class="clausula">
+      <li>O COLABORADOR(A) compromete-se a não compartilhar dados pessoais de terceiros sem o consentimento expresso da EMPRESA, sob pena de responsabilidade civil e penal.</li>
+      <li>O COLABORADOR(A) deverá informar imediatamente a EMPRESA sobre qualquer violação de dados pessoais ou incidente de segurança relacionado à utilização dos equipamentos.</li>
+    </ol>
+
+    <p class="clausula-titulo">Cláusula 4 - Da Segurança da Informação e Integridade</p>
+    <ol class="clausula">
+      <li>O COLABORADOR(A) compromete-se a adotar todas as medidas de segurança necessárias para proteger os equipamentos contra acesso não autorizado, perda, roubo ou qualquer outra forma de comprometimento da sua integridade, respondendo, integral e exclusivamente, por todos os prejuízos e danos que causar.</li>
+    </ol>
+
+    <p class="clausula-titulo">Cláusula 5 - Da Devolução do Equipamento</p>
+    <ol class="clausula">
+      <li>Ao término da relação do COLABORADOR(A) com a EMPRESA, ele deverá devolver imediatamente os equipamentos fornecidos em comodato, juntamente com qualquer dispositivo ou equipamento relacionado, em perfeito estado de conservação, ressalvado o desgaste decorrente do uso regular.</li>
+    </ol>
+
+    <p class="clausula-titulo">Cláusula 6 - Da Vigência</p>
+    <ol class="clausula">
+      <li>O presente Termo de Responsabilidade entrará em vigor a partir da data de assinatura pelo COLABORADOR(A) e permanecerá vigente durante todo o período em que este estiver vinculado à EMPRESA.</li>
+    </ol>
+
+    <p class="clausula-titulo">Cláusula 7 - Do Compromisso com o Compliance</p>
+    <ol class="clausula">
+      <li>O COLABORADOR(A) declara ter ciência e concorda em aderir aos princípios do compliance estabelecidos pela EMPRESA, os quais incluem, mas não se limitam a:
+        <ul class="sub">
+          <li><b>Ética e Integridade:</b> O COLABORADOR(A) compromete-se a conduzir suas atividades laborais pautado(a) por princípios éticos e de integridade, agindo de forma honesta, transparente e respeitosa com colegas, clientes, fornecedores e demais partes interessadas.</li>
+          <li><b>Cumprimento Legal:</b> O COLABORADOR(A) obriga-se a cumprir todas as leis, normas, regulamentos e obrigações aplicáveis à sua função e ao uso dos equipamentos, incluindo as leis mencionadas neste Termo de Responsabilidade e outras relacionadas ao negócio da EMPRESA.</li>
+          <li><b>Prevenção à Corrupção e Lavagem de Dinheiro:</b> O COLABORADOR(A) compromete-se a não se envolver em qualquer prática corrupta, suborno, lavagem de dinheiro ou condutas que violem a Lei Anticorrupção (Lei nº 12.846/2013) e a Lei de Lavagem de Dinheiro (Lei nº 9.613/1998).</li>
+          <li><b>Concorrência Leal:</b> O COLABORADOR(A) deverá agir de acordo com as regras da Lei de Defesa da Concorrência (Lei nº 12.529/2011) e garantir que suas ações não prejudiquem a livre concorrência e a competitividade do mercado.</li>
+          <li><b>Proteção de Dados Pessoais:</b> O COLABORADOR(A) deverá zelar pela proteção e privacidade dos dados pessoais de clientes, colegas de trabalho e demais indivíduos relacionados às atividades da EMPRESA, em consonância com as normas da LGPD (Lei nº 13.709/2018).</li>
+        </ul>
+      </li>
+      <li>O COLABORADOR(A) reconhece que o cumprimento dos princípios do compliance é essencial para a manutenção da reputação, governança e credibilidade da EMPRESA e para o exercício das atividades empresariais em conformidade com a legislação aplicável.</li>
+      <li>O COLABORADOR(A) declara estar ciente dos valores e propósitos da EMPRESA, os quais incluem o respeito à diversidade, a sustentabilidade, a valorização das relações humanas e o compromisso com o bem-estar das pessoas e da sociedade.</li>
+    </ol>
+
+    <p class="clausula-titulo">Cláusula 8 - Da Confidencialidade</p>
+    <ol class="clausula">
+      <li>O COLABORADOR(A) reconhece que as informações e dados recebidos ou acessados através dos equipamentos podem conter informações confidenciais e/ou sensíveis da EMPRESA, estando sujeito à responsabilização civil por perdas e danos em decorrência da violação desta cláusula.</li>
+      <li>O dever de confidencialidade estabelecido nesta cláusula permanecerá em vigor mesmo após o término da relação jurídica com a EMPRESA.</li>
+    </ol>
+
+    <p class="clausula-titulo">Cláusula 9 - Da Ciência e Aceitação do Termo</p>
+    <ol class="clausula">
+      <li>O COLABORADOR(A) declara ter lido, compreendido e estar ciente de todos os termos e cláusulas estipulados neste instrumento, assumindo, assim, a responsabilidade pelo fiel cumprimento das obrigações nele previstas.</li>
+      <li>Ao assinar este Termo de Responsabilidade, o COLABORADOR(A) expressa sua concordância e aceitação irrestrita a todas as disposições aqui contidas.</li>
+    </ol>
+
+    <p class="doc-local">Rio de Janeiro, {{ t.criado_em|date:"d" }} de {{ t.criado_em|date:"F"|capfirst }} de {{ t.criado_em|date:"Y" }}.</p>
+
+    <div class="assinatura">
+      <p class="assinatura__linha"></p>
+      <p class="assinatura__papel">Colaborador(a)</p>
+      <p class="assinatura__cap">Nome legível · Data</p>
+    </div>
+    </div>
+  </div>
+
+  <p class="doc-rodape">
+    <span>Make Distribuidora · Gestão de Ativos de TI</span>
+    <span>Termo nº {{ t.pk }} · emitido em {{ t.criado_em|date:"d/m/Y" }}</span>
+  </p>
+</body>
+</html>

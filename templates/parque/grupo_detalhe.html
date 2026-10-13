@@ -1,0 +1,296 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  /* ==========================================================================
+     grupo_detalhe.html — prefixo .grpx-  ·  Material Design 3
+     A tela responde a duas perguntas em ordem: o que já está no grupo e o que
+     ainda dá para adicionar. Cada uma é uma SEÇÃO filled (surface-container-low,
+     sem borda e sem sombra) e as linhas dentro dela sobem um tom
+     (surface-container), que é como o M3 aninha. Estado da preventiva virou chip
+     tonal. Só o cartão SELECIONÁVEL de "adicionar máquinas" mantém contorno.
+     HOOKS preservados: data-pv-open / data-kind / data-pk / data-nome (modal de
+     concluir preventiva) e os names dos formulários (baias / notebooks / acao).
+     ========================================================================== */
+  .grpx { display: flex; flex-direction: column; gap: 24px; }
+  .grpx * { box-sizing: border-box; }
+  .grpx svg { display: block; }
+
+  /* Outlined button do M3. */
+  .grpx-home {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 40px; padding: 0 24px;
+    border: 1px solid var(--md-outline); border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    text-decoration: none; white-space: nowrap;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .grpx-home:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); color: var(--md-primary); }
+  .grpx-home svg { width: 18px; height: 18px; }
+
+  .grpx-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+  .grpx-head__id { flex: 1 1 340px; min-width: 0; display: grid; gap: 4px; }
+  .grpx-head__acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .grpx-head__acts form { margin: 0; }
+
+  /* Botões M3: 40px, pílula, label-large, sem sombra. */
+  .grpx-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 40px; padding: 0 24px !important; border: 0 !important;
+    border-radius: var(--md-shape-full) !important; cursor: pointer; text-decoration: none;
+    font: 500 14px/20px var(--md-font) !important; letter-spacing: .1px !important;
+    white-space: nowrap; box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .grpx-btn svg { width: 18px; height: 18px; flex: none; }
+  /* Filled: a ação principal da tela. */
+  .grpx-btn--ok { background: var(--md-action) !important; color: var(--md-on-action) !important; }
+  .grpx-btn--ok:hover { background: var(--md-primary) !important; }
+  /* Outlined e destrutiva levam `#main` porque estes botões são <button
+     type="submit">, e make-m3.css §8 zera a borda deles com !important em
+     especificidade (1,1,1) — duas classes com um id vencem. */
+  #main .grpx .grpx-btn--ghost {
+    background: transparent !important; border: 1px solid var(--md-outline) !important;
+    color: var(--md-primary) !important;
+  }
+  #main .grpx .grpx-btn--ghost:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important; }
+  /* Destrutiva: outlined em error (o M3 não usa contêiner cheio para isso). */
+  #main .grpx .grpx-btn--danger {
+    background: transparent !important; border: 1px solid var(--md-outline) !important;
+    color: var(--md-error) !important;
+  }
+  #main .grpx .grpx-btn--danger:hover { background: color-mix(in srgb, var(--md-error) 8%, transparent) !important; }
+  /* Tonal: ação secundária de peso (secondary-container). */
+  .grpx-btn--soft { background: var(--md-secondary-container) !important; color: var(--md-on-secondary-container) !important; }
+  .grpx-btn--soft:hover { background: color-mix(in srgb, var(--md-on-secondary-container) 8%, var(--md-secondary-container)) !important; }
+
+  /* Seções: cartão filled, sem borda e sem linha sob o título. */
+  .grpx-sec {
+    background: var(--md-surface-container-low); border: 0;
+    border-radius: var(--md-shape-md); box-shadow: none; padding: 16px;
+  }
+  .grpx-sec__tt {
+    display: flex; align-items: center; gap: 12px; margin: 0 0 16px;
+    padding: 0; border: 0;
+    font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface);
+  }
+  .grpx-sec__q {
+    height: 24px; padding: 0 8px;
+    display: inline-flex; align-items: center; border-radius: var(--md-shape-sm);
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; font-variant-numeric: tabular-nums;
+  }
+
+  /* Máquinas do grupo: linhas em superfície tonal (um tom acima da seção). */
+  .grpx-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  @media (max-width: 1100px) { .grpx-rows { grid-template-columns: 1fr; } }
+  .grpx-row {
+    display: flex; align-items: center; gap: 12px; padding: 12px;
+    border: 0; border-radius: var(--md-shape-md); background: var(--md-surface-container);
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .grpx-row:hover { background: var(--md-surface-container-high); }
+  .grpx-row form { margin: 0; }
+  .grpx-row__ic {
+    width: 40px; height: 40px; border-radius: var(--md-shape-full); flex: none;
+    display: grid; place-items: center;
+    background: var(--md-primary-container); color: var(--md-on-primary-container);
+  }
+  .grpx-row__ic svg { width: 20px; height: 20px; }
+  .grpx-row__id { flex: 1; min-width: 0; }
+  .grpx-row__n {
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .grpx-row__s { font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); font-variant-numeric: tabular-nums; }
+  /* Estado da preventiva: chip tonal (par --md-st-* / --md-st-*-cont). */
+  .grpx-chip {
+    flex: none; height: 24px; padding: 0 8px;
+    display: inline-flex; align-items: center; border: 0; border-radius: var(--md-shape-sm);
+    background: var(--grpx-cc, var(--md-surface-container-high));
+    color: var(--grpx-c, var(--md-on-surface-variant));
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; text-transform: none;
+  }
+  .grpx-chip--em_dia { --grpx-c: var(--md-st-ok); --grpx-cc: var(--md-st-ok-cont); }
+  .grpx-chip--proxima { --grpx-c: var(--md-st-attn); --grpx-cc: var(--md-st-attn-cont); }
+  .grpx-chip--vencida { --grpx-c: var(--md-st-warn); --grpx-cc: var(--md-st-warn-cont); }
+  .grpx-chip--pendente { --grpx-c: var(--md-st-crit); --grpx-cc: var(--md-st-crit-cont); }
+  /* Nas linhas, os botões descem para o tamanho de chip (32px). */
+  #main .grpx-row .grpx-btn { min-height: 32px; padding: 0 12px !important; }
+
+  /* Escolher máquinas para adicionar */
+  .grpx-addbar { display: flex; gap: 16px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  /* Campo outlined do M3: 56px, raio 4px, borda 1px outline (primary no foco). */
+  .grpx-search {
+    flex: 1; min-width: 240px; display: flex; align-items: center; gap: 12px;
+    min-height: 56px; padding: 0 16px;
+    border: 1px solid var(--md-outline); border-radius: var(--md-shape-xs); background: transparent;
+  }
+  .grpx-search:focus-within { border-color: var(--md-primary); box-shadow: inset 0 0 0 1px var(--md-primary); }
+  .grpx-search svg { width: 24px; height: 24px; color: var(--md-on-surface-variant); flex: none; }
+  .grpx-search input {
+    border: 0; background: transparent; outline: 0; width: 100%;
+    font: 400 16px/24px var(--md-font); letter-spacing: .5px; color: var(--md-on-surface);
+  }
+  .grpx-search input::placeholder { color: var(--md-on-surface-variant); opacity: 1; }
+  .grpx-selinfo {
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: uppercase; color: var(--md-on-surface-variant);
+  }
+  .grpx-pickgrid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 8px; max-height: 440px; overflow-y: auto; padding: 2px;
+  }
+  /* Cartão SELECIONÁVEL: aqui o contorno é legítimo (contrato §4). Selecionado
+     vira secondary-container preenchido. */
+  .grpx-pick {
+    position: relative; display: flex; align-items: center; gap: 12px;
+    padding: 12px; cursor: pointer;
+    border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-md);
+    background: transparent;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .grpx-pick:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+  .grpx-pick input { position: absolute; opacity: 0; pointer-events: none; }
+  .grpx-pick__ic {
+    width: 40px; height: 40px; border-radius: var(--md-shape-full); flex: none;
+    display: grid; place-items: center;
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+  }
+  .grpx-pick__ic svg { width: 20px; height: 20px; }
+  .grpx-pick__id { flex: 1; min-width: 0; }
+  .grpx-pick__n {
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .grpx-pick__s {
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: uppercase; color: var(--md-on-surface-variant);
+  }
+  /* Checkbox do M3: 18px, raio 2px, primary quando marcado. */
+  .grpx-pick__chk {
+    width: 18px; height: 18px; border-radius: var(--md-shape-xs); flex: none;
+    display: grid; place-items: center;
+    border: 2px solid var(--md-on-surface-variant); color: transparent;
+  }
+  .grpx-pick__chk svg { width: 14px; height: 14px; }
+  .grpx-pick:has(input:checked) { border-color: transparent; background: var(--md-secondary-container); }
+  .grpx-pick:has(input:checked) .grpx-pick__n { color: var(--md-on-secondary-container); }
+  .grpx-pick:has(input:checked) .grpx-pick__s { color: var(--md-on-secondary-container); }
+  .grpx-pick:has(input:checked) .grpx-pick__ic { background: var(--md-primary-container); color: var(--md-on-primary-container); }
+  .grpx-pick:has(input:checked) .grpx-pick__chk { background: var(--md-primary); border-color: var(--md-primary); color: var(--md-on-primary); }
+  .grpx-pick:focus-within { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+  .grpx-addfoot { display: flex; align-items: center; gap: 16px; margin-top: 16px; }
+
+  @media (max-width: 900px) { .grpx-head { align-items: flex-start; } }
+</style>
+
+<div class="grpx">
+
+  <header class="mkpro-head grpx-head">
+    <div class="grpx-head__id">
+      <p class="mkpro-head__eyebrow">Preventiva · Grupo · {{ grupo.unidade.name }}</p>
+      <h1 class="mkpro-head__title">{{ grupo.nome }}</h1>
+      <p class="mkpro-head__sub">Antecipe a preventiva do grupo todo ou de máquinas específicas — concluir zera os dias de cada uma.</p>
+    </div>
+    <div class="grpx-head__acts">
+      <a data-mk-voltar class="grpx-home" href="{{ voltar_url }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg> {{ voltar_nome }}</a>
+      <form method="post" action="{% url 'parque_grupo_excluir' grupo.pk %}"
+            onsubmit="return confirm('Excluir o grupo “{{ grupo.nome }}”? As máquinas não são afetadas.');">
+        {% csrf_token %}
+        <button type="submit" class="grpx-btn grpx-btn--danger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg> Excluir grupo</button>
+      </form>
+      {% if membros %}
+      <form method="post" action="{% url 'parque_grupo_concluir_todos' grupo.pk %}"
+            onsubmit="return confirm('Concluir a preventiva de TODAS as {{ grupo.total_membros }} máquina(s) do grupo?');">
+        {% csrf_token %}
+        <button type="submit" class="grpx-btn grpx-btn--ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Concluir preventiva de todos ({{ grupo.total_membros }})</button>
+      </form>
+      {% endif %}
+    </div>
+  </header>
+
+  <div class="grpx-sec">
+    <h2 class="grpx-sec__tt">Máquinas do grupo <span class="grpx-sec__q mkpro-tabular">{{ grupo.total_membros }}</span></h2>
+    {% if membros %}
+    <div class="grpx-rows">
+      {% for m in membros %}
+      <div class="grpx-row">
+        <span class="grpx-row__ic">{% if m.kind == 'nb' %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>{% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8"/></svg>{% endif %}</span>
+        <div class="grpx-row__id"><div class="grpx-row__n">{{ m.colaborador|default:m.nome }}{% if m.patrimonio %} · {{ m.patrimonio }}{% endif %}</div><div class="grpx-row__s mkpro-tabular">Vence {{ m.vencimento|date:"d/m/Y" }}</div></div>
+        <span class="grpx-chip grpx-chip--{{ m.status }}">{{ m.status_label }}</span>
+        <button type="button" class="grpx-btn grpx-btn--soft" data-pv-open data-kind="{{ m.kind }}" data-pk="{{ m.pk }}" data-nome="{{ m.colaborador|default:m.nome }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> Concluir</button>
+        <form method="post" action="{% url 'parque_grupo_editar_membros' grupo.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="acao" value="remove">
+          <input type="hidden" name="{% if m.kind == 'baia' %}baias{% else %}notebooks{% endif %}" value="{{ m.pk }}">
+          <button type="submit" class="grpx-btn grpx-btn--ghost">Remover</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="mkpro-empty mkpro-empty--slim">
+      <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8V6a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h4"/><rect x="9" y="11" width="12" height="9" rx="2"/></svg></span>
+      <p class="mkpro-empty__title">Grupo ainda sem máquinas</p>
+      <p class="mkpro-empty__hint">Selecione as máquinas em <b>Adicionar máquinas</b>, abaixo, para poder concluir a preventiva de todas de uma vez.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="grpx-sec">
+    <h2 class="grpx-sec__tt">Adicionar máquinas <span class="grpx-sec__q">{{ grupo.unidade.name }}</span></h2>
+    {% if cand_baias or cand_nbs %}
+    <form method="post" action="{% url 'parque_grupo_editar_membros' grupo.pk %}">
+      {% csrf_token %}
+      <input type="hidden" name="acao" value="add">
+      <div class="grpx-addbar">
+        <span class="grpx-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg><input id="grpx-busca" placeholder="Buscar por nome ou patrimônio…"></span>
+        <span class="grpx-selinfo" id="grpx-selinfo">nenhuma selecionada</span>
+      </div>
+      <div class="grpx-pickgrid">
+        {% for c in cand_baias %}
+        <label class="grpx-pick" data-t="{{ c.nome|lower }} {{ c.patrimonio|lower }}"><input type="checkbox" name="baias" value="{{ c.pk }}"><span class="grpx-pick__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8"/></svg></span><span class="grpx-pick__id"><span class="grpx-pick__n">{{ c.nome }}{% if c.patrimonio %} · {{ c.patrimonio }}{% endif %}</span><span class="grpx-pick__s">Desktop</span></span><span class="grpx-pick__chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></label>
+        {% endfor %}
+        {% for c in cand_nbs %}
+        <label class="grpx-pick" data-t="{{ c.nome|lower }} {{ c.patrimonio|lower }}"><input type="checkbox" name="notebooks" value="{{ c.pk }}"><span class="grpx-pick__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg></span><span class="grpx-pick__id"><span class="grpx-pick__n">{{ c.nome }}{% if c.patrimonio %} · {{ c.patrimonio }}{% endif %}</span><span class="grpx-pick__s">Notebook</span></span><span class="grpx-pick__chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span></label>
+        {% endfor %}
+      </div>
+      <div class="grpx-addfoot">
+        <button type="submit" class="grpx-btn grpx-btn--ok" id="grpx-addbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> Adicionar selecionadas</button>
+      </div>
+    </form>
+    {% else %}
+    <div class="mkpro-empty mkpro-empty--slim">
+      <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg></span>
+      <p class="mkpro-empty__title">Todas as máquinas da unidade já estão no grupo</p>
+      <p class="mkpro-empty__hint">Não há mais nada a adicionar. Cadastre uma máquina nova na unidade para que ela apareça aqui.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+(function(){
+  var busca=document.getElementById('grpx-busca');
+  var info=document.getElementById('grpx-selinfo');
+  var btn=document.getElementById('grpx-addbtn');
+  var picks=[].slice.call(document.querySelectorAll('.grpx-pick'));
+  function atualiza(){
+    var n=document.querySelectorAll('.grpx-pick input:checked').length;
+    if(info) info.textContent = n? (n+' selecionada'+(n>1?'s':'')) : 'nenhuma selecionada';
+    if(btn){ btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> Adicionar selecionadas'+(n?' ('+n+')':''); }
+  }
+  picks.forEach(function(p){ var c=p.querySelector('input'); if(c) c.addEventListener('change',atualiza); });
+  if(busca) busca.addEventListener('input',function(e){
+    var q=(e.target.value||'').toLowerCase();
+    picks.forEach(function(p){ p.style.display = (p.dataset.t||'').indexOf(q)>-1 ? '' : 'none'; });
+  });
+  atualiza();
+})();
+</script>
+
+{% include "parque/_preventiva_concluir_modal.html" %}
+{% endblock %}

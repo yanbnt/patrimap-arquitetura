@@ -1,0 +1,384 @@
+{% comment %}
+Barra de filtro do sistema (DESIGN-SYSTEM.md §4): UMA barra horizontal acima do
+conteúdo, SEM card em volta, CHIPS M3 de 32px — e todo filtro aplicado vira um
+filter chip SELECIONADO (secondary-container + check + "×") logo abaixo.
+
+  • Unidade — seleção única (opções são links que navegam).
+  • Setor  — MULTI-seleção (checkboxes) cruzando lojas; "Aplicar" navega com vários ?setor=.
+
+Contrato de contexto (via `_filtros_ctx`):
+  unidades_filtro=[{val,label}]  uni_sel_val  uni_sel_label
+  setores_filtro =[{val,label,checked}]  setor_sel_vals=[..]  setor_sel_label
+Parâmetros: uni_lbl / setor_lbl ; keep = querystring extra a preservar (ex.: "vista=calendario").
+
+Contrato ALTERNATIVO (via `barra_filtros()`), para as telas cujo corte NÃO é
+unidade/setor — situação, tipo, motivo, autorizada, loja:
+  filtros_extra =[{param,label,sel,sel_label,opcoes=[{val,label,href,sel}]}]
+  filtros_chips =[{label,valor,href}]   filtros_limpar   keep_pairs
+  com_data + data_lbl / data_de_param / data_ate_param / data_atalhos
+Os dois contratos convivem: a barra rende o que receber. Sem `unidades_filtro` e
+sem `filtros_extra` ela não rende NADA — é o que impede o popup vazio (§12.4).
+
+HOOKS (não remover): `.flt-bar` com data-uni/data-keep é lido pelo JS que monta a URL
+do multi-setor; `[data-mkdd]`, `[data-mkdd-btn]`, `[data-mkdd-panel]`, `[data-mkdd-multi]`,
+`[data-mkdd-all]`, `[data-mkdd-apply]` e `input[name="setor"]` são de initFiltroDropdowns().
+Os chips de filtro ativo são LINKS (navegação server-side) — não dependem de JS.
+{% endcomment %}
+{% if unidades_filtro or filtros_extra %}
+<style>
+  /* _filtros.html — prefixo .fltx-. Reestiliza os componentes globais do filtro
+     (.flt-bar / .mkdd) no padrão Material 3; vale em toda tela que inclui este
+     parcial, por isso mora aqui e não na tela.
+
+     M3 (DESIGN-SYSTEM §4): o gatilho de cada filtro é um CHIP de 32px, raio 8px,
+     borda outline-variant — não um campo de 40px com moldura. O filtro APLICADO é
+     um filter chip SELECIONADO: secondary-container preenchido, SEM borda, com o
+     ícone de check à esquerda e o "×" para remover. A barra não tem card. */
+
+  /* A barra deixa de ser um card: só os chips, alinhados. */
+  .flt-bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+    margin: 0 !important; padding: 0 !important;
+    background: transparent !important; border: 0 !important;
+    border-radius: 0 !important; box-shadow: none !important;
+  }
+
+  .mkdd { gap: 8px !important; }
+  .mkdd__lbl {
+    font: 500 11px/16px var(--md-font) !important;
+    letter-spacing: .5px !important; text-transform: uppercase;
+    color: var(--md-on-surface-variant) !important;
+  }
+  /* Chip M3: 32px, raio 8px, contorno outline-variant, sem preenchimento. */
+  .mkdd__btn {
+    height: 32px; min-width: 0;
+    padding: 0 8px 0 12px !important;
+    border-radius: var(--md-shape-sm) !important;
+    border: 1px solid var(--md-outline-variant) !important;
+    background: transparent !important;
+    color: var(--md-on-surface) !important;
+    font: 500 14px/20px var(--md-font) !important; letter-spacing: .1px !important;
+    box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  /* Interação é state layer (8% / 12%), não troca da cor de fundo. */
+  .mkdd__btn:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent) !important; }
+  .mkdd__btn:active { background: color-mix(in srgb, var(--md-on-surface) 12%, transparent) !important; }
+  .mkdd__btn[aria-expanded="true"] {
+    border-color: var(--md-outline-variant) !important;
+    background: var(--md-secondary-container) !important;
+    color: var(--md-on-secondary-container) !important;
+    box-shadow: none !important;
+  }
+  .mkdd__chev { width: 18px; height: 18px; color: currentColor !important; }
+
+  /* Menu: aqui a sombra é legítima (flutua) — nível 2 sobre surface-container. */
+  .mkdd__panel {
+    padding: 8px !important; border-radius: var(--md-shape-xs) !important;
+    background: var(--md-surface-container) !important;
+    border: 0 !important;
+    box-shadow: var(--md-elev-2) !important;
+    -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  }
+  .mkdd__panel::before { display: none !important; }
+  .mkdd__opt {
+    min-height: 48px; padding: 0 12px !important;
+    border-radius: var(--md-shape-sm) !important;
+    font: 500 14px/20px var(--md-font) !important; letter-spacing: .1px !important;
+    color: var(--md-on-surface) !important;
+  }
+  .mkdd__opt:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent) !important; }
+  /* Seleção no M3 = secondary-container preenchido. */
+  .mkdd__opt.is-sel {
+    background: var(--md-secondary-container) !important;
+    color: var(--md-on-secondary-container) !important; font-weight: 500 !important;
+  }
+  .mkdd__sep { background: var(--md-outline-variant) !important; }
+  .mkdd__actions { background: var(--md-surface-container) !important; }
+  /* A única ação preenchida do menu: filled button (primary + on-primary). */
+  .mkdd__apply {
+    min-height: 40px; padding: 0 24px;
+    background: var(--md-primary) !important; color: var(--md-on-primary) !important;
+    border: 0 !important; border-radius: var(--md-shape-full) !important;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+  }
+  .mkdd__apply:hover { background: var(--md-primary) !important; filter: none; }
+
+  /* ---- Filtros aplicados: filter chip SELECIONADO (check + "×") ---- */
+  .fltx-active {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    margin: 12px 0 0;
+  }
+  .fltx-active__lbl {
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: uppercase; color: var(--md-on-surface-variant); margin-right: 2px;
+  }
+  .fltx-chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 32px; padding: 0 8px;
+    border: 0; border-radius: var(--md-shape-sm);
+    background: var(--md-secondary-container); color: var(--md-on-secondary-container);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    text-decoration: none; white-space: nowrap;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .fltx-chip b { font-weight: 500; color: inherit; }
+  .fltx-chip__ck, .fltx-chip__x {
+    display: grid; place-items: center; width: 18px; height: 18px; flex: none;
+    color: currentColor;
+  }
+  .fltx-chip__ck svg, .fltx-chip__x svg { width: 18px; height: 18px; display: block; }
+  .fltx-chip:hover { background: color-mix(in srgb, var(--md-on-secondary-container) 8%, var(--md-secondary-container)); }
+  .fltx-chip:active { background: color-mix(in srgb, var(--md-on-secondary-container) 12%, var(--md-secondary-container)); }
+  /* "Limpar tudo" é text button: sem contêiner, texto primary. */
+  .fltx-clear {
+    display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    color: var(--md-primary); text-decoration: none; border-radius: var(--md-shape-full);
+  }
+  .fltx-clear:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); text-decoration: none; }
+
+  /* O CARREGADOR do "Aplicar" (ver o comentário no HTML) nunca aparece: é só o
+     formulário que leva a querystring. Cinto e suspensório — o atributo
+     `hidden` e a regra — porque `.mkfp__pop .mkdd__data` pinta um flex. */
+  .mkfp-carrier { display: none !important; }
+</style>
+
+<div class="flt-bar" data-uni="{{ uni_sel_val }}" data-keep="{{ keep }}">
+  {% if unidades_filtro %}
+  {# --- UNIDADE (única) --- #}
+  <div class="mkdd" data-mkdd>
+    <span class="mkdd__lbl">{{ uni_lbl|default:"Unidade" }}</span>
+    <button type="button" class="mkdd__btn" data-mkdd-btn aria-haspopup="true" aria-expanded="false">
+      <span class="mkdd__cur">{{ uni_sel_label|default:"Todas" }}</span>
+      <svg class="mkdd__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="mkdd__panel" data-mkdd-panel hidden>
+      <a class="mkdd__opt{% if not uni_sel_val %} is-sel{% endif %}"
+         href="?{% for s in setor_sel_vals %}setor={{ s|urlencode }}&{% endfor %}{{ keep }}">Todas</a>
+      {% for u in unidades_filtro %}
+        <a class="mkdd__opt{% if u.val|stringformat:'s' == uni_sel_val %} is-sel{% endif %}"
+           href="?unidade={{ u.val|stringformat:'s'|urlencode }}{% for s in setor_sel_vals %}&setor={{ s|urlencode }}{% endfor %}{% if keep %}&{{ keep }}{% endif %}">{{ u.label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% comment %}
+  GRUPOS GENÉRICOS (`filtros_extra`, de `barra_filtros()`): um parâmetro de
+  querystring por grupo, seleção única. É o que faz a MESMA barra servir às
+  telas que cortam por situação, tipo, motivo, autorizada ou loja em vez de
+  unidade/setor — antes cada uma dessas tinha a sua fileira de chips própria.
+
+  HOOK: `data-mkdd-param` diz ao `initFiltrarPopup` sob qual nome mandar o valor
+  no "Aplicar". As opções são LINKS com a querystring já montada pela view, então
+  sem JS a tela continua filtrando na navegação.
+  {% endcomment %}
+  {% for g in filtros_extra %}
+    <div class="mkdd" data-mkdd data-mkdd-param="{{ g.param }}">
+      <span class="mkdd__lbl">{{ g.label }}</span>
+      <button type="button" class="mkdd__btn" data-mkdd-btn aria-haspopup="true" aria-expanded="false">
+        <span class="mkdd__cur">{{ g.sel_label }}</span>
+        <svg class="mkdd__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="mkdd__panel" data-mkdd-panel hidden>
+        {% for o in g.opcoes %}
+          <a class="mkdd__opt{% if o.sel %} is-sel{% endif %}" href="{{ o.href }}">{{ o.label }}</a>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+
+  {% if setores_filtro %}
+  {# --- SETOR (multi) --- #}
+  <div class="mkdd mkdd--multi" data-mkdd data-mkdd-multi>
+    <span class="mkdd__lbl">{{ setor_lbl|default:"Setor" }}</span>
+    <button type="button" class="mkdd__btn" data-mkdd-btn aria-haspopup="true" aria-expanded="false">
+      <span class="mkdd__cur">{{ setor_sel_label|default:"Todos" }}</span>
+      <svg class="mkdd__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="mkdd__panel mkdd__panel--multi" data-mkdd-panel hidden>
+      <label class="mkdd__opt mkdd__opt--check">
+        <input type="checkbox" data-mkdd-all{% if not setor_sel_vals %} checked{% endif %}>
+        <span>Todos</span>
+      </label>
+      <div class="mkdd__sep"></div>
+      {% for s in setores_filtro %}
+        <label class="mkdd__opt mkdd__opt--check">
+          <input type="checkbox" name="setor" value="{{ s.val }}"{% if s.checked %} checked{% endif %}>
+          <span>{{ s.label }}</span>
+        </label>
+      {% endfor %}
+      <div class="mkdd__actions">
+        <button type="button" class="mkdd__apply" data-mkdd-apply>Aplicar</button>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% comment %}
+  FILTRO DE DATA — janela do vencimento da preventiva.
+
+  Pedido do dono ("tem que ter a opção de filtrar por data também"). No mapa a
+  data que importa é a do CICLO DE PREVENTIVA: é a única que responde pergunta
+  operacional — "o que vence este mês?", "o que já venceu?". Data de compra e
+  última coleta são filtro de relatório, não de mapa.
+
+  As fichas de atalho são links (o servidor faz a conta da data), e o campo
+  aberto é para quando a pessoa quer uma data específica. Quem filtra de fato é
+  `_filtrar_por_vencimento()` em apps/parque/views.py, que roda ANTES do resumo
+  para as contagens do topo acompanharem.
+  {% endcomment %}
+  {% if com_data %}
+  {% comment %}
+  `data-mkfp-de`/`data-mkfp-ate` só aparecem quando a tela usa OUTROS nomes de
+  parâmetro para o período (os logs usam `de`/`ate`). Os campos continuam
+  chamados `vence_desde`/`vence_ate` porque é o que o `initCalendarioFiltro()`
+  procura para escrever a data escolhida no calendário; o `initFiltrarPopup`
+  traduz para o nome real na hora de enviar.
+  {% endcomment %}
+  <div class="mkdd mkdd--data" data-mkdd
+       {% if data_de_param %}data-mkfp-de="{{ data_de_param }}" data-mkfp-ate="{{ data_ate_param }}"{% endif %}>
+    <span class="mkdd__lbl">{{ data_lbl|default:"Preventiva vence" }}</span>
+    <button type="button" class="mkdd__btn" data-mkdd-btn aria-haspopup="true" aria-expanded="false">
+      <span class="mkdd__cur">{{ vence_label|default:"Qualquer data" }}</span>
+      <svg class="mkdd__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <div class="mkdd__panel mkdd__panel--data" data-mkdd-panel hidden>
+      {% if data_atalhos %}
+        {# Atalhos de período da própria tela ("Últimos 7 dias" etc.). #}
+        {% for a in data_atalhos %}
+          <a class="mkdd__opt{% if a.sel %} is-sel{% endif %}" href="{{ a.href }}">{{ a.label }}</a>
+        {% endfor %}
+      {% else %}
+        {% comment %}
+        NENHUMA ficha de atalho aqui. Eram quatro — "Qualquer data", "Já
+        vencida", "Nos próximos 15 dias", "Nos próximos 30 dias" — e o dono
+        pediu duas vezes para tirar: elas empurravam a grade do mês para baixo
+        da área visível, e o que elas respondem o calendário responde melhor,
+        com qualquer janela.
+
+        Quem limpa a data é o botão "Limpar data", no cabeçalho do calendário,
+        e o "×" do chip de filtro aplicado. Quem escolhe é o calendário.
+
+        A ÚNICA coisa que se perdeu é a janela aberta para trás ("já vencida" =
+        até hoje, sem início). Se um dia fizer falta, é uma linha aqui.
+
+        Isto vale só para o período de PREVENTIVA. Os `data_atalhos` do bloco
+        acima são de outras telas (Registros, Logs, Tabela) e continuam: lá são
+        atalhos da própria tela, e o dono não reclamou deles.
+        {% endcomment %}
+      {% endif %}
+
+      <form class="mkdd__data" method="get">
+        {% comment %}
+        Os pares "keep" preservam os outros filtros quando o formulário é
+        enviado sem JS. Com JS, o popup manda unidade e setor explicitamente e
+        o `initFiltrarPopup` remove os keep desses dois para não duplicar.
+        {% endcomment %}
+        {% for k, v in keep_pairs %}<input type="hidden" name="{{ k }}" value="{{ v }}" data-mkfp-keep="{{ k }}">{% endfor %}
+
+        {% comment %}
+        CALENDÁRIO. O host abaixo é preenchido por `initCalendarioFiltro()`
+        (make-admin.js): grade do mês, clique escolhe início e fim do
+        intervalo, e ele escreve nos dois campos nativos abaixo — que
+        continuam sendo quem envia o valor. Sem JS, o host fica vazio e os
+        campos nativos aparecem: a tela não perde função.
+        {% endcomment %}
+        <div class="mkcal" data-mkcal
+             data-desde="{{ vence_desde }}" data-ate="{{ vence_ate }}"
+             data-hoje="{{ hoje_iso }}"></div>
+
+        <label class="mkdd__data-l">De
+          <input type="date" name="vence_desde" value="{{ vence_desde }}">
+        </label>
+        <label class="mkdd__data-l">até
+          <input type="date" name="vence_ate" value="{{ vence_ate }}">
+        </label>
+        <button type="submit" class="mkdd__data-b">Aplicar</button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  {% comment %}
+  CARREGADOR DO "APLICAR".
+
+  O rodapé do popup envia UM formulário — e esse formulário era o do intervalo
+  de data, que só existe com `com_data=True`. Nas outras telas o "Aplicar" caía
+  no `if (!form) return` e NÃO FAZIA NADA: escolher unidade nos Setores, na
+  Tabela ou nos Notebooks marcava a ficha e morria ali. Era o "cliquei em
+  filtros e olha o que apareceu".
+
+  Este formulário vazio (escondido, nunca visível) é o carregador: o JS injeta
+  nele os valores escolhidos e envia. Sem JS ele nem entra na história — as
+  opções continuam sendo links.
+  {% endcomment %}
+  <form class="mkdd__data mkfp-carrier" method="get" hidden aria-hidden="true">
+    {% for k, v in keep_pairs %}<input type="hidden" name="{{ k }}" value="{{ v }}" data-mkfp-keep="{{ k }}">{% endfor %}
+  </form>
+  {% endif %}
+
+</div>
+
+{% if uni_sel_val or setor_sel_vals or filtros_chips or vence_desde or vence_ate %}
+  {% comment %}Filtro aplicado = filter chip SELECIONADO do M3: check à esquerda
+  (mostra que o filtro está ligado) e "×" à direita, que navega para a MESMA tela
+  sem aquele filtro. São links: funcionam sem JS.
+
+  A janela de data em vigor é repetida nos "×" de unidade e de setor: sem ela,
+  tirar a unidade tirava TAMBÉM o período (o "×" só reconstruía unidade + setor
+  + keep), e o chip prometia remover um filtro mas removia dois.
+
+  Estes testes são todos `{% templatetag openblock %} if {% templatetag closeblock %}`
+  e nunca argumento de filtro: `""|add:vence_desde` estoura com
+  VariableDoesNotExist nas telas que não têm grupo de data, porque argumento de
+  filtro não tolera variável ausente (o `{% templatetag openblock %} if {% templatetag closeblock %}`, sim).
+  {% endcomment %}
+  <div class="fltx-active" aria-label="Filtros aplicados">
+    <span class="fltx-active__lbl">Filtrando por</span>
+
+    {% if uni_sel_val %}
+      <a class="fltx-chip" title="Remover o filtro de unidade"
+         href="?{% for s in setor_sel_vals %}setor={{ s|urlencode }}&{% endfor %}{% if vence_desde %}vence_desde={{ vence_desde }}&{% endif %}{% if vence_ate %}vence_ate={{ vence_ate }}&{% endif %}{{ keep }}">
+        <span class="fltx-chip__ck" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+        {{ uni_lbl|default:"Unidade" }} <b>{{ uni_sel_label }}</b>
+        <span class="fltx-chip__x" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+      </a>
+    {% endif %}
+
+    {% for s in setor_sel_vals %}
+      <a class="fltx-chip" title="Remover o setor {{ s }} do filtro"
+         href="?{% if uni_sel_val %}unidade={{ uni_sel_val|urlencode }}&{% endif %}{% for outro in setor_sel_vals %}{% if outro != s %}setor={{ outro|urlencode }}&{% endif %}{% endfor %}{% if vence_desde %}vence_desde={{ vence_desde }}&{% endif %}{% if vence_ate %}vence_ate={{ vence_ate }}&{% endif %}{{ keep }}">
+        <span class="fltx-chip__ck" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+        {{ setor_lbl|default:"Setor" }} <b>{{ s }}</b>
+        <span class="fltx-chip__x" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+      </a>
+    {% endfor %}
+
+    {% comment %}Chip do PERÍODO no contrato antigo (o mapa): a janela de
+    vencimento estava aplicada e não aparecia em lugar nenhum fora do botão do
+    dropdown — não havia como ver nem tirar sem abrir o popup. No contrato novo
+    quem monta este chip é `barra_filtros`, por isso o `if not filtros_chips`.
+    {% endcomment %}
+    {% if vence_desde or vence_ate %}{% if not filtros_chips %}
+      <a class="fltx-chip" title="Remover o filtro de data"
+         href="?{% if uni_sel_val %}unidade={{ uni_sel_val|urlencode }}&{% endif %}{% for s in setor_sel_vals %}setor={{ s|urlencode }}&{% endfor %}{{ keep }}">
+        <span class="fltx-chip__ck" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+        {{ data_lbl|default:"Preventiva vence" }} <b>{{ vence_label }}</b>
+        <span class="fltx-chip__x" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+      </a>
+    {% endif %}{% endif %}
+
+    {% comment %}Chips dos grupos genéricos: mesmo desenho, mesmo "×" que
+    navega para a tela sem AQUELE filtro (href montado por `barra_filtros`).{% endcomment %}
+    {% for c in filtros_chips %}
+      <a class="fltx-chip" title="Remover o filtro {{ c.label }}" href="{{ c.href }}">
+        <span class="fltx-chip__ck" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+        {{ c.label }} <b>{{ c.valor }}</b>
+        <span class="fltx-chip__x" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+      </a>
+    {% endfor %}
+
+    <a class="fltx-clear" href="{% if filtros_limpar %}{{ filtros_limpar }}{% else %}?{{ keep }}{% endif %}">Limpar tudo</a>
+  </div>
+{% endif %}
+{% endif %}

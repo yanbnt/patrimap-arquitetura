@@ -1,0 +1,259 @@
+{% comment %}
+REDEFINIR SENHA — popup na ficha de Cadastros, não tela.
+
+Pedido do dono: "na opção de cadastros, depois de clicar pra editar, ter a
+opção de alterar a senha". O caminho que existia era a ação em lote do admin de
+usuários — longe de onde o problema aparece.
+
+O que ele NÃO faz, de propósito: deixar a TI digitar a senha da pessoa. O
+`SenhaComAntigaForm` exige a senha atual justamente para que ninguém troque a
+senha alheia; digitar uma nova aqui furaria essa regra por outra porta, e a TI
+passaria a conhecer a senha de quem ela atende.
+
+O que ele faz é a MESMA operação da ação "Gerar senha temporária" do admin:
+senha aleatória, exibida uma vez para ser entregue, com troca obrigatória no
+próximo acesso (TrocaSenhaObrigatoriaMiddleware). Assim ninguém — nem a TI —
+conhece a senha definitiva.
+
+Usa `<dialog>` nativo como o `_setor_novo.html`: véu, foco preso, Esc e retorno
+de foco vêm de graça. Quem grava é `redefinir_senha_colaborador()`
+(apps/orgs/views.py), que exige a permissão `auth.change_user`.
+{% endcomment %}
+<style>
+  .snc::backdrop {
+    background: color-mix(in srgb, #000 46%, transparent);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+  }
+  .snc {
+    width: min(460px, calc(100vw - 32px));
+    padding: 0;
+    border: 0;
+    border-radius: var(--md-shape-lg);
+    background: var(--md-surface-container-high);
+    color: var(--md-on-surface);
+    box-shadow: 0 18px 48px -8px rgba(0, 0, 0, .42), 0 4px 12px rgba(0, 0, 0, .22);
+  }
+  .snc__cab { display: flex; align-items: flex-start; gap: 10px; padding: 16px 18px 6px; }
+  .snc__ic {
+    display: grid; place-items: center; flex: none;
+    width: 36px; height: 36px; border-radius: var(--md-shape-md);
+    background: var(--md-primary-container); color: var(--md-on-primary-container);
+  }
+  .snc__ic svg { width: 19px; height: 19px; }
+  .snc__t { margin: 0; font: 600 16px/22px var(--md-font); }
+  .snc__s { margin: 2px 0 0; font: 400 12.5px/17px var(--md-font); color: var(--md-on-surface-variant); }
+  .snc__x {
+    margin-left: auto; width: 32px; height: 32px; flex: none;
+    display: grid; place-items: center; border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-on-surface-variant); cursor: pointer; font-size: 17px;
+  }
+  .snc__x:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+
+  .snc__corpo { padding: 10px 18px 4px; }
+  .snc__p { margin: 0 0 10px; font: 400 13px/19px var(--md-font); color: var(--md-on-surface-variant); }
+  .snc__p b { color: var(--md-on-surface); font-weight: 600; }
+
+  /* Lista do que vai acontecer: a TI precisa saber antes de clicar. */
+  .snc__lista { margin: 0; padding: 0; list-style: none; display: grid; gap: 7px; }
+  .snc__lista li {
+    display: flex; gap: 8px; align-items: flex-start;
+    font: 400 12.5px/18px var(--md-font); color: var(--md-on-surface-variant);
+  }
+  .snc__lista svg { width: 15px; height: 15px; flex: none; margin-top: 2px; color: var(--md-primary); }
+
+  /* Resultado: a senha aparece UMA vez. */
+  .snc__res { display: none; }
+  .snc[data-fase="feito"] .snc__res { display: block; }
+  .snc[data-fase="feito"] .snc__pedir { display: none; }
+  .snc__senha {
+    display: flex; align-items: center; gap: 10px;
+    margin: 4px 0 10px; padding: 12px 14px;
+    border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-highest);
+    border: 1px solid var(--md-outline-variant);
+  }
+  .snc__senha code {
+    font: 600 17px/1 ui-monospace, Consolas, monospace;
+    letter-spacing: .06em; color: var(--md-on-surface);
+    user-select: all; word-break: break-all;
+  }
+  .snc__copiar {
+    margin-left: auto; flex: none; border: 0; cursor: pointer;
+    padding: 8px 14px; border-radius: var(--md-shape-full);
+    background: var(--md-secondary-container); color: var(--md-on-secondary-container);
+    font: 600 12px/1 var(--md-font);
+  }
+  .snc__copiar:hover { background: color-mix(in srgb, var(--md-on-secondary-container) 8%, var(--md-secondary-container)); }
+
+  /* Erro usa o par CASADO error/on-error: `--md-st-crit` é vermelho claro e
+     texto branco em cima dele dá 1,7:1 (DESIGN-SYSTEM, armadilha conhecida). */
+  .snc__erro {
+    display: none; margin: 0 0 10px; padding: 10px 12px;
+    border-radius: var(--md-shape-md);
+    background: var(--md-error-container); color: var(--md-on-error-container);
+    font: 500 12.5px/18px var(--md-font);
+  }
+  .snc[data-fase="erro"] .snc__erro { display: block; }
+
+  .snc__pe {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 14px; padding: 12px 18px;
+    border-top: 1px solid var(--md-outline-variant);
+  }
+  .snc__cancelar {
+    border: 0; background: transparent; color: var(--md-primary);
+    font: 500 13px/1 var(--md-font); padding: 10px 12px;
+    border-radius: var(--md-shape-full); cursor: pointer;
+  }
+  .snc__cancelar:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .snc__ok {
+    margin-left: auto; border: 0; cursor: pointer;
+    min-height: 40px; padding: 0 22px; border-radius: var(--md-shape-full);
+    background: var(--md-action); color: var(--md-on-action);
+    font: 600 13px/1 var(--md-font);
+  }
+  .snc__ok:hover { background: var(--md-action-hover); }
+  .snc__ok[disabled] { opacity: .6; cursor: default; }
+  .snc[data-fase="feito"] .snc__ok,
+  .snc[data-fase="feito"] .snc__cancelar { display: none; }
+  .snc__fim { margin-left: auto; }
+  .snc__fim { display: none; }
+  .snc[data-fase="feito"] .snc__fim { display: block; }
+</style>
+
+<dialog class="snc" id="snc-dlg" aria-labelledby="snc-titulo" data-fase="pedir">
+  {% csrf_token %}
+
+  <div class="snc__cab">
+    <span class="snc__ic" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </span>
+    <div>
+      <h2 class="snc__t" id="snc-titulo">Redefinir senha</h2>
+      <p class="snc__s" id="snc-sub"></p>
+    </div>
+    <button type="button" class="snc__x" data-snc-fechar aria-label="Fechar">×</button>
+  </div>
+
+  <div class="snc__corpo">
+    <div class="snc__erro" id="snc-erro" role="alert"></div>
+
+    <div class="snc__pedir">
+      <p class="snc__p">
+        Uma senha temporária será gerada para a conta <b id="snc-conta"></b>.
+      </p>
+      <ul class="snc__lista">
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+          A senha aparece aqui uma única vez, para você entregar à pessoa.
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+          No próximo acesso, ela é obrigada a definir a senha definitiva — que
+          ninguém mais conhece.
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+          A senha atual deixa de funcionar imediatamente.
+        </li>
+      </ul>
+    </div>
+
+    <div class="snc__res">
+      <p class="snc__p">Entregue esta senha à pessoa. Ela <b>não será exibida de novo</b>.</p>
+      <div class="snc__senha">
+        <code id="snc-senha"></code>
+        <button type="button" class="snc__copiar" id="snc-copiar">Copiar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="snc__pe">
+    <button type="button" class="snc__cancelar" data-snc-fechar>Cancelar</button>
+    <button type="button" class="snc__ok" id="snc-confirmar">Gerar senha temporária</button>
+    <button type="button" class="snc__cancelar snc__fim" data-snc-fechar>Concluir</button>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  var dlg = document.getElementById("snc-dlg");
+  if (!dlg) { return; }
+
+  var sub = document.getElementById("snc-sub");
+  var conta = document.getElementById("snc-conta");
+  var erro = document.getElementById("snc-erro");
+  var campoSenha = document.getElementById("snc-senha");
+  var btnOk = document.getElementById("snc-confirmar");
+  var url = "";
+
+  function abrir(gatilho) {
+    url = gatilho.getAttribute("data-snc-url") || "";
+    sub.textContent = gatilho.getAttribute("data-snc-nome") || "";
+    conta.textContent = gatilho.getAttribute("data-snc-conta") || "";
+    erro.textContent = "";
+    campoSenha.textContent = "";
+    dlg.setAttribute("data-fase", "pedir");
+    btnOk.disabled = false;
+    btnOk.textContent = "Gerar senha temporária";
+    dlg.showModal();
+  }
+
+  document.addEventListener("click", function (ev) {
+    var g = ev.target.closest("[data-snc-abrir]");
+    if (g) { ev.preventDefault(); abrir(g); return; }
+    if (ev.target.closest("[data-snc-fechar]")) { dlg.close(); }
+  });
+
+  btnOk.addEventListener("click", function () {
+    if (!url) { return; }
+    btnOk.disabled = true;
+    btnOk.textContent = "Gerando…";
+    erro.textContent = "";
+
+    var token = dlg.querySelector("[name=csrfmiddlewaretoken]");
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": token ? token.value : "",
+        "X-Requested-With": "XMLHttpRequest"
+      },
+      credentials: "same-origin"
+    }).then(function (r) {
+      return r.json().catch(function () { return {ok: false, erro: "Resposta inesperada do servidor."}; });
+    }).then(function (d) {
+      if (d && d.ok) {
+        campoSenha.textContent = d.senha;
+        dlg.setAttribute("data-fase", "feito");
+      } else {
+        erro.textContent = (d && d.erro) || "Não foi possível redefinir a senha.";
+        dlg.setAttribute("data-fase", "erro");
+        btnOk.disabled = false;
+        btnOk.textContent = "Tentar de novo";
+      }
+    }).catch(function () {
+      erro.textContent = "Falha de rede. Verifique a conexão e tente de novo.";
+      dlg.setAttribute("data-fase", "erro");
+      btnOk.disabled = false;
+      btnOk.textContent = "Tentar de novo";
+    });
+  });
+
+  document.getElementById("snc-copiar").addEventListener("click", function () {
+    var txt = campoSenha.textContent || "";
+    var botao = this;
+    // clipboard.writeText exige contexto seguro; sem ele o texto segue
+    // selecionável (user-select:all no <code>) e o aviso diz o que fazer.
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(txt).then(function () {
+        botao.textContent = "Copiado";
+        setTimeout(function () { botao.textContent = "Copiar"; }, 1600);
+      });
+    } else {
+      botao.textContent = "Selecione e copie";
+      setTimeout(function () { botao.textContent = "Copiar"; }, 2200);
+    }
+  });
+})();
+</script>

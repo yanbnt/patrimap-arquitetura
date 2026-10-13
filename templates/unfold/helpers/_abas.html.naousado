@@ -1,0 +1,60 @@
+{% load i18n %}
+{% comment %}
+ABAS DA BARRA DO TOPO — o que saiu do menu vive aqui.
+
+O menu foi de 22 itens para 5 (Início · Agenda · Parque · Cadastros · Sistema),
+conforme o protótipo aprovado. As telas absorvidas NÃO ficaram inalcançáveis:
+cada uma é irmã de um dos cinco destinos e aparece como aba, escolhida a partir
+do caminho da requisição.
+
+REGRA: se você acrescentar uma tela nova ao sistema, acrescente-a à lista do
+grupo dela aqui — senão ela existe e ninguém acha.
+
+A permissão é repetida em duas abas (Aprovações e Sistema) porque a view delas
+já exige grupo: mostrar link que devolve 403 é pior que não mostrar.
+{% endcomment %}
+
+{% with p=request.path %}
+  {% if "/parque/reparos/" in p or "/parque/preventiva/" in p or "/parque/registros/" in p or "/parque/autorizadas/" in p or "/orcamentos/" in p or "/parque/aprovacoes/" in p or "/parque/chamado" in p %}
+    <nav class="mkab" aria-label="{% trans 'Seções da Agenda' %}">
+      <a class="mkab__i {% if '/parque/reparos/' in p or '/parque/chamado' in p %}is-on{% endif %}" href="/parque/reparos/">{% trans "Chamados" %}</a>
+      <a class="mkab__i {% if '/parque/preventiva/' in p %}is-on{% endif %}" href="/parque/preventiva/">{% trans "Preventiva" %}</a>
+      <a class="mkab__i {% if '/parque/registros/' in p %}is-on{% endif %}" href="/parque/registros/">{% trans "Registros" %}</a>
+      <a class="mkab__i {% if '/parque/autorizadas/' in p %}is-on{% endif %}" href="/parque/autorizadas/">{% trans "Assistência externa" %}</a>
+      <a class="mkab__i {% if '/orcamentos/' in p %}is-on{% endif %}" href="/orcamentos/">{% trans "Orçamentos" %}</a>
+      {% if request.user.is_superuser or perms.parque.change_transferencia %}
+        <a class="mkab__i {% if '/parque/aprovacoes/' in p %}is-on{% endif %}" href="/parque/aprovacoes/">{% trans "Aprovações" %}</a>
+      {% endif %}
+    </nav>
+
+  {% elif "/parque/" in p %}
+    <nav class="mkab" aria-label="{% trans 'Seções do Parque' %}">
+      <a class="mkab__i {% if '/parque/mapa' in p %}is-on{% endif %}" href="/parque/mapa-completo/">{% trans "Mapa" %}</a>
+      <a class="mkab__i {% if '/parque/tabela' in p %}is-on{% endif %}" href="/parque/tabela-computadores/">{% trans "Tabela" %}</a>
+      <a class="mkab__i {% if '/parque/estoque/' in p %}is-on{% endif %}" href="/parque/estoque/">{% trans "Estoque" %}</a>
+      <a class="mkab__i {% if '/parque/tabela-pecas/' in p %}is-on{% endif %}" href="/parque/tabela-pecas/">{% trans "Peças" %}</a>
+      <a class="mkab__i {% if '/parque/transferencia' in p %}is-on{% endif %}" href="/parque/transferencias/">{% trans "Transferências" %}</a>
+      <a class="mkab__i {% if '/parque/etiquetas/' in p %}is-on{% endif %}" href="/parque/etiquetas/">{% trans "Etiquetas" %}</a>
+      <a class="mkab__i {% if '/parque/fora-de-uso/' in p %}is-on{% endif %}" href="/parque/fora-de-uso/">{% trans "Fora de uso" %}</a>
+    </nav>
+
+  {% elif "/admin/orgs/" in p or "/parque/setores/" in p or "/parque/agente/" in p %}
+    <nav class="mkab" aria-label="{% trans 'Seções de Cadastros' %}">
+      <a class="mkab__i {% if '/admin/orgs/person/' in p %}is-on{% endif %}" href="/admin/orgs/person/">{% trans "Colaboradores" %}</a>
+      <a class="mkab__i {% if '/parque/setores/' in p %}is-on{% endif %}" href="/parque/setores/">{% trans "Setores" %}</a>
+      <a class="mkab__i {% if '/admin/orgs/location/' in p %}is-on{% endif %}" href="/admin/orgs/location/">{% trans "Lojas e unidades" %}</a>
+      <a class="mkab__i {% if '/parque/agente/' in p %}is-on{% endif %}" href="/parque/agente/">{% trans "Agente e telemetria" %}</a>
+    </nav>
+
+  {% elif "/admin/auth/" in p or "/admin/admin/logentry/" in p %}
+    {% if request.user.is_superuser or request.user.groups.exists %}
+      <nav class="mkab" aria-label="{% trans 'Seções do Sistema' %}">
+        <a class="mkab__i {% if '/admin/auth/user/' in p %}is-on{% endif %}" href="/admin/auth/user/">{% trans "Usuários" %}</a>
+        <a class="mkab__i {% if '/admin/auth/group/' in p %}is-on{% endif %}" href="/admin/auth/group/">{% trans "Grupos" %}</a>
+        <a class="mkab__i {% if 'usuarioonline' in p %}is-on{% endif %}" href="/admin/orgs/usuarioonline/">{% trans "Online" %}</a>
+        <a class="mkab__i {% if 'logentry' in p %}is-on{% endif %}" href="/admin/admin/logentry/">{% trans "Log de ações" %}</a>
+        <a class="mkab__i {% if 'logacesso' in p %}is-on{% endif %}" href="/admin/orgs/logacesso/">{% trans "Log de acessos" %}</a>
+      </nav>
+    {% endif %}
+  {% endif %}
+{% endwith %}

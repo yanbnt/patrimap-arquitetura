@@ -1,0 +1,205 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  {% comment %}
+    tabela_pecas.html — MATERIAL DESIGN 3 (DESIGN-SYSTEM.md §4 "Tabela" e §5).
+
+    Migrado de `--ui-*` para `--md-*`. O que SAIU:
+      · a moldura de 1px da tabela e as bordas do cartão — a tabela vive numa
+        superfície tonal (`surface-container-low`) e o divisor de linha é o
+        `outline-variant` que o `make-m3.css` já aplica globalmente;
+      · o CSS de célula desta tela (padding, hairline, zebra): a data table do
+        M3 é global, não se reescreve por tela (§4 do contrato);
+      · o peso 700 na quantidade — número é 400, alinhado à direita e tabular;
+      · o hex de cor que vinha da view no chip de estoque: agora é o par tonal
+        do M3 (`st-crit-cont`/`st-crit` para "Em falta", `st-ok-*` para "OK"),
+        escolhido pelo próprio rótulo que a view manda.
+
+    A busca virou SEARCH BAR do M3 (pílula em `surface-container-high`, 56px).
+
+    Hooks preservados: #tab-body (data-modelo/-transferir-row/-caixa/
+    -pode-excluir), tr.tab-row[data-edit][data-transferir], .tab-col-chk,
+    #tr-all, .tr-chk[form=disp-bulk-form], #tab-busca, #tab-busca-x,
+    #tab-sem-busca e a classe .tab-tabela (ordenação por cabeçalho).
+  {% endcomment %}
+  .tp { display: grid; gap: 16px; }
+
+  /* Text button do M3: sem contêiner, texto `primary`, state layer de 8%. */
+  .tp-back {
+    justify-self: start; display: inline-flex; align-items: center; gap: 8px;
+    height: 40px; padding: 0 16px 0 12px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; text-decoration: none;
+  }
+  .tp-back:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .tp-back svg { width: 18px; height: 18px; flex: none; }
+
+  /* ---------- Botões: um filled por tela, o resto tonal ---------- */
+  .tp-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 40px; padding: 0 24px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: var(--md-secondary-container); color: var(--md-on-secondary-container);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; text-decoration: none;
+    cursor: pointer; white-space: nowrap;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .tp-btn:hover { background: color-mix(in srgb, var(--md-on-secondary-container) 8%, var(--md-secondary-container)); }
+  .tp-btn svg { width: 18px; height: 18px; flex: none; }
+  .tp-btn--ok { background: var(--md-action); color: var(--md-on-action); }
+  .tp-btn--ok:hover { background: color-mix(in srgb, var(--md-on-action) 8%, var(--md-action)); }
+
+  /* ---------- Barra de filtros: A MESMA de toda tela de lista ----------
+     Antes eram chips `.tp-chip` de unidade soltos na linha (uma fileira que
+     crescia com o número de lojas). Agora é o botão "Filtrar" + popup do
+     sistema — o `initFiltrarPopup` monta o popup no PAI da `.flt-bar`, então
+     esta `.tp-bar` é o host. O acabamento da linha (cartão fino, campo de busca
+     em pílula) é o mesmo das telas que já adotaram (`.tbd-fbar` na make-m3.css
+     §32); mora aqui porque aquela regra lista as classes uma a uma. */
+  .tp-bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px;
+    margin: 0; padding: 10px 12px;
+    background: var(--md-surface);
+    border: 1px solid var(--md-outline-variant);
+    border-radius: var(--md-shape-lg);
+  }
+  /* O bloco "Filtrando por…" ocupa uma linha própria: aparecer e desaparecer
+     não pode empurrar a busca para o lado (make-m3.css §21.1). */
+  .tp-bar .fltx-active { flex: 1 0 100%; order: 99; margin: 2px 0 0 !important; }
+
+  /* Campo de busca: pílula preenchida, sem moldura (padrão das outras telas). */
+  .tp-search { position: relative; flex: 1 1 260px; min-width: 0; max-width: 420px; }
+  .tp-search svg {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    width: 19px; height: 19px; color: var(--md-on-surface-variant); pointer-events: none;
+  }
+  #main .tp-search input {
+    width: 100%; height: 42px !important; min-height: 42px !important;
+    padding: 0 44px !important;
+    background: var(--md-surface-container) !important;
+    border: 0 !important; border-radius: var(--md-shape-full) !important;
+    box-shadow: none !important;
+    font: 400 13.5px/42px var(--md-font) !important;
+    color: var(--md-on-surface) !important;
+  }
+  #main .tp-search input:focus { box-shadow: none !important; outline: none !important; }
+  .tp-search__x {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    width: 32px; height: 32px; display: grid; place-items: center;
+    border: 0; background: transparent; color: var(--md-on-surface-variant);
+    font-size: 18px; line-height: 1; cursor: pointer; border-radius: var(--md-shape-full);
+  }
+  .tp-search__x:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+
+  /* ---------- Data table (o estilo de célula é global) ---------- */
+  .tp-tbl {
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-low); overflow: auto; max-width: 100%;
+  }
+  .tp-tbl .tab-tabela { width: 100%; min-width: 720px; }
+  .tp-tbl .tab-row { cursor: pointer; }
+  .tp-tbl .tab-col-chk { width: 48px; }
+  .tp-tbl th.tp-num, .tp-tbl td.tp-num { text-align: right; white-space: nowrap; }
+  .tp-tbl td.tp-desc { color: var(--md-on-surface-variant) !important; }
+  .tp-tbl td.tab-vazio { padding: 16px !important; }
+
+  /* Situação do estoque: chip tonal do M3 (par contêiner + on-contêiner). */
+  .tp-st {
+    display: inline-flex; align-items: center; height: 24px; padding: 0 8px;
+    border: 0; border-radius: var(--md-shape-sm); white-space: nowrap;
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px;
+    background: var(--md-surface-container-high); color: var(--md-on-surface-variant);
+  }
+  .tp-st--ok { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+  .tp-st--crit { background: var(--md-st-crit-cont); color: var(--md-st-crit); }
+
+  .tp-nada {
+    margin: 0; padding: 24px; text-align: center;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant);
+  }
+</style>
+
+<div class="tp">
+  <a data-mk-voltar class="tp-back" href="{{ voltar_url }}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+    {{ voltar_nome }}
+  </a>
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · Estoque</p>
+    <h1 class="mkpro-head__title">{{ titulo }}</h1>
+    <p class="mkpro-head__sub">Peças e periféricos por unidade · <span class="mkpro-num">{{ total }}</span> itens · clique numa linha para editar.</p>
+    <div class="mkpro-head__actions">
+      <a class="tp-btn" href="/parque/montar-caixa/?generico=1"
+         title="Gerar um protocolo de envio genérico (itens que não são do estoque)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2h16v20l-3-2-3 2-3-2-3 2z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
+        Protocolo avulso
+      </a>
+      <a class="tp-btn tp-btn--ok" href="{{ novo_url }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        Nova peça
+      </a>
+    </div>
+  </header>
+
+  <div class="tp-bar">
+    {% include "parque/_filtros.html" %}
+    <div class="tp-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="search" id="tab-busca" autocomplete="off"
+             placeholder="Filtrar nesta lista…" aria-label="Filtrar nesta lista">
+      <button type="button" id="tab-busca-x" class="tp-search__x" aria-label="Limpar busca" hidden>×</button>
+    </div>
+  </div>
+
+  <form id="disp-bulk-form" method="post" action="{% url 'parque_excluir_dispositivos' %}"
+        onsubmit="return confirm('Excluir os itens selecionados? Esta ação não pode ser desfeita.');">
+    {% csrf_token %}
+    <input type="hidden" name="modelo" value="{{ modelo }}">
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  </form>
+
+  <div class="tp-tbl">
+    <table class="tab-tabela">
+      <thead>
+        <tr>
+          <th class="tab-col-chk"><input type="checkbox" id="tr-all" title="Selecionar todos"></th>
+          <th>Tipo</th>
+          <th>Descrição / especificação</th>
+          <th>Unidade</th>
+          <th class="tp-num">Quantidade</th>
+          <th>Estoque</th>
+        </tr>
+      </thead>
+      <tbody id="tab-body"
+             data-modelo="{{ modelo }}"
+             data-transferir-row="1"
+             data-caixa="{{ caixa_url }}"
+             data-pode-excluir="{% if pode_excluir %}1{% else %}0{% endif %}">
+        {% for r in linhas %}
+          <tr class="tab-row" data-edit="{{ r.edit }}" data-transferir="{{ r.transferir }}" tabindex="0">
+            <td class="tab-col-chk"><input type="checkbox" class="tr-chk" name="itens" value="{{ r.pk }}" form="disp-bulk-form"></td>
+            <td><b>{{ r.tipo }}</b></td>
+            <td class="tp-desc">{{ r.descricao }}</td>
+            <td>{{ r.unidade }}</td>
+            <td class="tp-num">{{ r.quantidade }}</td>
+            <td><span class="tp-st {% if r.estoque_label == 'OK' %}tp-st--ok{% else %}tp-st--crit{% endif %}">{{ r.estoque_label }}</span></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="tab-vazio">
+            <div class="mkpro-empty mkpro-empty--slim">
+              <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></span>
+              <p class="mkpro-empty__title">Nenhuma peça cadastrada</p>
+              <p class="mkpro-empty__hint">Use <b>Nova peça</b> para cadastrar a primeira peça ou periférico do estoque.</p>
+            </div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p id="tab-sem-busca" class="tp-nada" hidden>Nada encontrado para a busca.</p>
+  </div>
+</div>
+{% endblock %}

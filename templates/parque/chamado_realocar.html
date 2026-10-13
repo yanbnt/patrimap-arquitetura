@@ -1,0 +1,165 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  /* =========================================================================
+     chamado_realocar — ESCOLHA guiada em Material Design 3: o contexto primeiro
+     (quem sai de qual mesa e por quê), depois a grade de mesas livres, cada uma
+     com UMA ação.
+
+     O que SAIU (DESIGN-SYSTEM.md §5): a borda e a sombra do painel de contexto,
+     a borda e a sombra de cada cartão, a borda do quadro de score, o divisor
+     interno do cartão, o peso 800 no número e o peso 700 nos rótulos, e a borda
+     tracejada do estado vazio.
+
+     O que ENTROU (§4): cartão filled (surface-container-low, raio 12, hover um
+     tom acima); a ação repetida do cartão vira TONAL (secondary-container) —
+     nenhuma tela tem 20 botões filled; "manter na mesa" vira text button.
+     Escopado em .chr; cor por var(--md-*).
+     ====================================================================== */
+  .chr { display: flex; flex-direction: column; gap: 16px; }
+  .chr *, .chr *::before, .chr *::after { box-sizing: border-box; }
+  .chr svg { display: block; }
+
+  /* --- botões: base de layout do sistema M3 + o text button -------------- */
+  .chr .pvx-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  .chr .pvx-btn svg { width: 18px; height: 18px; flex: none; }
+  /* `#main` na frente vence o `!important` do CSS histórico (§9.2). */
+  #main .chr-txt {
+    background: transparent !important; color: var(--md-primary) !important;
+    padding: 0 12px !important;
+  }
+
+  /* --- painel de contexto ----------------------------------------------- */
+  /* `.chr` / `#main` na frente para vencer os `.dark .chr-*` do CSS histórico
+     (2 classes de especificidade) — ver §9.2. */
+  .chr .chr-intro {
+    margin: 0;
+    background: var(--md-surface-container-low);
+    border: 0; border-radius: var(--md-shape-lg); box-shadow: none;
+    padding: 16px;
+  }
+  #main .chr-intro__p {
+    margin: 0 0 16px;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant);
+  }
+  #main .chr-intro__p b { color: var(--md-on-surface); font-weight: 500; }
+  .chr-intro .mkpro-alert { margin: 0 0 16px; }
+  .chr-skip { margin: 0; }
+
+  /* --- grade de mesas livres --------------------------------------------- */
+  .chr-count {
+    display: flex; align-items: baseline; gap: 8px; margin: 0;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant);
+  }
+  .chr-count b { font-weight: 500; color: var(--md-on-surface); font-variant-numeric: tabular-nums; }
+
+  .chr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); gap: 12px; }
+
+  .chr .chr-card {
+    margin: 0; display: flex; flex-direction: column; gap: 12px;
+    background: var(--md-surface-container-low);
+    border: 0; border-radius: var(--md-shape-md); box-shadow: none;
+    padding: 16px;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .chr .chr-card:hover { background: var(--md-surface-container); }
+  .chr-card__top { display: flex; align-items: center; gap: 12px; }
+  .chr-card__id { min-width: 0; flex: 1; }
+  .chr-card__id b {
+    display: block; font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .chr-card__id span { display: block; font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant); }
+  /* Score: chip tonal, número em peso 400 (§3). */
+  .chr-sc {
+    flex: none; min-width: 40px; text-align: center;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; font-variant-numeric: tabular-nums;
+    border: 0; border-radius: var(--md-shape-sm);
+    background: var(--md-surface-container-high); color: var(--md-on-surface); padding: 4px 8px;
+  }
+  .chr-sc--critico { background: var(--md-st-crit-cont); color: var(--md-st-crit); }
+  .chr-sc--baixo { background: var(--md-st-warn-cont); color: var(--md-st-warn); }
+  .chr-sc--bom, .chr-sc--otimo { background: var(--md-st-ok-cont); color: var(--md-st-ok); }
+  .chr .chr-card__specs {
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .chr-card .pvx-btn { width: 100%; }
+
+  .chr-vazio { grid-column: 1 / -1; }
+  .chr .mkpro-empty a { color: var(--md-primary); font-weight: 500; }
+</style>
+
+<div class="chr">
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · Chamado</p>
+    <h1 class="mkpro-head__title">Realocar colaborador</h1>
+    <p class="mkpro-head__sub">Escolha uma mesa livre com PC na mesma loja para o colaborador trabalhar durante o reparo.</p>
+    <div class="mkpro-head__actions">
+      <a data-mk-voltar class="pvx-btn chr-txt" href="{{ voltar_url }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg> {{ voltar_nome }}
+      </a>
+    </div>
+  </header>
+
+  <section class="chr-intro">
+    <p class="chr-intro__p">
+      O chamado de <b>{{ colaborador.full_name|default:origem.nome }}</b>
+      ({{ origem.setor.unidade.name }} › {{ origem.setor.nome }} · {{ origem.nome }})
+      tira a máquina de operação. Escolha uma <b>mesa livre com PC</b> da mesma loja para
+      <b>{{ colaborador.full_name|default:"o colaborador" }}</b> trabalhar durante o reparo.
+    </p>
+    <div class="mkpro-alert" role="status">
+      <span class="mkpro-alert__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg></span>
+      <div><strong>A volta é automática.</strong> Ao finalizar o chamado, o colaborador retorna para a mesa original.</div>
+    </div>
+    <form method="post" class="chr-skip">
+      {% csrf_token %}
+      <input type="hidden" name="acao" value="pular">
+      <button type="submit" class="pvx-btn chr-txt">
+        Manter na mesma mesa por enquanto
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+    </form>
+  </section>
+
+  <p class="chr-count"><b>{{ livres|length }}</b> mesa{{ livres|length|pluralize }} livre{{ livres|length|pluralize }} com PC nesta loja</p>
+
+  <div class="chr-grid">
+    {% for b in livres %}
+      <form method="post" class="chr-card">
+        {% csrf_token %}
+        <input type="hidden" name="baia" value="{{ b.pk }}">
+        <div class="chr-card__top">
+          <span class="mkpro-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+          <span class="chr-card__id">
+            <b>{{ b.nome }}</b>
+            <span>{{ b.setor.nome }}</span>
+          </span>
+          {% if b.indice_desempenho is not None %}
+            <span class="chr-sc chr-sc--{{ b.classe_desempenho|slugify }}">{{ b.indice_desempenho }}</span>
+          {% endif %}
+        </div>
+        <div class="chr-card__specs">{{ b.resumo_pc }}</div>
+        {# Ação repetida (uma por cartão) — TONAL, não filled. #}
+        <button type="submit" class="pvx-btn pvx-btn--soft">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5M15 12H3"/></svg> Mover para cá
+        </button>
+      </form>
+    {% empty %}
+      <div class="mkpro-empty chr-vazio">
+        <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+        <p class="mkpro-empty__title">Nenhuma mesa livre com PC nesta loja</p>
+        <p class="mkpro-empty__hint">O colaborador permanece na mesa atual —
+          <a href="{% url 'parque_chamado_detalhe' reparo.pk %}">ver o chamado</a>.</p>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

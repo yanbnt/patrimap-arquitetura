@@ -1,0 +1,509 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+{% csrf_token %}
+<style>
+  /* ==========================================================================
+     mapa_notebooks.html — prefixo .mnb-  ·  Material Design 3
+     Mesma pele M3 dos demais mapas. Duas decisões próprias desta tela:
+       • a SITUAÇÃO (ativo / defeito / obsoleto), que é o que a legenda explica,
+         virou o CHIP TONAL do card (.nb-badge) — antes era filete lateral;
+       • a nota continua sendo o DESEMPENHO, em chip tonal próprio (--mnb-pf).
+     Saíram: moldura do setor e do card, filete de cor, peso 700/800, maiúsculas.
+     O DESENHO do laptop, do caminhão, do avatar e do zoom NÃO muda.
+     ========================================================================== */
+
+  /* 1. Cabeçalho */
+  .mnb-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+  .mnb-head__id { flex: 1 1 340px; min-width: 0; display: grid; gap: 4px; }
+  .mnb-sub { display: flex; flex-wrap: wrap; gap: 3px 16px; }
+  .mnb-sub span { position: relative; }
+  .mnb-sub span + span::before { content: "·"; position: absolute; left: -10px; opacity: .55; }
+  /* "← Voltar" outlined; o atalho de marcas é text button. */
+  .mapa__voltar, .mapa__estoque {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 40px; padding: 0 24px; box-sizing: border-box;
+    border: 0 !important; border-radius: var(--md-shape-full) !important;
+    background: transparent !important; color: var(--md-primary) !important;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    text-decoration: none; white-space: nowrap; box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .mapa__voltar { border: 1px solid var(--md-outline) !important; }
+  .mapa__voltar:hover, .mapa__estoque:hover {
+    background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important;
+    color: var(--md-primary) !important;
+  }
+  .mapa__estoque svg { width: 18px; height: 18px; flex: none; }
+  /* Segmented button do M3. */
+  .mapa__view {
+    display: inline-flex; gap: 0; height: 40px; padding: 0; box-sizing: border-box;
+    border: 1px solid var(--md-outline); border-radius: var(--md-shape-full);
+    background: transparent; overflow: hidden;
+  }
+  .mapa__view-btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 0 20px;
+    border-radius: var(--md-shape-full);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    color: var(--md-on-surface); text-decoration: none; background: transparent;
+  }
+  .mapa__view-btn svg { width: 18px; height: 18px; }
+  .mapa__view-btn:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+  .mapa__view-btn.is-active { background: var(--md-secondary-container); color: var(--md-on-secondary-container); box-shadow: none; }
+
+  /* 2. Barra de filtro: sem card e sem linha divisória */
+  .mnb-fbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
+    margin: 0 0 20px; padding: 0;
+  }
+
+  /* 3. Legenda de situação */
+  .mnb-leg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; margin: 0 0 20px; }
+  .mnb-leg__lbl { font: 500 11px/16px var(--md-font); letter-spacing: .5px; text-transform: uppercase; color: var(--md-on-surface-variant); }
+  .mnb-leg__i { display: inline-flex; align-items: center; gap: 8px; font: 500 12px/16px var(--md-font); letter-spacing: .5px; color: var(--md-on-surface-variant); }
+  .mnb-leg__i::before { content: ""; width: 8px; height: 8px; border-radius: var(--md-shape-full); background: var(--mnb-lc, var(--md-outline)); }
+  .mnb-leg__i--ativo { --mnb-lc: var(--md-st-ok); }
+  .mnb-leg__i--defeito { --mnb-lc: var(--md-st-crit); }
+  .mnb-leg__i--obsoleto { --mnb-lc: var(--md-outline); }
+
+  /* 4. Planta e setores — seção tonal, um degrau abaixo do cartão. */
+  .mnb-skin .mapa-unidade__titulo {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    font: 500 16px/24px var(--md-font); letter-spacing: .15px;
+    color: var(--md-on-surface); margin: 4px 0 12px; padding: 0; border: 0;
+  }
+  .mnb-skin .mapa-uni-ico { width: 24px; height: 24px; color: var(--md-on-surface-variant); }
+  .mnb-skin .mapa-setor {
+    background: var(--md-surface-container-lowest) !important; border: 0 !important;
+    border-radius: var(--md-shape-lg) !important; box-shadow: none !important;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .mnb-skin .mapa-setor::before { display: none; }
+  .mnb-skin .mapa-setor__titulo {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface);
+    margin: 0 0 12px; padding: 0; border: 0;
+  }
+  .mnb-skin .mapa .mapa-setor__qtd, .mnb-skin .mapa-setor__qtd {
+    margin-left: auto; min-width: 0; height: 24px; padding: 0 8px;
+    display: inline-flex; align-items: center; border: 0; border-radius: var(--md-shape-sm);
+    background: var(--md-surface-container-high) !important; color: var(--md-on-surface-variant) !important;
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px; font-variant-numeric: tabular-nums;
+  }
+  .mnb-skin .mapa-unidade__titulo .mapa-setor__qtd { margin-left: 0; }
+  /* "＋ Notebook": text button. */
+  .mnb-skin .mapa-setor__add {
+    margin-left: auto; min-height: 32px; padding: 0 12px;
+    display: inline-flex; align-items: center; border-radius: var(--md-shape-full);
+    background: transparent !important; border: 0 !important;
+    color: var(--md-primary) !important;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+  }
+  .mnb-skin .mapa-setor__add:hover {
+    background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important;
+    color: var(--md-primary) !important;
+  }
+
+  /* 5. Cartão do notebook (M3 filled card) */
+  .mnb-skin .nb-grid { grid-template-columns: repeat(auto-fill, minmax(166px, 1fr)); gap: 8px; }
+  .mnb-skin .nb-grid > .nb-card:not(.nb-card--vazio) { min-height: 118px; }
+  /* Pares de papéis: situação (--mnb-sit/-c) e desempenho (--mnb-pf/-c). */
+  .mnb-skin .nb-card {
+    --cor: var(--md-outline);
+    --mnb-pf: var(--md-on-surface-variant); --mnb-pfc: var(--md-surface-container-high);
+    --mnb-sit: var(--md-on-surface-variant); --mnb-sitc: var(--md-surface-container-high);
+  }
+  .mnb-skin .nb-cl-otimo { --mnb-pf: var(--md-st-ok); --mnb-pfc: var(--md-st-ok-cont); }
+  .mnb-skin .nb-cl-bom { --mnb-pf: var(--md-st-attn); --mnb-pfc: var(--md-st-attn-cont); }
+  .mnb-skin .nb-cl-baixo { --mnb-pf: var(--md-st-warn); --mnb-pfc: var(--md-st-warn-cont); }
+  .mnb-skin .nb-cl-critico { --mnb-pf: var(--md-st-crit); --mnb-pfc: var(--md-st-crit-cont); }
+  .mnb-skin .nb--ativo { --mnb-sit: var(--md-st-ok); --mnb-sitc: var(--md-st-ok-cont); --cor: var(--md-st-ok); }
+  .mnb-skin .nb--defeito { --mnb-sit: var(--md-st-crit); --mnb-sitc: var(--md-st-crit-cont); --cor: var(--md-st-crit); }
+  .mnb-skin .nb--obsoleto { --mnb-sit: var(--md-on-surface-variant); --mnb-sitc: var(--md-surface-container-high); --cor: var(--md-outline); }
+  .mnb-skin .nb-card {
+    width: auto; padding: 12px;
+    background: var(--md-surface-container-low) !important; border: 0 !important;
+    border-radius: var(--md-shape-md) !important; box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .mnb-skin .nb-card::before { display: none; }
+  .mnb-skin .nb-card:hover {
+    transform: none !important; box-shadow: none !important;
+    background: var(--md-surface-container) !important;
+  }
+  /* Vaga sem notebook: tile tracejado (é um alvo de drop, o contorno é legítimo). */
+  .mnb-skin .nb-card--vazio {
+    background: transparent !important;
+    border: 1px dashed var(--md-outline-variant) !important;
+    opacity: 1;
+  }
+  .mnb-skin .nb-card:focus-visible { outline: 3px solid var(--md-primary); outline-offset: 2px; }
+  .mnb-skin .baia__top { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; min-height: 20px; }
+  .mnb-skin .baia__icone { color: var(--md-on-surface-variant); font-size: 0; }
+  .mnb-skin .baia__icone svg { width: 18px; height: 18px; }
+  .mnb-skin .baia__tel { margin-left: auto; margin-right: 0; font-size: 0; }
+  .mnb-skin .baia__tel svg { width: 14px; height: 14px; }
+  .mnb-skin .baia__tel--ativo { color: var(--md-st-ok); }
+  .mnb-skin .baia__tel--inativo { color: var(--md-st-warn); }
+  .mnb-skin .baia__tel--sem { color: var(--md-outline-variant); }
+  /* A nota é o DESEMPENHO — chip tonal com o par --mnb-pf / --mnb-pfc. */
+  .mnb-skin .baia__score {
+    min-width: 0; height: 20px; padding: 0 8px;
+    display: inline-flex; align-items: center; border: 0; border-radius: var(--md-shape-sm);
+    background: var(--mnb-pfc) !important; color: var(--mnb-pf) !important;
+    font: 500 11px/16px var(--md-font) !important; letter-spacing: .5px; font-variant-numeric: tabular-nums;
+  }
+  .mnb-skin .baia__nome {
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    color: var(--md-on-surface) !important;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mnb-skin .baia__ocupante {
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; margin-top: 2px;
+    color: var(--md-on-surface-variant) !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mnb-skin .nb-card--vazio .baia__ocupante { color: var(--md-on-surface-variant) !important; font-style: normal; }
+  .mnb-skin .baia__specs { font: 400 12px/16px var(--md-font); letter-spacing: .4px; margin-top: 6px; color: var(--md-on-surface-variant) !important; }
+  .mnb-skin .baia__perifs { margin-top: 8px; gap: 8px; opacity: .5; transition: opacity var(--md-dur-short) var(--md-ease-standard); }
+  .mnb-skin .nb-card:hover .baia__perifs, .mnb-skin .nb-card:focus-visible .baia__perifs { opacity: 1; }
+  .mnb-skin .baia__perif { color: var(--md-on-surface-variant); font-size: 0; }
+  .mnb-skin .baia__perif svg { width: 14px; height: 14px; }
+  /* SITUAÇÃO = chip tonal (era moldura colorida). */
+  .mnb-skin .nb-badge {
+    margin-top: 8px; height: 20px; padding: 0 8px;
+    display: inline-flex; align-items: center; border: 0;
+    border-radius: var(--md-shape-sm);
+    background: var(--mnb-sitc); color: var(--mnb-sit);
+    font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+  }
+
+  /* 6. Diálogos e overlays desta tela (M3: raio 28, nível 3, tonal por dentro) */
+  .tl-overlay__card, .mov-modal__card {
+    background: var(--md-surface-container-high) !important;
+    border: 0 !important; border-radius: var(--md-shape-xl) !important;
+    box-shadow: var(--md-elev-3) !important; padding: 24px !important;
+  }
+  .tl-overlay__title, .mov-modal__title {
+    font: 400 24px/32px var(--md-font) !important; letter-spacing: 0 !important;
+    color: var(--md-on-surface) !important;
+  }
+  .tl-overlay__sub, .mov-modal__msg {
+    font: 400 14px/20px var(--md-font) !important; letter-spacing: .25px !important;
+    color: var(--md-on-surface-variant) !important;
+  }
+  .tl-overlay__close { color: var(--md-on-surface-variant) !important; }
+  .tl-overlay .tl-unit {
+    display: flex; align-items: center; gap: 16px; width: 100%; text-align: left;
+    padding: 16px; cursor: pointer; text-decoration: none;
+    background: var(--md-surface-container-low) !important; border: 0 !important;
+    border-radius: var(--md-shape-md) !important; box-shadow: none !important;
+  }
+  .tl-overlay .tl-unit:hover { transform: none !important; background: var(--md-surface-container) !important; }
+  .tl-overlay .tl-unit__icon { color: var(--md-primary); flex: none; }
+  .tl-overlay .tl-unit__nome { font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface); }
+  .tl-overlay .tl-unit__cidade { font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant); }
+  .tl-overlay .tl-unit__seta { color: var(--md-on-surface-variant); flex: none; }
+  .tl-input {
+    min-height: 56px; padding: 16px !important; box-sizing: border-box; width: 100%;
+    border: 1px solid var(--md-outline) !important; border-radius: var(--md-shape-xs) !important;
+    background: transparent !important; color: var(--md-on-surface) !important;
+    font: 400 16px/24px var(--md-font) !important; letter-spacing: .5px !important;
+    box-shadow: none !important; outline: 0;
+  }
+  .tl-input::placeholder { color: var(--md-on-surface-variant) !important; opacity: 1; }
+  .tl-input:focus { border-color: var(--md-primary) !important; box-shadow: inset 0 0 0 1px var(--md-primary) !important; }
+  .tl-campo { display: block; font: 500 12px/16px var(--md-font); letter-spacing: .5px; color: var(--md-on-surface-variant); }
+  .mov-btn {
+    min-height: 40px; padding: 0 24px !important;
+    border: 0 !important; border-radius: var(--md-shape-full) !important;
+    font: 500 14px/20px var(--md-font) !important; letter-spacing: .1px !important;
+    box-shadow: none !important; text-transform: none !important;
+  }
+  .mov-btn--cancel { background: transparent !important; color: var(--md-primary) !important; }
+  .mov-btn--cancel:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important; }
+  .mov-btn--ok { background: var(--md-action) !important; color: var(--md-on-action) !important; }
+  /* Carrossel de colaboradores: cartões filled; o avatar não muda. */
+  .colab-card {
+    background: var(--md-surface-container-low) !important; border: 0 !important;
+    border-radius: var(--md-shape-md) !important; box-shadow: none !important;
+  }
+  .colab-card:hover { background: var(--md-surface-container) !important; transform: none !important; }
+  .colab-card__nome { font: 500 14px/20px var(--md-font) !important; letter-spacing: .1px; color: var(--md-on-surface) !important; }
+  .colab-card__cargo { font: 400 12px/16px var(--md-font) !important; letter-spacing: .4px; color: var(--md-on-surface-variant) !important; }
+  .colab-card__tag, .colab-card__nb {
+    border: 0 !important; border-radius: var(--md-shape-sm) !important;
+    background: var(--md-secondary-container) !important; color: var(--md-on-secondary-container) !important;
+    font: 500 11px/16px var(--md-font) !important; letter-spacing: .5px; padding: 2px 8px !important;
+  }
+  .colab-card__remover {
+    border: 0 !important; border-radius: var(--md-shape-full) !important;
+    background: transparent !important; color: var(--md-error) !important;
+    font: 500 11px/16px var(--md-font) !important; letter-spacing: .5px;
+  }
+
+  /* 7. Miudezas desta tela (docks, zoom) */
+  .mnb-hint { display: inline-flex; align-items: center; gap: 8px; justify-content: center; }
+  .mnb-hint svg { width: 18px; height: 18px; flex: none; }
+  .mnb-ovt { display: flex; align-items: center; gap: 12px; }
+  .mnb-nb { display: inline-flex; align-items: center; gap: 6px; justify-content: center; }
+  .mnb-nb svg { width: 14px; height: 14px; flex: none; }
+  .mnb-lbl { display: inline-flex; align-items: center; gap: 6px; }
+  .mnb-lbl svg { width: 14px; height: 14px; flex: none; opacity: .9; }
+  .mnb-editar { display: inline-flex; align-items: center; gap: 8px; }
+  .mnb-editar svg { width: 18px; height: 18px; flex: none; }
+  .mnb-empty { margin: 24px 0; }
+  .mnb-req { color: var(--md-error); }
+
+  @media (max-width: 900px) { .mnb-head { align-items: flex-start; } }
+</style>
+<div class="mapa tl-nb mnb-skin"
+     data-transferir-url="{% url 'parque_transferir_notebook' %}"
+     data-atribuir-url="{% url 'parque_atribuir_notebook' %}"
+     data-remover-url="{% url 'parque_remover_notebook_colaborador' %}"
+     data-pode-mover="{% if pode_mover %}1{% else %}0{% endif %}">
+
+  <header class="mkpro-head mnb-head">
+    <div class="mnb-head__id">
+      <p class="mkpro-head__eyebrow">Parque de máquinas · Notebooks</p>
+      <h1 class="mkpro-head__title">{{ titulo }}</h1>
+      <p class="mkpro-head__sub mnb-sub">
+        {% if total %}<span class="mkpro-tabular">{{ total }} notebooks</span>{% endif %}
+        <span>Arraste para enviar a outra loja ou atribuir a um colaborador</span>
+      </p>
+    </div>
+    <div class="mkpro-head__actions">
+      <a data-mk-voltar class="mapa__voltar" href="{{ voltar_url }}">← {{ voltar_nome }}</a>
+      <div class="mapa__view">
+        <span class="mapa__view-btn is-active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg> Mapa</span>
+        <a class="mapa__view-btn" href="/parque/tabela-notebooks/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18"/></svg> Tabela</a>
+      </div>
+      {% if marca_filtro %}
+        <a class="mapa__estoque" href="{% url 'parque_mapa_notebooks' %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg> Ver todas as marcas</a>
+      {% endif %}
+    </div>
+  </header>
+
+  <div class="mnb-fbar">
+    {% include "parque/_filtros.html" with uni_lbl="Unidade" setor_lbl="Setor" %}
+    {% include "parque/_mapa_cargo.html" %}
+    {% include "parque/_mapa_busca.html" %}
+  </div>
+
+  {% include "parque/_parque_resumo.html" %}
+
+  <div class="mnb-leg">
+    <span class="mnb-leg__lbl">Situação</span>
+    <span class="mnb-leg__i mnb-leg__i--ativo">Ativo</span>
+    <span class="mnb-leg__i mnb-leg__i--defeito">Com defeito</span>
+    <span class="mnb-leg__i mnb-leg__i--obsoleto">Obsoleto</span>
+  </div>
+
+  <div class="mapa__planta" id="mapa-planta">
+    {% for grupo in unidades_estrut %}
+      <div class="mapa-unidade" data-unidade="{{ grupo.unidade }}">
+        <h2 class="mapa-unidade__titulo"><svg class="mapa-uni-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 9.5 2-5.5h15l2 5.5"/><path d="M4 9.5V20h16V9.5"/><path d="M9.5 20v-6h5v6"/></svg> {{ grupo.unidade }}
+          <span class="mapa-setor__qtd mkpro-tabular">{{ grupo.total }}</span>
+          <a class="mapa-setor__add" href="/admin/parque/notebook/add/" title="Cadastrar novo notebook">＋ Notebook</a>
+        </h2>
+        <div class="mapa-unidade__setores">
+          {% for s in grupo.setores %}
+          <section class="mapa-setor">
+            <header class="mapa-setor__titulo">{{ s.setor }}
+              <span class="mapa-setor__qtd mkpro-tabular">{{ s.total }}</span>
+            </header>
+            <div class="nb-grid">
+              {% for n in s.notebooks %}
+            <div class="nb-card nb--{{ n.status }} nb-cl-{{ n.classe_desempenho|slugify }}" draggable="true" role="button" tabindex="0"
+               data-notebook="{{ n.pk }}"
+               data-desempenho="{{ n.indice_desempenho|default_if_none:'' }}"
+               data-classe="{{ n.classe_desempenho }}"
+               data-tel="{{ n.telemetria_status }}"
+               data-cargo="{{ n.colaborador.job_title|default:'' }}"
+               data-nome="{{ n.marca }} {{ n.modelo }}"
+               data-user="{{ n.usuario|default:'' }}"
+               data-marca="{{ n.marca|default:'' }}"
+               data-modelo="{{ n.modelo|default:'' }}"
+               data-serial="{{ n.serial|default:'' }}"
+               data-patrimonio="{{ n.patrimonio|default:'' }}"
+               data-etiqueta="{% url 'parque_etiquetas' %}?nb_ids={{ n.pk }}"
+               data-status="{{ n.get_status_display }}"
+               data-statusclass="{{ n.status }}"
+               data-unidade="{{ n.unidade_setor|default:'' }}"
+               data-cpu="{{ n.cpu_efetivo|default:'' }}"
+               data-ram="{{ n.ram_efetivo|default:'' }}"
+               data-disco="{{ n.disco_efetivo|default:'' }}"
+               data-so="{{ n.so_efetivo|default:'' }}"
+               data-placa="{{ n.placa_mae|default:'' }}"
+               data-gpu="{{ n.tel_gpu|default:'' }}"
+               data-uptime="{% if n.tel_uptime_seg %}{{ n.tel_uptime_humano }}{% endif %}"
+               data-local="{{ n.tel_local|default:'' }}"
+               data-conta="{{ n.conta|default:'' }}"
+               data-anydesk="{{ n.anydesk|default:'' }}"
+               data-edit="{% url 'admin:parque_notebook_change' n.pk %}"
+               data-diag='{{ n.diagnostico_json|safe }}'
+               title="{{ n.usuario|default:n.marca }} · {{ n.get_status_display }}{% if n.serial %} · Série {{ n.serial }}{% endif %} — clique para ver, arraste para transferir/atribuir">
+              <div class="baia__top">
+                <span class="baia__icone"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg></span>
+                <span class="baia__tel baia__tel--{{ n.telemetria_status }}"
+                      title="Telemetria: {% if n.telemetria_status == 'ativo' %}ativa (coleta recente){% elif n.telemetria_status == 'inativo' %}parada (sem coleta recente){% else %}sem agente instalado{% endif %}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><circle cx="12" cy="12" r="2"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 19.1a10 10 0 0 1 0-14.2M19.1 4.9a10 10 0 0 1 0 14.2"/></svg></span>
+                {% if n.indice_desempenho is not None %}
+                  <span class="baia__score mkpro-tabular" title="Desempenho {{ n.indice_desempenho }} — {{ n.classe_desempenho }}">{{ n.indice_desempenho }}</span>
+                {% endif %}
+              </div>
+              {% comment %}Identificação primeiro (equipamento + pessoa), specs depois.{% endcomment %}
+              <div class="baia__nome">{{ n.marca }} {{ n.modelo }}</div>
+              {% if n.usuario %}<div class="baia__ocupante">{{ n.usuario }}</div>{% endif %}
+              {% if n.resumo_specs != '—' %}<div class="baia__specs">{{ n.resumo_specs }}</div>{% endif %}
+              <div class="baia__perifs" aria-label="Periféricos">
+                <span class="baia__perif is-sim" title="Mouse"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 6v4"/></svg></span>
+                <span class="baia__perif is-sim" title="Headset"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><path d="M4 17v-5a8 8 0 0 1 16 0v5"/><path d="M4 15h3v6H5a1 1 0 0 1-1-1zM20 15h-3v6h2a1 1 0 0 0 1-1z"/></svg></span>
+              </div>
+              <span class="nb-badge nb-badge--{{ n.status }}">{{ n.get_status_display }}</span>
+            </div>
+              {% endfor %}
+              {% for p in s.vazios %}
+            <div class="nb-card nb-card--vazio" data-tipo="sem_pc"
+                 data-cargo="{{ p.job_title|default:'' }}"
+                 title="{{ p.full_name }} — sem notebook">
+              <div class="baia__top">
+                <span class="baia__icone"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+              </div>
+              <div class="baia__nome">{{ p.full_name }}</div>
+              <div class="baia__ocupante">Sem notebook</div>
+            </div>
+              {% endfor %}
+            </div>
+          </section>
+          {% endfor %}
+        </div>
+      </div>
+    {% empty %}
+      <div class="mkpro-empty mnb-empty">
+        <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg></span>
+        <p class="mkpro-empty__title">Nenhum notebook cadastrado</p>
+        <p class="mkpro-empty__hint">Cadastre um notebook para vê-lo aqui e poder atribuí-lo a um colaborador ou transferi-lo entre lojas.</p>
+        <a class="mapa-setor__add" href="/admin/parque/notebook/add/">＋ Cadastrar notebook</a>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+{# ---------- Docks (zonas de drop): caminhão + colaborador ---------- #}
+<div class="nb-docks" id="nb-docks" aria-hidden="true">
+  <div class="truck-dock truck-dock--inline" id="truck-dock-nb">
+    <div class="truck-dock__hint mnb-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h3"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg> Enviar p/ outra loja</div>
+    <svg class="truck-dock__svg" viewBox="0 0 220 110" aria-hidden="true">
+      <rect class="tr-body" x="8" y="34" width="120" height="54" rx="6"/>
+      <rect class="tr-cab" x="128" y="48" width="56" height="40" rx="6"/>
+      <rect class="tr-window" x="150" y="54" width="28" height="20" rx="3"/>
+      <rect class="tr-bumper" x="184" y="80" width="14" height="10" rx="3"/>
+      <circle class="tr-wheel" cx="44" cy="92" r="13"/>
+      <circle class="tr-wheel" cx="150" cy="92" r="13"/>
+      <circle class="tr-hub" cx="44" cy="92" r="5"/>
+      <circle class="tr-hub" cx="150" cy="92" r="5"/>
+    </svg>
+  </div>
+  <div class="dock-colab" id="dock-colab">
+    <div class="truck-dock__hint mnb-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Atribuir a colaborador</div>
+    <div class="dock-colab__av av--neutral">{% include "parque/_avatar.html" %}</div>
+  </div>
+</div>
+
+{# ---------- Overlay: escolher a loja de DESTINO ---------- #}
+<div class="tl-overlay" id="dest-units-nb" aria-hidden="true">
+  <div class="tl-overlay__card tl-overlay__card--wide">
+    <button type="button" class="tl-overlay__close" data-close-dest-nb>×</button>
+    <h2 class="tl-overlay__title mnb-ovt"><span class="mkpro-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg></span>Para qual loja vai o notebook?</h2>
+    <div class="tl-units">
+      {% for u in destinos %}
+        <button type="button" class="tl-unit" data-unidade="{{ u.id }}" data-unidade-nome="{{ u.name }}">
+          <span class="tl-unit__icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 9.5 2-5.5h15l2 5.5"/><path d="M4 9.5V20h16V9.5"/><path d="M9.5 20v-6h5v6"/></svg></span>
+          <span class="tl-unit__txt">
+            <span class="tl-unit__nome">{{ u.name }}</span>
+            {% if u.city %}<span class="tl-unit__cidade">{{ u.city }}</span>{% endif %}
+          </span>
+          <svg class="tl-unit__seta" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{# ---------- Overlay: carrossel de colaboradores ---------- #}
+<div class="tl-overlay" id="colab-carrossel" aria-hidden="true">
+  <div class="tl-overlay__card tl-overlay__card--wide">
+    <button type="button" class="tl-overlay__close" data-close-colab>×</button>
+    <h2 class="tl-overlay__title mnb-ovt"><span class="mkpro-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span>Atribuir <span id="colab-nb-nome"></span> a um colaborador</span></h2>
+    <p class="tl-overlay__sub">Clique num colaborador <b>sem notebook</b> (rosto neutro) para entregar o equipamento. Quem já tem fica <b>sorrindo</b> segurando o notebook.</p>
+    <input type="text" id="colab-busca" class="tl-input" placeholder="Buscar colaborador…" autocomplete="off">
+    <div class="colab-track" id="colab-track">
+      {% for c in colaboradores %}
+        <div class="colab-card {% if c.sexo == 'F' %}av--f{% endif %} {% if c.tem_notebook %}av--smile av--has-nb is-ocupado{% else %}av--neutral is-livre{% endif %}"
+             data-colab="{{ c.id }}"
+             data-nome="{{ c.nome }}"
+             data-tem="{% if c.tem_notebook %}1{% else %}0{% endif %}"
+             data-notebook-id="{{ c.notebook_id }}"
+             data-busca="{{ c.nome|lower }} {{ c.cargo|lower }} {{ c.unidade|lower }}">
+          <div class="colab-card__av">{% include "parque/_avatar.html" %}</div>
+          <span class="colab-card__nome">{{ c.nome }}</span>
+          {% if c.cargo %}<span class="colab-card__cargo">{{ c.cargo }}</span>{% endif %}
+          {% if c.tem_notebook %}
+            <span class="colab-card__nb mnb-nb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg>{{ c.notebook_nome|default:"Notebook" }}</span>
+            <button type="button" class="colab-card__remover mnb-nb" data-remover="{{ c.notebook_id }}" data-nome="{{ c.nome }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>Retirar</button>
+          {% else %}
+            <span class="colab-card__tag">Disponível</span>
+          {% endif %}
+        </div>
+      {% empty %}
+        <div class="mkpro-empty mkpro-empty--slim">
+          <span class="mkpro-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <p class="mkpro-empty__title">Nenhum colaborador cadastrado</p>
+          <p class="mkpro-empty__hint">Cadastre as pessoas da loja para poder entregar um notebook a cada uma.</p>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{# ---------- Modal de confirmação (envio a outra loja) ---------- #}
+<div class="mov-modal" id="tl-confirm-nb" aria-hidden="true">
+  <div class="mov-modal__card">
+    <h3 class="mov-modal__title">Confirmar transferência</h3>
+    <p class="mov-modal__msg" id="tl-confirm-msg-nb"></p>
+    <label class="tl-campo">Colaborador no destino <small>(opcional)</small>
+      <select id="tl-user-dest-nb" class="tl-input">
+        <option value="">— Ninguém / manter —</option>
+        {% for c in colaboradores %}
+          <option value="{{ c.nome }}">{{ c.nome }}{% if c.cargo %} · {{ c.cargo }}{% endif %}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="tl-campo">Código da tarefa do Bitrix <b class="mnb-req">*</b>
+      <input type="text" id="tl-bitrix-nb" class="tl-input" placeholder="ex.: 12345" autocomplete="off" maxlength="40" inputmode="numeric">
+    </label>
+    <div class="mov-modal__acoes">
+      <button type="button" class="mov-btn mov-btn--cancel" id="tl-cancel-nb">Cancelar</button>
+      <button type="button" class="mov-btn mov-btn--ok" id="tl-ok-nb">Confirmar transferência</button>
+    </div>
+  </div>
+</div>
+
+{# ---------- Zoom do notebook (laptop abrindo a tela) ---------- #}
+{% comment %}
+O PAINEL DA MÁQUINA É O MESMO DOS COMPUTADORES.
+
+Aqui existia um popup próprio (`#nb-zoom`), com animação de tampa de laptop e
+uma ficha paralela. Resultado: clicar num computador no mapa da loja abria uma
+coisa, clicar num notebook abria outra — dois desenhos e dois códigos para a
+mesma pergunta. O dono viu e foi direto ao ponto: "os notebooks ainda estão com
+a animação de zoom, ao invés do modelo novo".
+
+Agora o mapa de notebooks inclui o mesmo `_zoom.html` do mapa da loja, e o
+`initNotebookZoom()` do make-admin.js apenas TRADUZ os dados do cartão de
+notebook para os nomes que o painel espera, chamando o mesmo `abrir()`. As
+linhas que só o notebook tem (nº de série, unidade/setor, conta, AnyDesk) e a
+ação "Gerar termo" moram no painel, escondidas, e aparecem quando há o dado.
+{% endcomment %}
+{% include "parque/_zoom.html" %}
+{% endblock %}

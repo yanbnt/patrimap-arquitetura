@@ -1,0 +1,15 @@
+{% comment %}
+Override do unfold: o badge da navegação só aparece quando o CALLBACK retorna um
+número > 0. O template original checava {% if item.badge %} (o caminho da função,
+sempre truthy) e item.badge_callback é um objeto LAZY (também sempre truthy num
+{% if %}) — por isso aparecia "NONE" quando o callback retornava None/0.
+Aqui resolvemos o callback para TEXTO e comparamos a string.
+{% endcomment %}
+{% with cb=item.badge_callback|stringformat:"s" %}
+    {% if cb and cb != "None" and cb != "0" %}
+        {% include "unfold/helpers/_make_badge_span.html" with conteudo=cb %}
+    {% elif item.badge and cb == "" %}
+        {# Badge estático (valor literal, sem callback). #}
+        {% include "unfold/helpers/_make_badge_span.html" with conteudo=item.badge %}
+    {% endif %}
+{% endwith %}

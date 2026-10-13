@@ -1,0 +1,108 @@
+{% comment %}
+NOVO SETOR — popup, não tela.
+
+Pedido do dono: "adicionar setor pode ser abrir um popup. Nada de abrir uma
+tela só com esses 2 elementos". Antes, o "+ Setor" levava ao formulário do
+admin: trocava de tela, perdia a loja que ele estava olhando e exigia voltar.
+
+Usa `<dialog>` nativo: `showModal()` já dá véu, foco preso, Esc para fechar e
+retorno do foco ao botão — nada disso precisa de JS nosso. Quem grava é
+`setor_criar()` (apps/parque/views.py), e o `next` devolve para esta tela.
+
+O JS que abre está no `initSetorPopup()` do make-admin.js: ele intercepta os
+links que apontavam para o admin, então o popup vale nas quatro entradas
+("Novo setor", "+ Setor", "Adicionar setor" e o primeiro setor da loja vazia)
+sem repetir markup em cada uma.
+{% endcomment %}
+<style>
+  .stn::backdrop {
+    background: color-mix(in srgb, #000 46%, transparent);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+  }
+  .stn {
+    width: min(420px, calc(100vw - 32px));
+    padding: 0;
+    border: 0;
+    border-radius: var(--md-shape-lg);
+    background: var(--md-surface-container-high);
+    color: var(--md-on-surface);
+    box-shadow: 0 18px 48px -8px rgba(0, 0, 0, .42), 0 4px 12px rgba(0, 0, 0, .22);
+  }
+  .stn__cab { display: flex; align-items: flex-start; gap: 10px; padding: 16px 18px 6px; }
+  .stn__ic {
+    display: grid; place-items: center; flex: none;
+    width: 36px; height: 36px; border-radius: var(--md-shape-md);
+    background: var(--md-primary-container); color: var(--md-on-primary-container);
+  }
+  .stn__ic svg { width: 19px; height: 19px; }
+  .stn__t { margin: 0; font: 600 16px/22px var(--md-font); }
+  .stn__s { margin: 2px 0 0; font: 400 12.5px/17px var(--md-font); color: var(--md-on-surface-variant); }
+  .stn__x {
+    margin-left: auto; width: 32px; height: 32px; flex: none;
+    display: grid; place-items: center; border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-on-surface-variant); cursor: pointer; font-size: 17px;
+  }
+  .stn__x:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+  .stn__corpo { display: grid; gap: 12px; padding: 10px 18px 4px; }
+  .stn__campo { display: grid; gap: 5px; }
+  .stn__campo label { font: 500 12px/16px var(--md-font); color: var(--md-on-surface-variant); }
+  .stn__campo label b { color: var(--md-error); font-weight: 500; }
+  .stn__pe {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 14px; padding: 12px 18px;
+    border-top: 1px solid var(--md-outline-variant);
+  }
+  .stn__cancelar {
+    border: 0; background: transparent; color: var(--md-primary);
+    font: 500 13px/1 var(--md-font); padding: 10px 12px;
+    border-radius: var(--md-shape-full); cursor: pointer;
+  }
+  .stn__cancelar:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .stn__ok {
+    margin-left: auto; border: 0; cursor: pointer;
+    min-height: 40px; padding: 0 22px; border-radius: var(--md-shape-full);
+    background: var(--md-action); color: var(--md-on-action);
+    font: 600 13px/1 var(--md-font);
+  }
+  .stn__ok:hover { background: var(--md-action-hover); }
+</style>
+
+<dialog class="stn" id="stn-dlg" aria-labelledby="stn-titulo">
+  <form method="post" action="{% url 'parque_setor_criar' %}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+
+    <div class="stn__cab">
+      <span class="stn__ic" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      </span>
+      <div>
+        <h2 class="stn__t" id="stn-titulo">Novo setor</h2>
+        <p class="stn__s">O setor é a área do mapa da loja — Estoque, Financeiro, TI.</p>
+      </div>
+      <button type="button" class="stn__x" data-stn-fechar aria-label="Fechar">×</button>
+    </div>
+
+    <div class="stn__corpo">
+      <div class="stn__campo">
+        <label for="stn-unidade">Unidade <b>*</b></label>
+        <select id="stn-unidade" name="unidade" required>
+          {% for u in stn_unidades %}
+            <option value="{{ u.id }}">{{ u.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="stn__campo">
+        <label for="stn-nome">Nome do setor <b>*</b></label>
+        <input type="text" id="stn-nome" name="nome" required maxlength="80"
+               placeholder="Ex.: Estoque, Financeiro, TI" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="stn__pe">
+      <button type="button" class="stn__cancelar" data-stn-fechar>Cancelar</button>
+      <button type="submit" class="stn__ok">Criar setor</button>
+    </div>
+  </form>
+</dialog>

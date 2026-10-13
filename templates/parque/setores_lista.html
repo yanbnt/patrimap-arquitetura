@@ -1,0 +1,191 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  /* ==========================================================================
+     setores_lista.html — prefixo .stl-  ·  Material Design 3
+     Estrutura da rede: cada unidade é uma SEÇÃO em superfície tonal (título +
+     contagem em chip) e cada setor é um CARTÃO FILLED, um tom acima da seção —
+     hover sobe outro tom. Saíram: a moldura da seção e dos cartões, a faixa
+     cinza + linha do cabeçalho da seção, o peso 700 e os verdes em rgba solta.
+     ========================================================================== */
+
+  .stl-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+  .stl-head__id { flex: 1 1 340px; min-width: 0; display: grid; gap: 4px; }
+  /* Outlined button do M3. */
+  .mapa__voltar {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 40px; padding: 0 24px; box-sizing: border-box;
+    border: 1px solid var(--md-outline) !important; border-radius: var(--md-shape-full) !important;
+    background: transparent !important; color: var(--md-primary) !important;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    text-decoration: none; white-space: nowrap; box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .mapa__voltar:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important; color: var(--md-primary) !important; }
+  /* A ÚNICA ação filled da tela: primary + on-primary. */
+  .set-nova-uni {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 40px; padding: 0 24px; box-sizing: border-box;
+    border: 0; border-radius: var(--md-shape-full) !important;
+    background: var(--md-primary) !important; color: var(--md-on-primary) !important;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    text-decoration: none; white-space: nowrap; box-shadow: none !important; transform: none !important;
+  }
+  .set-nova-uni:hover { background: var(--md-primary) !important; }
+  .stl-nova svg { width: 18px; height: 18px; flex: none; }
+
+  /* Barra de filtro: sem card e sem linha divisória */
+  .stl-fbar { margin: 0 0 24px; padding: 0; border: 0; }
+
+  /* Seções por unidade: superfície tonal, sem borda e sem cabeçalho pintado. */
+  .set-lista { display: flex; flex-direction: column; gap: 24px; }
+  .set-grupo {
+    background: var(--md-surface-container-lowest) !important; border: 0 !important;
+    border-radius: var(--md-shape-lg) !important; box-shadow: none !important; overflow: hidden;
+  }
+  .set-grupo__head {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 16px 16px 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+  }
+  .set-grupo__nome {
+    margin: 0; display: inline-flex; align-items: center; gap: 12px;
+    font: 500 16px/24px var(--md-font) !important; letter-spacing: .15px !important;
+    color: var(--md-on-surface) !important;
+  }
+  .set-grupo__ico { color: var(--md-on-surface-variant) !important; display: inline-grid; place-items: center; }
+  .stl-ico svg { width: 24px; height: 24px; }
+  .set-grupo__qtd {
+    margin-left: auto; height: 24px; padding: 0 8px;
+    display: inline-flex; align-items: center; border-radius: var(--md-shape-sm);
+    background: var(--md-surface-container-high) !important; color: var(--md-on-surface-variant) !important;
+    font: 500 11px/16px var(--md-font) !important; letter-spacing: .5px !important;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .set-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; padding: 16px !important; }
+  /* Cartão filled: sem borda, sem sombra; hover sobe um tom. */
+  .set-card {
+    display: flex; align-items: center; gap: 16px; padding: 12px;
+    background: var(--md-surface-container-low) !important; border: 0 !important;
+    border-radius: var(--md-shape-md) !important; box-shadow: none !important; text-decoration: none;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .set-card:hover {
+    transform: none !important; box-shadow: none !important;
+    background: var(--md-surface-container) !important;
+  }
+  /* Ícone do setor: contêiner primário tonal (o "chip" do M3). */
+  .set-card__icone {
+    width: 40px !important; height: 40px !important; border-radius: var(--md-shape-full);
+    background: var(--md-primary-container) !important; color: var(--md-on-primary-container) !important;
+  }
+  .stl-card-ico svg { width: 20px; height: 20px; }
+  .set-card__nome { font: 500 14px/20px var(--md-font) !important; letter-spacing: .1px !important; color: var(--md-on-surface) !important; }
+  .set-card__baias {
+    font: 400 12px/16px var(--md-font) !important; letter-spacing: .4px !important;
+    color: var(--md-on-surface-variant) !important; font-variant-numeric: tabular-nums;
+  }
+  /* Lápis: icon button de 40px com state layer. */
+  .set-card__edit {
+    display: grid; place-items: center; width: 40px; height: 40px; flex: none;
+    border-radius: var(--md-shape-full); color: var(--md-on-surface-variant) !important;
+  }
+  .set-card__edit svg { width: 18px; height: 18px; }
+  .set-card__edit:hover {
+    color: var(--md-on-surface) !important;
+    background: color-mix(in srgb, var(--md-on-surface) 8%, transparent) !important;
+  }
+  /* "Adicionar setor" é um alvo de ação: contorno tracejado fino, sem degradê. */
+  .set-card--add {
+    border: 1px dashed var(--md-outline-variant) !important;
+    background: transparent !important; justify-content: center;
+  }
+  .set-card--add:hover {
+    border-color: var(--md-primary) !important;
+    background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important;
+  }
+  .set-card--add__mais { color: var(--md-on-surface-variant); font-size: 20px; font-weight: 300; line-height: 1; margin-right: 8px; }
+  .set-card--add:hover .set-card--add__mais, .set-card--add:hover .set-card__nome { color: var(--md-primary) !important; }
+
+  .stl-empty { margin: 8px 0 0; }
+
+  @media (max-width: 900px) { .stl-head { align-items: flex-start; } }
+</style>
+
+<header class="mkpro-head stl-head">
+  <div class="stl-head__id">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · Estrutura</p>
+    <h1 class="mkpro-head__title">Unidades e setores</h1>
+    <p class="mkpro-head__sub"><span class="mkpro-tabular">{{ total }}</span> setores · cada setor vira uma área do mapa da loja. Clique num setor para abrir o mapa da unidade.</p>
+  </div>
+  <div class="mkpro-head__actions">
+    <a data-mk-voltar class="mapa__voltar" href="{{ voltar_url }}">← {{ voltar_nome }}</a>
+    {% if pode_add_unidade %}
+      <a class="set-nova-uni stl-nova" href="{% url 'admin:orgs_location_add' %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Nova unidade</a>
+    {% endif %}
+  </div>
+</header>
+
+<div class="mapa stl-skin">
+  <div class="stl-fbar">
+    {% include "parque/_filtros.html" with uni_lbl="Unidade" %}
+  </div>
+
+  <div class="set-lista">
+    {% for g in grupos %}
+      <section class="set-grupo">
+        <header class="set-grupo__head">
+          <h2 class="set-grupo__nome"><span class="set-grupo__ico stl-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2.5 9.5 2-5.5h15l2 5.5"/><path d="M4 9.5V20h16V9.5"/><path d="M9.5 20v-6h5v6"/></svg></span> {{ g.unidade.name }}</h2>
+          <span class="set-grupo__qtd mkpro-tabular">{{ g.setores|length }} setor{{ g.setores|length|pluralize:"es" }}</span>
+        </header>
+        <div class="set-grid">
+          {% for s in g.setores %}
+            <a class="set-card" href="/parque/mapa/{{ g.unidade.id }}/" title="Ver o mapa de {{ g.unidade.name }}">
+              {% comment %}O ícone do setor vem da view (`s.icone`, nome de Material Symbol).
+              Aqui ele é traduzido para o SVG de linha equivalente — sem Material Symbols na
+              parte custom (DESIGN-SYSTEM §6). Qualquer nome novo cai no ícone padrão (sala).{% endcomment %}
+              <span class="set-card__icone stl-card-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{% if s.icone == 'point_of_sale' %}<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M7 8V5h10v3M7.5 13h9M7.5 16.5h5"/>{% elif s.icone == 'insights' %}<path d="m3 17 6-6 4 4 8-8"/><path d="M15 7h6v6"/>{% elif s.icone == 'handshake' or s.icone == 'groups' or s.icone == 'co_present' %}<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>{% elif s.icone == 'payments' %}<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>{% elif s.icone == 'receipt_long' %}<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/>{% elif s.icone == 'local_shipping' %}<path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5v8h3"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>{% elif s.icone == 'support_agent' or s.icone == 'headset_mic' %}<path d="M4 17v-5a8 8 0 0 1 16 0v5"/><path d="M4 15h3v6H5a1 1 0 0 1-1-1zM20 15h-3v6h2a1 1 0 0 0 1-1z"/>{% elif s.icone == 'assignment_return' %}<path d="M9 15 4 10l5-5"/><path d="M4 10h11a5 5 0 0 1 0 10h-4"/>{% elif s.icone == 'school' %}<path d="M22 9 12 4 2 9l10 5z"/><path d="M6 11.5V17c0 1.7 2.7 3 6 3s6-1.3 6-3v-5.5"/>{% elif s.icone == 'marketing' or s.icone == 'campaign' %}<path d="m3 11 15-6v14L3 13z"/><path d="M7 13.5V19a2 2 0 0 0 4 0v-4"/>{% elif s.icone == 'corporate_fare' %}<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 7h.01M15 7h.01M9 11h.01M15 11h.01M9 15h.01M15 15h.01"/>{% elif s.icone == 'inventory_2' %}<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>{% elif s.icone == 'shopping_cart' %}<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h2.5l2.4 11.2A2 2 0 0 0 8.9 16h9.2a2 2 0 0 0 2-1.6L21.5 7H5.2"/>{% elif s.icone == 'dns' %}<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>{% else %}<path d="M5 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17"/><path d="M3 21h18M12.5 12h.01"/>{% endif %}</svg></span>
+              <span class="set-card__txt">
+                <span class="set-card__nome">{{ s.nome }}</span>
+                <span class="set-card__baias mkpro-tabular">{{ s.n_baias }} baia{{ s.n_baias|pluralize }}</span>
+              </span>
+              {% if pode_add %}
+                <span class="set-card__edit stl-edit"
+                      data-edit="{% url 'admin:parque_setor_change' s.pk %}" title="Editar setor" aria-label="Editar setor {{ s.nome }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>
+              {% endif %}
+            </a>
+          {% endfor %}
+          {% if pode_add %}
+            <a class="set-card set-card--add" href="{% url 'admin:parque_setor_add' %}?unidade={{ g.unidade.id }}">
+              <span class="set-card--add__mais">＋</span>
+              <span class="set-card__nome">Adicionar setor</span>
+            </a>
+          {% endif %}
+        </div>
+      </section>
+    {% empty %}
+      <div class="mkpro-empty stl-empty">
+        <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17"/><path d="M3 21h18M12.5 12h.01"/></svg></span>
+        <p class="mkpro-empty__title">Nenhum setor cadastrado</p>
+        <p class="mkpro-empty__hint">Crie a unidade primeiro e depois os setores dela — é o setor que define as áreas do mapa da loja.</p>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+// O lápis edita o setor (admin) sem disparar o link do card (que vai pro mapa).
+document.querySelectorAll(".set-card__edit[data-edit]").forEach(function (el) {
+  el.addEventListener("click", function (e) {
+    e.preventDefault(); e.stopPropagation();
+    window.location.href = el.getAttribute("data-edit");
+  });
+});
+</script>
+{% include "parque/_setor_novo.html" %}
+
+{% endblock %}

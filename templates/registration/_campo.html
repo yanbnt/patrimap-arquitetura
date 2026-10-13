@@ -1,0 +1,25 @@
+{% comment %}
+Campo de formulário das telas de autenticação: rótulo + input + erro + ajuda.
+Uso: include desta partial passando `with field=form.<campo>`.
+{% endcomment %}
+<div class="mkauth__field{% if field.errors %} mkauth__field--erro{% endif %}">
+  <label class="mkauth__label" for="{{ field.id_for_label }}">
+    {{ field.label }}{% if field.field.required %} <span class="mkauth__req" aria-hidden="true">*</span>{% endif %}
+  </label>
+
+  {{ field }}
+
+  {% for erro in field.errors %}
+    <p class="mkauth__err" role="alert">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
+      </svg>
+      <span>{{ erro }}</span>
+    </p>
+  {% endfor %}
+
+  {% if field.help_text %}
+    <div class="mkauth__help">{{ field.help_text|safe }}</div>
+  {% endif %}
+</div>

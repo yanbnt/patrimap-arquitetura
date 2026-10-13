@@ -1,0 +1,2 @@
+# Scripts de shell (agente Linux) SEMPRE com LF — CRLF quebra no Linux.
+*.sh text eol=lf

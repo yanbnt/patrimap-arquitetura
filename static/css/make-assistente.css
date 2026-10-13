@@ -1,0 +1,978 @@
+/* =============================================================================
+   make-assistente.css — widget do assistente de ajuda.
+   Segue os tokens do DESIGN-SYSTEM.md (--ui-*), definidos em make-ui.css.
+   ========================================================================== */
+
+#mkasst {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 9000;
+  font-family: var(--ui-font, 'Figtree', system-ui, sans-serif);
+}
+
+/* ---------------------------------------------------------------- gatilho */
+
+.mkasst__abrir {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--md-shape-lg, 16px);
+  background: var(--md-primary-container, #8df8b0);
+  color: var(--md-on-primary-container, #002110);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  box-shadow: var(--md-elev-3, 0 4px 8px 3px rgba(0,0,0,.15));
+  transition: background .15s cubic-bezier(.2,0,0,1), transform .1s;
+}
+.mkasst__abrir:hover {
+  background: color-mix(in srgb, var(--md-on-primary-container) 8%, var(--md-primary-container));
+}
+.mkasst__abrir:active { transform: translateY(1px); }
+.mkasst__abrir svg { color: currentColor; }
+#mkasst.mkasst--aberto .mkasst__abrir { opacity: 0; pointer-events: none; }
+
+/* ----------------------------------------------------------------- painel */
+
+.mkasst__painel {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: min(400px, calc(100vw - 32px));
+  max-height: min(620px, calc(100vh - 40px));
+  display: flex;
+  flex-direction: column;
+  background: var(--md-surface-container-high, #e3eae2);
+  border: 0;
+  border-radius: var(--md-shape-xl, 28px);
+  box-shadow: var(--md-elev-3, 0 4px 8px 3px rgba(0,0,0,.15));
+  overflow: hidden;
+}
+.mkasst__painel[hidden] { display: none; }
+
+.mkasst__topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 20px 12px;
+  background: transparent;
+  color: var(--md-on-surface, #171d19);
+}
+.mkasst__marca { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.mkasst__marca svg { color: var(--md-primary, #00713a); }
+.mkasst__x {
+  background: none;
+  border: 0;
+  color: var(--md-on-surface-variant, #404942);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+}
+.mkasst__x:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
+
+/* ------------------------------------------------------------------ busca */
+
+.mkasst__busca {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ui-line, rgba(14, 38, 25, .1));
+  color: var(--ui-faint, #93a89c);
+}
+.mkasst__campo {
+  flex: 1;
+  min-width: 0;
+  border: 0 !important;
+  background: transparent !important;
+  outline: none;
+  font-family: inherit;
+  font-size: 14px !important;
+  color: var(--ui-ink, #101c15) !important;
+  min-height: 0 !important;
+  box-shadow: none !important;
+  padding: 4px 0 !important;
+}
+.mkasst__campo::-webkit-search-cancel-button { cursor: pointer; }
+
+/* ------------------------------------------------------------------ corpo */
+
+.mkasst__corpo {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ui-ink-2, #40534a);
+}
+.mkasst__corpo[data-carregando] { opacity: .55; }
+
+.mkasst__dica {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ui-muted, #64786d);
+}
+.mkasst__sug { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.mkasst__sug button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+  padding: 9px 11px;
+  border: 1px solid var(--ui-line, rgba(14, 38, 25, .1));
+  border-radius: 9px;
+  background: var(--ui-surface-2, #f7faf8);
+  color: var(--ui-ink, #101c15);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.mkasst__sug button:hover {
+  border-color: var(--ui-grn, #00a651);
+  background: var(--ui-surface, #fff);
+}
+.mkasst__sug svg { color: var(--ui-grn-700, #067a38); flex: none; }
+
+.mkasst__resp { margin-bottom: 14px; }
+.mkasst__secao {
+  margin: 0 0 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ui-grn-700, #067a38);
+}
+.mkasst__resp h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--ui-ink, #101c15);
+  text-wrap: balance;
+}
+.mkasst__passos {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  counter-reset: passo;
+  display: grid;
+  gap: 9px;
+}
+.mkasst__passos li {
+  counter-increment: passo;
+  display: grid;
+  grid-template-columns: 21px 1fr;
+  gap: 9px;
+  align-items: start;
+}
+.mkasst__passos li::before {
+  content: counter(passo);
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 166, 81, .13);
+  color: var(--ui-grn-700, #067a38);
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.mkasst__passos strong { color: var(--ui-ink, #101c15); font-weight: 700; }
+
+.mkasst__ir {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 9px;
+  background: var(--ui-grn, #00a651);
+  color: #fff !important;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.mkasst__ir:hover { background: var(--ui-grn-600, #00913f); }
+.mkasst__mais {
+  display: block;
+  margin-top: 9px;
+  font-size: 12px;
+  color: var(--ui-grn-700, #067a38);
+  text-decoration: none;
+  font-weight: 600;
+}
+.mkasst__mais:hover { text-decoration: underline; }
+
+.mkasst__vazio {
+  padding: 12px;
+  border: 1px dashed var(--ui-line-2, rgba(14, 38, 25, .16));
+  border-radius: 11px;
+  background: var(--ui-surface-2, #f7faf8);
+  margin-bottom: 14px;
+}
+.mkasst__vazio p { margin: 0 0 6px; }
+.mkasst__vazio p:last-child { margin: 0; }
+
+/* ----------------------------------------------------------------- rodapé */
+
+.mkasst__rodape {
+  padding: 10px 14px;
+  border-top: 1px solid var(--ui-line, rgba(14, 38, 25, .1));
+  background: var(--ui-surface-2, #f7faf8);
+}
+.mkasst__rodape a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-muted, #64786d);
+  text-decoration: none;
+}
+.mkasst__rodape a:hover { color: var(--ui-grn-700, #067a38); }
+
+/* ------------------------------------------------------------ responsivo */
+
+@media (max-width: 560px) {
+  /* NÃO esticar o widget na largura da tela.
+     Com `left: 12px` o gatilho nascia com a largura toda e virava uma barra
+     verde cobrindo o rodapé — foi o que o dono viu no telefone. O widget
+     continua ancorado no canto; quem se espalha é o PAINEL, quando abre
+     (regra logo abaixo). */
+  #mkasst { right: 12px; bottom: 12px; }
+
+  /* Gatilho: botão redondo de 56px, sem rótulo — o ícone basta, e é o
+     tamanho de alvo de toque que o M3 pede. */
+  .mkasst__abrir {
+    width: 56px; height: 56px; padding: 0;
+    justify-content: center; border-radius: var(--md-shape-lg, 16px);
+  }
+  .mkasst__abrir > span { display: none; }
+  .mkasst__abrir svg { width: 24px; height: 24px; }
+
+  /* Painel: folha que ocupa a tela, com respiro. */
+  #mkasst .mkasst__painel {
+    position: fixed;
+    left: 10px; right: 10px; bottom: 78px;
+    width: auto !important; max-width: none !important;
+  }
+
+  /* Minimizado no telefone: a alça fica um pouco maior, para o dedo. */
+  #mkasst.mkasst--min .mkasst__alca { width: 24px; height: 62px; }
+  .mkasst__painel { width: auto; left: 0; right: 0; max-height: calc(100vh - 24px); }
+  .mkasst__abrir { width: 100%; justify-content: center; }
+}
+
+@media print { #mkasst { display: none !important; } }
+
+/* Índice completo (o assistente virou a porta única da ajuda). */
+.mkasst__grupo { margin-bottom: 14px; }
+.mkasst__grupo h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  color: var(--ui-ink, #101c15);
+}
+.mkasst__indice {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-muted, #64786d);
+  cursor: pointer;
+}
+.mkasst__indice:hover { color: var(--ui-grn-700, #067a38); }
+
+/* ============================================================================
+   Acabamento Material Design 3 (ver DESIGN-SYSTEM.md).
+   Carrega depois do bloco original, então sobrepõe o que faltou.
+   ========================================================================== */
+
+.mkasst__abrir {
+  height: 56px;                        /* FAB do M3 */
+  padding: 0 20px;
+  gap: 12px;
+  font: 500 14px/20px var(--md-font, Roboto, sans-serif);
+  letter-spacing: .1px;
+}
+.mkasst__abrir svg { width: 24px; height: 24px; }
+
+.mkasst__busca {
+  margin: 0 20px 8px;
+  padding: 0 16px;
+  min-height: 48px;
+  border: 0;
+  border-radius: var(--md-shape-full, 999px);
+  background: var(--md-surface-container-highest, #dee4dd);
+  color: var(--md-on-surface-variant, #404942);
+}
+.mkasst__campo {
+  font: 400 16px/24px var(--md-font, Roboto, sans-serif) !important;
+  letter-spacing: .5px !important;
+  color: var(--md-on-surface, #171d19) !important;
+}
+
+.mkasst__corpo { padding: 8px 20px 16px; color: var(--md-on-surface-variant, #404942); }
+
+.mkasst__dica {
+  font: 500 11px/16px var(--md-font, Roboto, sans-serif);
+  letter-spacing: .5px;
+  color: var(--md-on-surface-variant, #404942);
+}
+
+/* Sugestão e índice: itens de LISTA do M3, não cartões com borda. */
+.mkasst__sug { gap: 0; }
+.mkasst__sug button {
+  min-height: 48px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: var(--md-shape-md, 12px);
+  background: transparent;
+  color: var(--md-on-surface, #171d19);
+  font: 400 14px/20px var(--md-font, Roboto, sans-serif);
+  letter-spacing: .25px;
+  transition: background-color .15s cubic-bezier(.2, 0, 0, 1);
+}
+.mkasst__sug button:hover {
+  border: 0;
+  background: color-mix(in srgb, var(--md-on-surface) 8%, transparent);
+}
+.mkasst__sug svg { color: var(--md-primary, #00713a); }
+
+.mkasst__resp { margin-bottom: 8px; }
+.mkasst__secao {
+  font: 500 11px/16px var(--md-font, Roboto, sans-serif);
+  letter-spacing: .5px;
+  color: var(--md-primary, #00713a);
+}
+.mkasst__resp h3 {
+  font: 400 22px/28px var(--md-font, Roboto, sans-serif);
+  letter-spacing: 0;
+  color: var(--md-on-surface, #171d19);
+  margin-bottom: 12px;
+}
+.mkasst__passos li::before {
+  background: var(--md-primary-container, #8df8b0);
+  color: var(--md-on-primary-container, #002110);
+  font: 500 11px/16px var(--md-font, Roboto, sans-serif);
+  width: 24px; height: 24px;
+}
+.mkasst__passos li { grid-template-columns: 24px 1fr; gap: 12px; }
+.mkasst__passos strong { color: var(--md-on-surface, #171d19); font-weight: 500; }
+
+.mkasst__ir {
+  height: 40px;
+  padding: 0 24px;
+  border-radius: var(--md-shape-full, 999px);
+  background: var(--md-primary, #00713a);
+  color: var(--md-on-primary, #fff) !important;
+  font: 500 14px/20px var(--md-font, Roboto, sans-serif);
+  letter-spacing: .1px;
+}
+.mkasst__mais { color: var(--md-primary, #00713a); font-weight: 500; }
+
+.mkasst__vazio {
+  border: 0;
+  border-radius: var(--md-shape-md, 12px);
+  background: var(--md-surface-container-low, #eff5ee);
+  padding: 16px;
+}
+
+.mkasst__rodape {
+  padding: 8px 20px 16px;
+  border-top: 0;
+  background: transparent;
+}
+.mkasst__indice, .mkasst__rodape a {
+  font: 500 14px/20px var(--md-font, Roboto, sans-serif);
+  letter-spacing: .1px;
+  color: var(--md-primary, #00713a);
+}
+.mkasst__grupo h4 {
+  font: 500 14px/20px var(--md-font, Roboto, sans-serif);
+  letter-spacing: .1px;
+  color: var(--md-on-surface, #171d19);
+  padding: 0 16px;
+}
+
+/* ============================================================================
+   Ação em LIMA (§18 do DESIGN-SYSTEM.md, referência Midbox).
+   Este arquivo carrega DEPOIS do make-m3.css, então é aqui que a regra final
+   do FAB e do botão "Ir para a tela" precisa estar.
+   ========================================================================== */
+.mkasst__abrir {
+  background: var(--md-action, #cbf542) !important;
+  color: var(--md-on-action, #17240a) !important;
+  border-radius: var(--md-shape-lg, 16px) !important;
+  font-weight: 600 !important;
+}
+.mkasst__abrir:hover { background: var(--md-action-hover, #d7f96a) !important; }
+.mkasst__abrir:active { background: var(--md-action-press, #bde82f) !important; }
+.mkasst__abrir svg { color: currentColor !important; }
+
+.mkasst__ir {
+  background: var(--md-action, #cbf542) !important;
+  color: var(--md-on-action, #17240a) !important;
+  border-radius: var(--md-shape-btn, 8px) !important;
+  font-weight: 600 !important;
+}
+.mkasst__ir:hover { background: var(--md-action-hover, #d7f96a) !important; }
+
+/* Busca do assistente no padrão de campo preenchido do Midbox. */
+.mkasst__busca {
+  border-radius: var(--md-shape-field, 8px) !important;
+  background: var(--md-field-fill, #eceff0) !important;
+}
+
+/* ============================================================================
+   AVISOS DENTRO DO ASSISTENTE
+
+   O sino saiu da barra de cima (decisão do dono: ajuda e avisos num só lugar).
+   A lista é a mesma do sino — as classes `make-notif-*` continuam valendo, e o
+   que entra aqui é só a faixa que abre e fecha, mais o contador no botão.
+   ========================================================================== */
+.mkasst__abrir { position: relative; }
+.mkasst__badge {
+  position: absolute; top: -5px; right: -5px;
+  min-width: 19px; height: 19px; padding: 0 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px;
+  background: #b3261e; color: #fff;
+  font: 700 11px/1 var(--md-font);
+  box-shadow: 0 0 0 2px var(--md-surface, #fff);
+}
+
+.mkasst__avisos {
+  border-bottom: 1px solid var(--md-outline-variant);
+  background: var(--md-surface);
+}
+.mkasst__avbtn {
+  width: 100%;
+  display: flex; align-items: center; gap: 9px;
+  height: 44px; padding: 0 14px;
+  border: 0; background: transparent; cursor: pointer;
+  font: 600 12.5px/1 var(--md-font);
+  color: var(--md-on-surface);
+  text-align: left;
+}
+.mkasst__avbtn:hover { background: color-mix(in srgb, var(--md-on-surface) 6%, transparent); }
+.mkasst__avtt { flex: 1 1 auto; }
+.mkasst__avn {
+  min-width: 18px; height: 18px; padding: 0 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 999px; background: #b3261e; color: #fff;
+  font: 700 10.5px/1 var(--md-font);
+}
+.mkasst__avchev { display: inline-flex; transition: transform .18s cubic-bezier(.2,0,0,1); }
+.mkasst__avisos--aberto .mkasst__avchev { transform: rotate(180deg); }
+.mkasst__avlista { max-height: 46vh; overflow-y: auto; border-top: 1px solid var(--md-outline-variant); }
+/* A lista veio de um dropdown posicionado; dentro do painel ela é bloco. */
+.mkasst__avlista .make-notif-drop__head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 9px 14px;
+  font: 500 11.5px/1 var(--md-font);
+}
+/* A faixa já diz "Avisos": o título interno do antigo dropdown viraria eco. */
+.mkasst__avlista .mkhdr__droptt { display: none; }
+.mkasst__avlista .make-notif-drop__head { justify-content: flex-end; }
+
+/* ============================================================================
+   ALTURA FIXA — O CAMPO DE DIGITAR NÃO SOBE MAIS
+
+   O painel era `bottom: 0` com `max-height`: crescia para cima conforme a
+   resposta aparecia, e o campo de busca ia subindo junto. O dono viu isso e
+   perguntou "por que o campo de digitar do chat fica subindo?".
+
+   Agora o painel tem altura FIXA: topo, busca e rodapé ficam parados e só o
+   corpo rola. Assim dá para escrever e ver o resultado aparecer, sem a caixa
+   pulando debaixo do dedo.
+   ========================================================================== */
+.mkasst__painel {
+  height: min(560px, calc(100vh - 40px)) !important;
+  max-height: min(560px, calc(100vh - 40px)) !important;
+}
+.mkasst__topo,
+.mkasst__busca,
+.mkasst__rodape { flex: 0 0 auto !important; }
+.mkasst__corpo {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overscroll-behavior: contain;
+}
+/* O índice de assuntos vira lista compacta, com o título de seção grudado no
+   alto enquanto rola — era "texto listado assim" solto no meio da conversa. */
+.mkasst__corpo .mkasst__sec {
+  position: sticky; top: -14px;
+  margin: 10px 0 4px;
+  padding: 6px 0 4px;
+  background: var(--md-surface-container-high, #e3eae2);
+  font: 700 10px/12px var(--ui-font, 'Figtree', system-ui, sans-serif);
+  letter-spacing: .12em; text-transform: uppercase;
+  color: var(--md-on-surface-variant, #40534a);
+}
+
+/* Estado inicial do assistente: convite curto, sem lista.
+   O dono pediu que o texto apareça só ao digitar. */
+.mkasst__vazio {
+  margin: 6px 0 0;
+  font: 500 13px/19px var(--ui-font, 'Figtree', system-ui, sans-serif);
+  color: var(--md-on-surface, #17201a);
+}
+.mkasst__vazio span {
+  display: block; margin-top: 4px;
+  font-weight: 400; font-size: 12px;
+  color: var(--md-on-surface-variant, #6d7a71);
+}
+
+/* Título de seção do índice com ícone (pedido do dono: cada categoria com o
+   seu). O ícone entra em chip tonal para o título não virar texto solto. */
+.mkasst__sec { display: flex !important; align-items: center; gap: 8px; }
+.mkasst__sec-ic {
+  display: grid; place-items: center; flex: none;
+  width: 22px; height: 22px; border-radius: 999px;
+  background: var(--md-primary-container, #d8f3e2);
+  color: var(--md-on-primary-container, #00713a);
+}
+.mkasst__sec-ic svg { width: 14px; height: 14px; }
+
+/* ============================================================================
+   ACABAMENTO 04/09/2026 — três coisas que o dono apontou de uma vez.
+   ========================================================================== */
+
+/* 1. SEM BORDA VERDE ACESA NA BUSCA
+   O anel vinha da regra global de foco do sistema (`input:focus-visible`),
+   que desenha 2px na tinta primária. Num campo que já é uma pílula preenchida
+   isso vira um segundo contorno gritando dentro do primeiro — "borda acesa
+   verde irritante". Fica um fio discreto na casca, que continua indicando o
+   foco (é requisito de teclado), sem repintar a pílula. */
+.mkasst__campo:focus,
+.mkasst__campo:focus-visible { outline: 0 !important; box-shadow: none !important; }
+.mkasst__busca:focus-within {
+  box-shadow: inset 0 0 0 1px var(--md-outline, #70796f) !important;
+}
+
+/* 2. O TEXTO DO PASSO OCUPA A COLUNA DO TEXTO
+   Par do <span> que o JS passou a emitir: o item de texto vai para a segunda
+   coluna do grid e pode encolher (sem `min-width: 0` um link ou uma série
+   comprida estufaria o painel). */
+.mkasst__passos li > .mkasst__passo-txt { grid-column: 2; min-width: 0; overflow-wrap: anywhere; }
+
+/* 3. MINIMIZAR PARA A BORDA DIREITA
+   Fechado, o botão encosta na borda e deixa só uma alça de 16px à vista;
+   passar o mouse (ou chegar com Tab) traz ele de volta inteiro. Aberto, o
+   painel nunca fica deslocado — a classe de minimizado é ignorada. */
+#mkasst {
+  transition: transform .18s cubic-bezier(.2, 0, 0, 1);
+}
+/* Minimizado: sai INTEIRO de cena. Quem fica é a alça, 20px na borda.
+   A revelação (`mkasst--espia`) é posta pelo JS a partir de eventos da alça —
+   NÃO por `:hover` neste elemento. Motivo, para não voltar atrás: pendurar a
+   revelação no hover do próprio botão faz o alvo do hover se mover junto com
+   ele; o cursor fica dentro e fora a cada quadro e o botão treme. */
+#mkasst.mkasst--min { transform: translateX(calc(100% + 8px)); }
+#mkasst.mkasst--min.mkasst--espia,
+#mkasst.mkasst--aberto { transform: none; }
+#mkasst.mkasst--min .mkasst__min { opacity: 0; pointer-events: none; }
+#mkasst.mkasst--min.mkasst--espia .mkasst__min { opacity: 1; pointer-events: auto; }
+
+/* A alça: só existe quando minimizado. Sem transição e sem deslocamento —
+   é o ponto fixo de que o gatilho precisa. */
+.mkasst__alca { display: none; }
+#mkasst.mkasst--min .mkasst__alca {
+  display: block;
+  position: fixed;
+  right: 0;
+  bottom: 14px;
+  width: 20px;
+  height: 54px;
+  border-radius: 12px 0 0 12px;
+  background: var(--md-primary-container, #8df8b0);
+  box-shadow: -2px 0 6px rgba(0, 0, 0, .18);
+  cursor: pointer;
+}
+#mkasst.mkasst--min .mkasst__alca::after {
+  content: "";
+  position: absolute;
+  left: 7px; top: 50%;
+  width: 5px; height: 5px;
+  margin-top: -2.5px;
+  border-radius: 999px;
+  background: var(--md-on-primary-container, #002110);
+  opacity: .55;
+}
+#mkasst.mkasst--min.mkasst--espia .mkasst__alca { opacity: 0; pointer-events: none; }
+
+.mkasst__min {
+  position: absolute;
+  top: -6px; right: -6px;
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  padding: 0; border: 0; cursor: pointer;
+  border-radius: var(--md-shape-full, 999px);
+  background: var(--md-surface-container-highest, #dee4dd);
+  color: var(--md-on-surface-variant, #404942);
+  box-shadow: var(--md-elev-1, 0 1px 3px rgba(0, 0, 0, .2));
+  opacity: 0;
+  transition: opacity .15s cubic-bezier(.2, 0, 0, 1);
+}
+#mkasst:hover .mkasst__min,
+#mkasst:focus-within .mkasst__min { opacity: 1; }
+.mkasst__min:hover { background: var(--md-surface-container-high, #e3eae2); }
+/* Aberto o painel, o "x" de minimizar sai de cena — quem fecha é o "x" do
+   cabeçalho do painel. */
+#mkasst.mkasst--aberto .mkasst__min { display: none; }
+
+
+/* ============================================================================
+   CELULAR — o que a medição achou depois da primeira correção
+
+   A correção anterior (botão redondo de 56px + painel como folha) resolveu a
+   "barra verde de ponta a ponta" que o dono viu no rodapé. Medindo o resultado
+   numa janela de 375×812, sobraram três coisas.
+   ========================================================================== */
+
+/* --------------------------------- 1. A ALÇA FICAVA FORA DA TELA
+
+   O assistente nasce MINIMIZADO (`make-assistente.js`: `var minimizado = true`),
+   e nesse estado quem fica à vista é só a alça na borda direita. Medido: a alça
+   em 415–435 numa janela de 375px — INTEIRAMENTE fora da tela. No telefone o
+   dono não tinha como abrir a ajuda: nem botão, nem alça, só o atalho Alt+H,
+   que não existe num teclado de celular. (E não é defeito só de telefone:
+   numa janela de 1280px a alça caía em 1352–1372, também fora.)
+
+   A causa: `#mkasst.mkasst--min` sai de cena com
+   `transform: translateX(calc(100% + 8px))`. **Um `transform` faz do elemento
+   o bloco de contenção dos descendentes `position: fixed`** — então a alça,
+   que é `fixed; right: 0` para ser o ponto FIXO de que o gatilho precisa,
+   passou a andar junto com o que devia ficar parado, os mesmos 72px do
+   deslocamento (64px de largura do widget + 8px).
+
+   Correção na raiz: quem se desloca é o BOTÃO, não o widget. Assim `#mkasst`
+   nunca tem `transform`, a alça volta a ser da JANELA e encosta na borda de
+   verdade. De brinde, o painel (`fixed` também) deixa de depender de o estado
+   "aberto" limpar o transform a tempo. */
+#mkasst.mkasst--min { transform: none; }
+#mkasst.mkasst--min .mkasst__abrir,
+#mkasst.mkasst--min .mkasst__min {
+  transform: translateX(calc(100% + 24px));
+}
+/* Espiada e painel aberto: o botão volta para o lugar. Especificidade maior
+   (1 id + 2 classes) que a regra de cima, e não depende da ordem. */
+#mkasst.mkasst--min.mkasst--espia .mkasst__abrir,
+#mkasst.mkasst--min.mkasst--espia .mkasst__min,
+#mkasst.mkasst--aberto .mkasst__abrir,
+#mkasst.mkasst--aberto .mkasst__min { transform: none; }
+/* A transição de sair/voltar era do widget; agora é do botão. */
+#mkasst .mkasst__abrir { transition: background .15s cubic-bezier(.2,0,0,1), transform .18s cubic-bezier(.2,0,0,1); }
+#mkasst .mkasst__abrir:active { transform: translateY(1px); }
+
+@media (max-width: 560px) {
+  /* --------------------------------- 2. O GATILHO TINHA 64px, NÃO 56px
+
+     Sobrou uma regra antiga DEPOIS da nova, dentro da mesma media query:
+     `.mkasst__abrir { width: 100% }` (o resto da "barra verde"). Empatada em
+     especificidade com `.mkasst__abrir { width: 56px }` e escrita depois, ela
+     ganhava; e o bloco de acabamento M3 no fim do arquivo devolvia
+     `padding: 0 20px`. Resultado medido: 64×56 em vez de 56×56.
+
+     Aqui o botão volta a ser o círculo de 56px que a correção pediu. */
+  #mkasst .mkasst__abrir {
+    width: 56px;
+    min-width: 56px;
+    height: 56px;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+  }
+
+  /* --------------------------------- 3. ALÇA E "×" PARA O DEDO
+
+     A alça tinha 20×54. A media query já pedia 24×62, mas perdia para a regra
+     `#mkasst.mkasst--min .mkasst__alca` escrita mais adiante no arquivo (mesma
+     especificidade, ordem depois). Aqui ela ganha por vir por último.
+
+     Largura de 32px: uma alça de borda não pode ter 40px de espessura sem
+     virar um tarugo no meio da tela; a área vem da altura (72px). */
+  #mkasst.mkasst--min .mkasst__alca { width: 32px; height: 72px; bottom: 18px; }
+
+  /* O "×" de minimizar só aparecia no `:hover` — que no telefone NUNCA
+     acontece. Ficava um alvo de 22×22 invisível e, ainda assim, clicável.
+     No toque ele fica visível e com 32px. */
+  #mkasst .mkasst__min {
+    opacity: 1;
+    width: 32px; height: 32px;
+    top: -8px; right: -8px;
+  }
+}
+
+
+/* ============================================================================
+   CELULAR: ABRIR E FECHAR O ASSISTENTE COM O DEDO (08/09/2026)
+
+   Queixa do dono: "abrir e fechar o chatbot no celular tá difícil". Minimizado,
+   o gatilho é uma alça de 20px na borda, e no telefone não existe passar o
+   mouse por cima — eram dois toques, o primeiro num alvo de 20px.
+
+   Estas regras acompanham o clique longo que entrou no JS. Tudo dentro de
+   `hover: none` para o computador ficar exatamente como está.
+   ========================================================================== */
+@media (hover: none) {
+
+  /* ALVO DE TOQUE de 44px sem mudar o desenho: a área invisível cresce para a
+     esquerda da alça; a tinta à vista continua com 20px. 44px é o mínimo de
+     alvo do M3 — com 20px o dedo erra mais do que acerta. */
+  #mkasst.mkasst--min .mkasst__alca::before {
+    content: "";
+    position: absolute;
+    top: -12px;
+    bottom: -12px;
+    left: -30px;
+    right: 0;
+    /* sem cor: é só área de toque */
+  }
+
+  /* RETORNO VISUAL enquanto o dedo segura. Sem isto, o clique longo é um
+     segredo: a pessoa segura, não acontece nada visível, e ela solta antes dos
+     450ms. A alça cresce e acende — quando ela terminar de crescer, abriu. */
+  #mkasst.mkasst--min .mkasst__alca {
+    transition: width .45s linear, background .45s linear;
+  }
+  #mkasst.mkasst--min .mkasst__alca.is-pressionando {
+    width: 34px;
+    background: var(--md-action, #cdf75a);
+  }
+
+  /* FECHAR: o "×" do painel e o de minimizar passam a ter alvo de dedo. O do
+     painel some atrás do polegar num alvo de 32px. */
+  .mkasst__x {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+  .mkasst__min {
+    width: 34px;
+    height: 34px;
+    top: -8px;
+    right: -8px;
+  }
+}
+
+/* ============================================================================
+   A ALÇA PISCA DE VEZ EM QUANDO (08/09/2026)
+
+   Pedido do dono: "seria legal se o agente minimizado tivesse uma bordinha que
+   fica reluzente em um intervalo fixo e apaga, só pra chamar a atenção do
+   usuário clicar ali".
+
+   O problema real que isso resolve: minimizado, o assistente é uma alça de
+   20px encostada na borda. Quem não sabe que ela existe não descobre — não há
+   rótulo, não há ícone, e no telefone nem hover para revelar. Um brilho curto
+   a cada 9 segundos é o menor gesto que responde "tem algo aqui".
+
+   Três cuidados para não virar poluição:
+     · o brilho dura 0,9s dentro de um ciclo de 9s — 10% do tempo aceso;
+     · PARA na hora em que a pessoa interage (mouse em cima, dedo segurando,
+       alça revelada ou painel aberto): já chamou a atenção, cumpriu o papel;
+     · desligado inteiro para quem pediu menos movimento no sistema
+       (`prefers-reduced-motion`), que é regra do projeto.
+   ========================================================================== */
+@keyframes mkasstAlcaBrilho {
+  0%,
+  88%,
+  100% {
+    box-shadow: -2px 0 6px rgba(0, 0, 0, .18);
+    background: var(--md-primary-container, #8df8b0);
+  }
+  /* O pico é curto de propósito: chama e sai. */
+  94% {
+    box-shadow: -2px 0 14px 3px color-mix(in srgb, var(--md-action, #cdf75a) 70%, transparent),
+                -2px 0 6px rgba(0, 0, 0, .18);
+    background: var(--md-action, #cdf75a);
+  }
+}
+
+#mkasst.mkasst--min .mkasst__alca {
+  animation: mkasstAlcaBrilho 9s ease-in-out infinite;
+}
+
+/* Interagiu? Para. */
+#mkasst.mkasst--min .mkasst__alca:hover,
+#mkasst.mkasst--min .mkasst__alca.is-pressionando,
+#mkasst.mkasst--min.mkasst--espia .mkasst__alca,
+#mkasst.mkasst--aberto .mkasst__alca {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #mkasst.mkasst--min .mkasst__alca { animation: none; }
+}
+
+/* =============================================================================
+   AS ABAS — o painel deixou de ser só da ajuda.
+
+   O canto chegou a ter três coisas empilhadas (assistente, chat, "ao topo") e
+   ficou feio. Em vez de afastar as bolhas uma da outra, juntei o que era para
+   estar junto: um painel, duas abas. Quem não tem acesso ao chat não vê tira
+   de abas nenhuma — o painel fica exatamente como era.
+   ========================================================================== */
+
+.mkasst__abas {
+  display: flex;
+  gap: 2px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--md-outline-variant, #c3ccc3);
+}
+.mkasst__abas[hidden] { display: none; }
+
+.mkasst__aba {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 10px 12px 9px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  font: 600 13px/1 var(--md-font, sans-serif);
+  color: var(--md-on-surface-variant, #414a43);
+  transition: color .14s, border-color .14s;
+}
+.mkasst__aba:hover { color: var(--md-on-surface, #171d19); }
+/* Sublinhado, não pílula preenchida: pílula lê como filtro ligado/desligado,
+   e isto aqui é navegação — a mesma escolha feita nas abas do mural. */
+.mkasst__aba--on {
+  color: var(--md-on-surface, #171d19);
+  border-bottom-color: var(--md-primary, #00713a);
+}
+.mkasst__aban {
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--md-shape-full, 999px);
+  background: var(--md-primary, #00713a);
+  color: var(--md-on-primary, #fff);
+  font: 700 10.5px/1 var(--md-font, sans-serif);
+}
+
+/* Uma aba de cada vez. `flex` e não `block`: o miolo do chat é flex-column e
+   precisa herdar a altura do painel para rolar por dentro. */
+.mkasst__pane { display: none; flex: 1; min-height: 0; flex-direction: column; }
+.mkasst__pane--on { display: flex; }
+
+/* A seta de voltar: só aparece quando se está DENTRO de alguma coisa (hoje,
+   dentro de uma conversa). */
+.mkasst__volta {
+  flex: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--md-shape-full, 999px);
+  color: var(--md-on-surface-variant, #414a43);
+}
+.mkasst__volta[hidden] { display: none; }
+.mkasst__volta:hover { background: var(--md-surface-container-highest, #dee4dd); }
+
+/* O contador de não lidas, na bolha que fica à vista o tempo todo.
+   O par CASADO --md-error/--md-on-error, nunca --md-st-crit com #fff na mão:
+   no tema escuro st-crit é um vermelho CLARO (#ffb4ab) e branco por cima dá
+   1,7:1 — o número sumiria justo quando importa. */
+.mkasst__n {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--md-shape-full, 999px);
+  background: var(--md-error, #ba1a1a);
+  color: var(--md-on-error, #fff);
+  font: 700 11px/1 var(--md-font, sans-serif);
+  box-shadow: 0 0 0 2px var(--md-surface, #f7fcf6);
+  pointer-events: none;
+}
+.mkasst__n[hidden] { display: none; }
+
+/* O contador é posicionado contra o BOTÃO. Sem isto ele se ancoraria em
+   #mkasst (que é fixed) e pularia para o canto do painel ao abrir. */
+.mkasst__abrir { position: relative; }
+
+/* =============================================================================
+   A AJUDA FALA EM BALÃO — o mesmo idioma da aba de conversas.
+
+   Antes esta aba era um buscador (campo em cima, resposta em lista numerada) e
+   a outra era um mensageiro. Duas caras na mesma janela. O fio e o campo de
+   escrever abaixo usam as classes de balão do make-chat.css; o que fica aqui é
+   só a caixa que os contém.
+   ========================================================================== */
+
+.mkasst__fio {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  gap: 8px;
+  align-content: start;
+}
+.mkasst__esc {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--md-outline-variant, #c3ccc3);
+}
+/* A resposta da ajuda é mais larga que uma fala de gente: ela traz passos
+   numerados, e 82% deixaria o texto em coluna estreita demais para ler. */
+.mkasst__fio > .mkchat__m { max-width: 94%; }
+.mkasst__fio > .mkchat__m--meu { max-width: 82%; }
+
+.mkasst__pensando { opacity: .7; font-style: italic; }
+.mkasst__ex { display: block; margin-top: 4px; opacity: .8; font-size: 12.4px; }
+
+/* O "ver todos os assuntos" agora nasce dentro do balão de saudação. */
+.mkasst__fio .mkasst__indice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  border: 1px solid var(--md-outline-variant, #c3ccc3);
+  background: transparent;
+  cursor: pointer;
+  padding: 6px 11px;
+  border-radius: var(--md-shape-full, 999px);
+  font: 600 12.2px/1 var(--md-font, sans-serif);
+  color: var(--md-on-surface, #171d19);
+}
+.mkasst__fio .mkasst__indice:hover {
+  background: var(--md-surface-container-highest, #dee4dd);
+}

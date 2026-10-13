@@ -1,0 +1,10 @@
+{% load i18n %}
+
+{# Header da tela de login. Removido o link "Voltar ao site"; mantém o tema. #}
+<div class="absolute flex flex-row items-center justify-between left-0 m-4 right-0 top-0">
+    {% if not theme %}
+        <div class="ml-auto">
+            {% include "unfold/helpers/theme_switch_dropdown.html" %}
+        </div>
+    {% endif %}
+</div>

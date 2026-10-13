@@ -1,0 +1,300 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  /* ==========================================================================
+     tabela_dispositivos.html — prefixo .tbd-  ·  Material Design 3
+     Data table do M3: linha de 52px, divisor outline-variant, cabeçalho grudento
+     em label-medium (sem maiúscula, sem peso 700), SEM zebra, hover como state
+     layer de 8% e números à direita. Saíram: a moldura da tabela, a faixa cinza
+     do cabeçalho, o filete verde no hover e as pílulas sólidas saturadas —
+     situação e nota agora são chips TONAIS derivados da cor que a view manda.
+     ========================================================================== */
+
+  /* 1. Cabeçalho da tela */
+  .tbd-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+  .tbd-head__id { flex: 1 1 340px; min-width: 0; display: grid; gap: 4px; }
+  .tbd-sub { display: flex; flex-wrap: wrap; gap: 3px 16px; }
+  .tbd-sub span { position: relative; }
+  .tbd-sub span + span::before { content: "·"; position: absolute; left: -10px; opacity: .55; }
+  .mapa__voltar {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 40px; padding: 0 24px; box-sizing: border-box;
+    border: 1px solid var(--md-outline) !important; border-radius: var(--md-shape-full) !important;
+    background: transparent !important; color: var(--md-primary) !important;
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    text-decoration: none; white-space: nowrap; box-shadow: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .mapa__voltar:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important; color: var(--md-primary) !important; }
+  /* Segmented button do M3. */
+  .mapa__view {
+    display: inline-flex; gap: 0; height: 40px; padding: 0; box-sizing: border-box;
+    border: 1px solid var(--md-outline); border-radius: var(--md-shape-full);
+    background: transparent; overflow: hidden;
+  }
+  .mapa__view-btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 0 20px;
+    border-radius: var(--md-shape-full);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    color: var(--md-on-surface); text-decoration: none; background: transparent;
+  }
+  .mapa__view-btn:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+  .mapa__view-btn.is-active { background: var(--md-secondary-container); color: var(--md-on-secondary-container); box-shadow: none; }
+  .tbd-i { width: 18px; height: 18px; flex: none; display: block; }
+  .tbd-i--sm { width: 18px; height: 18px; }
+
+  .tab-export, .tab-novo {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 40px; padding: 0 24px; box-sizing: border-box; flex: 0 0 auto;
+    border-radius: var(--md-shape-full) !important;
+    font: 500 14px/20px var(--md-font) !important; letter-spacing: .1px;
+    text-decoration: none; white-space: nowrap;
+    box-shadow: none !important; transform: none !important;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  /* Outlined: exportar é a alternativa. */
+  .tab-export {
+    border: 1px solid var(--md-outline) !important;
+    background: transparent !important; color: var(--md-primary) !important;
+  }
+  .tab-export:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important; color: var(--md-primary) !important; }
+  /* A ÚNICA ação filled da tela. */
+  .tab-novo {
+    border: 0 !important;
+    background: var(--md-primary) !important; color: var(--md-on-primary) !important;
+  }
+  .tab-novo:hover { background: var(--md-primary) !important; filter: none; }
+
+  /* 2. Barra de filtro: sem card e sem linha divisória */
+  .tbd-fbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
+    margin: 0 0 20px; padding: 0;
+  }
+  .tbd-fbar .mapa__busca { position: relative; display: flex; align-items: center; flex: 1 1 280px; max-width: 480px; margin: 0; }
+  .tbd-busca-ico {
+    position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+    width: 24px; height: 24px; line-height: 0; color: var(--md-on-surface-variant);
+    pointer-events: none; z-index: 1;
+  }
+  .tbd-busca-ico svg { width: 24px; height: 24px; display: block; }
+  /* Campo outlined do M3: 56px, raio 4px, borda primary no foco. */
+  #main .tbd-fbar .mapa__busca-input {
+    width: 100%; min-height: 56px; box-sizing: border-box; padding: 16px 52px !important;
+    font: 400 16px/24px var(--md-font) !important; letter-spacing: .5px !important;
+    color: var(--md-on-surface) !important; background: transparent !important;
+    border: 1px solid var(--md-outline) !important; border-radius: var(--md-shape-xs) !important;
+    box-shadow: none !important; outline: none; -webkit-appearance: none; appearance: none;
+  }
+  #main .tbd-fbar .mapa__busca-input::placeholder { color: var(--md-on-surface-variant) !important; opacity: 1; }
+  #main .tbd-fbar .mapa__busca-input:hover { border-color: var(--md-on-surface) !important; }
+  #main .tbd-fbar .mapa__busca-input:focus { border-color: var(--md-primary) !important; box-shadow: inset 0 0 0 1px var(--md-primary) !important; }
+  .tbd-fbar .mapa__busca-x {
+    position: absolute; right: 8px; width: 40px; height: 40px; padding: 0;
+    display: grid; place-items: center; border: 0; border-radius: var(--md-shape-full); cursor: pointer;
+    background: transparent; color: var(--md-on-surface-variant); font-size: 20px; line-height: 1;
+  }
+  .tbd-fbar .mapa__busca-x:hover {
+    background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); color: var(--md-on-surface);
+  }
+
+  /* Período da compra: mesma barra, sem card próprio. Os campos de data usam o
+     outlined field global (make-m3.css §7) — não há CSS de campo aqui. */
+  .tab-periodo {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin: 0 0 20px !important; padding: 0 !important;
+    background: transparent !important; border: 0 !important;
+  }
+  .tab-periodo__lbl {
+    display: inline-flex; align-items: center; gap: 8px;
+    font: 500 11px/16px var(--md-font) !important; letter-spacing: .5px !important;
+    text-transform: uppercase; color: var(--md-on-surface-variant) !important;
+  }
+  .tab-periodo__ate { font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant); }
+  /* Outlined button. Leva `#main .tab-periodo` porque é <button type="submit"> e
+     make-m3.css §8 zera a borda desses com !important em (1,1,1). */
+  #main .tab-periodo .tab-periodo__btn {
+    min-height: 40px; padding: 0 24px !important;
+    border: 1px solid var(--md-outline) !important; border-radius: var(--md-shape-full) !important;
+    background: transparent !important; color: var(--md-primary) !important;
+    font: 500 14px/20px var(--md-font) !important; letter-spacing: .1px !important;
+    cursor: pointer; box-shadow: none !important;
+  }
+  #main .tab-periodo .tab-periodo__btn:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent) !important; color: var(--md-primary) !important; }
+  /* Text button. */
+  .tab-periodo__x {
+    display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px;
+    border-radius: var(--md-shape-full);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px;
+    color: var(--md-primary); text-decoration: none;
+  }
+  .tab-periodo__x:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); text-decoration: none; }
+
+  /* 3. A tabela (data table do M3) */
+  .tab-wrap {
+    background: var(--md-surface-container-low) !important;
+    border: 0 !important;
+    border-radius: var(--md-shape-md) !important;
+    box-shadow: none !important;
+    overflow: auto; max-height: calc(100vh - 300px);
+  }
+  .tab-tabela {
+    border-collapse: separate; border-spacing: 0; width: 100%;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+  }
+  /* Cabeçalho grudento em label-medium sobre a mesma superfície do painel. */
+  .tab-tabela th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--md-surface-container-low) !important; color: var(--md-on-surface-variant) !important;
+    border: 0 !important; border-bottom: 1px solid var(--md-outline-variant) !important;
+    padding: 14px 16px !important; text-align: left;
+    font: 500 12px/16px var(--md-font) !important; letter-spacing: .5px !important;
+    text-transform: none; white-space: nowrap;
+  }
+  /* Linha de 52px: 20px de texto + 16px acima e abaixo. */
+  .tab-tabela td {
+    padding: 16px !important; vertical-align: middle;
+    border: 0 !important; border-bottom: 1px solid var(--md-outline-variant) !important;
+    color: var(--md-on-surface) !important;
+  }
+  /* Sem zebra: quem separa é o divisor. */
+  .tab-tabela tbody tr:nth-child(even) td { background: transparent !important; }
+  .tab-row { cursor: pointer; }
+  /* Hover = state layer de 8% (não uma cor de fundo nova). */
+  .tab-tabela tbody tr:hover td { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent) !important; }
+  .tab-tabela tbody tr:last-child td { border-bottom: 0 !important; }
+  .tab-col-chk { width: 48px; text-align: center; }
+  .tab-col-chk input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--md-primary); }
+  .tab-th-sort:hover { color: var(--md-on-surface) !important; }
+  .tab-th-sort[data-sort="asc"]::after, .tab-th-sort[data-sort="desc"]::after { color: var(--md-primary); }
+
+  /* Situação e nota: CHIP TONAL. A cor continua vindo do dado (a view manda o
+     hex em `--tbd-c`); aqui ela é misturada com a superfície para virar
+     contêiner tonal, com o texto sempre em on-surface — legível nos dois temas. */
+  .tab-badge, .tab-score {
+    display: inline-flex; align-items: center; height: 24px; padding: 0 8px;
+    border: 0; border-radius: var(--md-shape-sm);
+    background: color-mix(in srgb, var(--tbd-c, var(--md-outline)) 22%, var(--md-surface-container-low));
+    color: var(--md-on-surface); white-space: nowrap; box-shadow: none;
+    font: 500 11px/16px var(--md-font) !important; letter-spacing: .5px;
+  }
+  .tab-score { font-variant-numeric: tabular-nums; }
+  .tab-resumo { color: var(--md-on-surface-variant) !important; max-width: 380px; }
+  /* Números e datas alinham pelos dígitos, à direita (contrato §4). */
+  .tab-tabela th:last-child, .tab-tabela td.tab-data {
+    text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .tab-data--vazio { color: var(--md-on-surface-variant); }
+  .tab-vazio { text-align: center; color: var(--md-on-surface-variant); padding: 24px !important; }
+  .tab-tabela td.tab-vazio:has(.mkpro-empty) { padding: 12px !important; }
+  /* O JS liga/desliga a linha "nada encontrado" por `hidden`. */
+  .tab-sem-busca[hidden] { display: none !important; }
+
+  @media (max-width: 900px) { .tbd-head { align-items: flex-start; } }
+</style>
+<div class="mapa tbd-skin">
+
+  <header class="mkpro-head tbd-head">
+    <div class="tbd-head__id">
+      <p class="mkpro-head__eyebrow">Parque de máquinas · Tabela</p>
+      <h1 class="mkpro-head__title">{{ titulo }}</h1>
+      <p class="mkpro-head__sub tbd-sub">
+        {% if total %}<span class="mkpro-tabular">{{ total }} itens</span>{% endif %}
+        <span>Clique numa linha para editar</span>
+      </p>
+    </div>
+    <div class="mkpro-head__actions">
+      <a data-mk-voltar class="mapa__voltar" href="{{ voltar_url }}">← {{ voltar_nome }}</a>
+      <div class="mapa__view">
+        <a class="mapa__view-btn {% if view_atual == 'mapa' %}is-active{% endif %}" href="{{ view_mapa }}"><svg class="tbd-i tbd-i--sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg> Mapa</a>
+        <a class="mapa__view-btn {% if view_atual == 'tabela' %}is-active{% endif %}" href="{{ view_tabela }}"><svg class="tbd-i tbd-i--sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18"/></svg> Tabela</a>
+      </div>
+      {% if export_url %}
+        <a class="tab-export" href="{{ export_url }}" title="Exportar esta lista para Excel (.xlsx), já com os filtros aplicados">
+          <svg class="tbd-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/></svg> Exportar
+        </a>
+      {% endif %}
+      <a class="tab-novo" href="{{ novo_url }}"><svg class="tbd-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Novo</a>
+    </div>
+  </header>
+
+  <div class="tbd-fbar">
+    {% include "parque/_filtros.html" with uni_lbl="Unidade" setor_lbl="Setor" %}
+    <div class="mapa__busca">
+      <span class="mapa__busca-ico tbd-busca-ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      </span>
+      <input type="search" id="tab-busca" class="mapa__busca-input" autocomplete="off"
+             placeholder="Buscar por nº de série, patrimônio, nome, usuário ou specs…"
+             aria-label="Buscar nesta lista">
+      <button type="button" id="tab-busca-x" class="mapa__busca-x" aria-label="Limpar busca" hidden>×</button>
+    </div>
+  </div>
+
+  {% if tem_periodo %}
+    <form method="get" class="tab-periodo">
+      {% for k, v in periodo_hidden %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+      <span class="tab-periodo__lbl"><svg class="tbd-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Data da compra</span>
+      <input type="date" name="compra_de" value="{{ compra_de }}" aria-label="De">
+      <span class="tab-periodo__ate">até</span>
+      <input type="date" name="compra_ate" value="{{ compra_ate }}" aria-label="Até">
+      <button type="submit" class="tab-periodo__btn">Filtrar</button>
+      {% if compra_de or compra_ate %}
+        <a class="tab-periodo__x" href="?{% for k, v in periodo_hidden %}{{ k }}={{ v }}&{% endfor %}">limpar</a>
+      {% endif %}
+    </form>
+  {% endif %}
+
+  {% comment %}Form do lote: os checkboxes (form="disp-bulk-form") pertencem a ele;
+  a barra flutuante (.make-fab-bar) é montada pelo JS e submete este form ao excluir.{% endcomment %}
+  <form id="disp-bulk-form" method="post" action="{% url 'parque_excluir_dispositivos' %}"
+        onsubmit="return confirm('Excluir os itens selecionados? Esta ação não pode ser desfeita.');">
+    {% csrf_token %}
+    <input type="hidden" name="modelo" value="{{ modelo }}">
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  </form>
+
+  <div class="tab-wrap">
+    <table class="tab-tabela">
+      <thead>
+        <tr>
+          <th class="tab-col-chk"><input type="checkbox" id="tr-all" title="Selecionar todos"></th>
+          {% for c in colunas %}<th>{{ c }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody id="tab-body"
+             data-modelo="{{ modelo }}"
+             data-transferir="{{ transferir_url }}"
+             data-atribuir="{{ atribuir_url }}"
+             data-etiqueta="{{ etiqueta_url }}"
+             data-pode-excluir="{% if pode_excluir %}1{% else %}0{% endif %}">
+        {% for r in linhas %}
+          <tr class="tab-row" data-edit="{{ r.edit }}" data-busca="{{ r.busca }}" tabindex="0">
+            <td class="tab-col-chk"><input type="checkbox" class="tr-chk" name="itens" value="{{ r.pk }}" form="disp-bulk-form"></td>
+            <td><b>{{ r.ident }}</b></td>
+            <td>{{ r.local }}</td>
+            <td>{{ r.pessoa }}</td>
+            {% comment %}A cor vem da view, como antes; só deixa de ser `background`
+            sólido e passa a alimentar `--tbd-c`, que o CSS mistura com a superfície
+            para virar um contêiner tonal do M3.{% endcomment %}
+            <td><span class="tab-badge" style="--tbd-c:{{ r.sit_cor }}">{{ r.sit_label }}</span></td>
+            <td>{% if r.score is not None %}<span class="tab-score" style="--tbd-c:{{ r.cor }}">{{ r.score }}{% if r.classe %} · {{ r.classe }}{% endif %}</span>{% else %}—{% endif %}</td>
+            <td class="tab-resumo">{{ r.resumo }}</td>
+            <td class="tab-data">{% if r.data_compra %}{{ r.data_compra|date:"d/m/Y" }}{% else %}<span class="tab-data--vazio">—</span>{% endif %}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8" class="tab-vazio">
+            <div class="mkpro-empty mkpro-empty--slim">
+              <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+              <p class="mkpro-empty__title">Nenhum item nesta lista</p>
+              <p class="mkpro-empty__hint">Ajuste os filtros acima ou use <b>Novo</b> para cadastrar o primeiro item.</p>
+            </div>
+          </td></tr>
+        {% endfor %}
+        <tr class="tab-sem-busca" id="tab-sem-busca" hidden><td colspan="8" class="tab-vazio">Nenhum item encontrado para essa busca.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

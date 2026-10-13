@@ -1,0 +1,833 @@
+{% comment %}
+FICHA DA MÁQUINA — gaveta lateral. Abre ao clicar numa baia do mapa.
+
+Antes isto era um overlay de tela cheia desenhado como um MONITOR, com o
+conteúdo dentro da "tela". O dono pediu outra forma: "quando eu clicasse no
+computador exibisse algo na lateral dessa forma, com o desenho da máquina, e as
+especificações; estado de saúde do pc, tempo de atividade e telemetria se está
+ativa ou não". O protótipo aprovado está em
+https://claude.ai/code/artifact/03b547e8-9d9e-46a7-b225-1c677d0e67a6
+
+REGRA QUE MANDOU NESTA REESCRITA: **nenhum gancho de JS pode mudar.** O
+`make-admin.js` preenche 28 elementos por id (`#mz-*`) e liga/desliga vários por
+`hidden`; o mapa abre e fecha por `.is-open` em `#mapa-zoom`. Todos continuam
+aqui, no mesmo nome — o que mudou é a MOLDURA e a ORDEM. Assim a conversão não
+tocou uma linha de JavaScript, e o risco na tela mais usada do sistema ficou
+perto de zero.
+
+Ganchos preservados (não renomeie sem procurar no make-admin.js primeiro):
+  · abre/fecha: #mapa-zoom + classe .is-open, #mapa-zoom-fechar
+  · identidade: #mz-pessoa #mz-baia #mz-patrimonio #mz-desempenho #mz-status #mz-tel
+  · chamado:    #mz-chamado #mz-critico-msg #mz-reparo #mz-troca #mz-finalizar
+  · ficha:      #mz-so #mz-cpu #mz-placa #mz-ram #mz-disco #mz-gpu(+li)
+                #mz-uptime(+li) #mz-local(+li)
+  · periféricos:#mz-mouse #mz-teclado #mz-webcam #mz-headset #mz-monitor #mz-leitor
+  · diagnóstico:#mz-diag #mz-diag-titulo #mz-diag-lista  (o JS reescreve o
+                className de #mz-diag, então o estilo dele mora em .monitor__diag)
+  · ações:      #mz-alocar-pc #mz-alocar-nb #mz-atribuir-colab #mz-remover-disp
+                #mz-retirar-colab #mz-editar
+{% endcomment %}
+<style>
+  /* ============ a gaveta ============ */
+  /* `.mapa-zoom` era um overlay centralizado (make-admin.css:1533). Aqui ela
+     vira gaveta à direita. O contrato com o JS é só o `display` no `.is-open`,
+     que continua valendo — por isso o seletor leva o id, para ganhar sem
+     `!important` desnecessário. */
+  #mapa-zoom.mapa-zoom {
+    position: fixed; inset: 0; z-index: 120;
+    display: none; align-items: stretch; justify-content: flex-end;
+    background: color-mix(in srgb, #000 46%, transparent);
+    -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+    padding: 0;
+  }
+  #mapa-zoom.mapa-zoom.is-open { display: flex; }
+  #mapa-zoom .mapa-zoom__fechar {
+    position: absolute; top: 14px; right: 424px; z-index: 2;
+    width: 36px; height: 36px; border: 0; border-radius: var(--md-shape-full);
+    background: color-mix(in srgb, #fff 16%, transparent); color: #fff;
+    font-size: 18px; line-height: 1; cursor: pointer;
+  }
+  #mapa-zoom .mapa-zoom__fechar:hover { background: color-mix(in srgb, #fff 26%, transparent); }
+  @media (max-width: 720px) { #mapa-zoom .mapa-zoom__fechar { right: 14px; top: 8px; } }
+
+  /* O painel. Escuro nos dois temas, de propósito: é a "sala de máquinas" da
+     tela, e escuro dá contraste ao desenho de linha e aos números. */
+  .mzx {
+    --pz: #161d19; --pz-s: #212a25; --pz-s2: #2b352e; --pz-line: #3d4f43;
+    --pz-ink: #eaf1ec; --pz-ink2: #a3b3a9; --pz-ink3: #77887d;
+    --pz-pri: #7cecab; --pz-lima: #c2ee3c;
+    --pz-warn-bg: #4a3a2a; --pz-warn-i: #f0c89a;
+    --pz-ok-bg: #20362a;  --pz-ok-i: #a8e6c1;
+    width: 412px; max-width: 100vw; height: 100%;
+    background: var(--pz); color: var(--pz-ink);
+    overflow-y: auto; overscroll-behavior: contain;
+    padding: 18px; display: grid; gap: 14px; align-content: start;
+    animation: mzx-entra 260ms cubic-bezier(.05,.7,.1,1);
+  }
+  @keyframes mzx-entra { from { transform: translateX(28px); opacity: .4; } }
+  @media (prefers-reduced-motion: reduce) { .mzx { animation: none; } }
+  .mzx * { box-sizing: border-box; }
+  .mzx svg { display: block; }
+
+  /* ============ identidade ============ */
+  .mzx__cab { display: flex; align-items: flex-start; gap: 10px; }
+  .mzx__id { min-width: 0; display: grid; gap: 1px; }
+  #mz-patrimonio {
+    font: 700 11px/14px ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .06em; color: var(--pz-lima);
+  }
+  #mz-pessoa { font: 700 17px/22px var(--md-font); letter-spacing: -.015em; }
+  #mz-baia { font: 400 11.5px/16px var(--md-font); color: var(--pz-ink2); }
+  #mz-status, #mz-tel {
+    display: inline-block; padding: 3px 9px; margin-top: 6px; margin-right: 5px;
+    border-radius: var(--md-shape-xs);
+    background: var(--pz-s2); color: var(--pz-ink2);
+    font: 600 10px/14px var(--md-font); letter-spacing: .3px;
+  }
+
+  /* ============ as três leituras ============ */
+  .mzx__tri { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .mzx-kpi {
+    background: var(--pz-s); border: 1px solid var(--pz-line);
+    border-radius: var(--md-shape-md); padding: 10px; display: grid; gap: 2px;
+  }
+  .mzx-kpi__l {
+    font: 600 9px/12px var(--md-font); letter-spacing: .12em;
+    text-transform: uppercase; color: var(--pz-ink3);
+  }
+  .mzx-kpi__v { font: 700 17px/22px var(--md-font); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .mzx-kpi__s { font: 500 10px/13px var(--md-font); color: var(--pz-ink2); }
+  /* O selo de desempenho que o JS preenche entra aqui como o valor do KPI. */
+  #mz-desempenho { font: 700 15px/22px var(--md-font); letter-spacing: -.02em; }
+  #mz-desempenho[data-classe="Ótimo"] { color: var(--pz-pri); }
+  #mz-desempenho[data-classe="Bom"] { color: #e5d34a; }
+  #mz-desempenho[data-classe="Baixo"] { color: #ffc06b; }
+  #mz-desempenho[data-classe="Crítico"] { color: #ffb4ab; }
+
+  /* a escala do índice: as faixas reais do sistema (0·35·55·75·100) */
+  .mzx-esc { position: relative; height: 6px; border-radius: var(--md-shape-full); margin-top: 8px;
+             background: linear-gradient(90deg,#e05a52 0%,#e0a13f 34%,#d9d24a 56%,#6fd694 78%,#7cecab 100%); }
+  .mzx-esc__t { display: flex; justify-content: space-between; margin-top: 5px; }
+  .mzx-esc__t span { font: 500 9px/1 var(--md-font); color: var(--pz-ink3); font-variant-numeric: tabular-nums; }
+
+  /* ============ o desenho da máquina ============ */
+  .mzx-maq {
+    background: var(--pz-s); border: 1px solid var(--pz-line);
+    border-radius: var(--md-shape-lg); padding: 12px;
+    display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: 10px; align-items: center;
+  }
+  .mzx-maq__cards { display: grid; gap: 9px; }
+  .mzx-mc {
+    position: relative; overflow: hidden;
+    background: var(--pz); border: 1px solid var(--pz-line);
+    border-radius: var(--md-shape-md); padding: 9px 10px 9px 13px; display: grid; gap: 1px;
+  }
+  .mzx-mc::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--mc-c); }
+  .mzx-mc--cpu { --mc-c: #e0a94f; }
+  .mzx-mc--ram { --mc-c: #e0645c; }
+  .mzx-mc--dis { --mc-c: #7cecab; }
+  .mzx-mc__l1 { display: flex; align-items: center; gap: 6px; }
+  .mzx-mc__pt { width: 7px; height: 7px; border-radius: var(--md-shape-full); background: var(--mc-c); flex: 0 0 auto; }
+  .mzx-mc__l { font: 500 9.5px/13px var(--md-font); color: var(--pz-ink3); }
+  .mzx-mc__v { font: 700 13px/18px var(--md-font); letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mzx-maq__svg { width: 100%; height: auto; }
+  .mzx-peca { stroke: #4f7060; stroke-width: 1.4; fill: none; stroke-linejoin: round; }
+  .mzx-fill { fill: #0d1712; stroke: #3d4f43; stroke-width: 1; }
+  .mzx-anel { fill: none; stroke-width: 2.1; }
+  .mzx-anel--cpu { stroke: #e0a94f; }
+  .mzx-anel--ram { stroke: #e0645c; }
+  .mzx-anel--dis { stroke: #7cecab; }
+
+  /* O DESENHO SEGUE O TIPO DA MAQUINA.
+     Quando o notebook deixou de ter popup proprio e passou a usar esta ficha,
+     ficou o desenho da torre para todo mundo — um notebook com gabinete de PC
+     ao lado dos cartoes de peca. Agora sao dois desenhos no HTML e a chave e o
+     `.is-notebook` que o JS poe em #mapa-zoom (make-admin.js, `pcstatus`).
+     Nao ha custo de rede nisso: os dois sao SVG inline, ja vem na pagina. */
+  /* ARMADILHA DE ESPECIFICIDADE (paguei nesta linha, 09/09/2026).
+     A primeira versao escreveu so `.mzx-maq__svg--nb { display: none }` — um
+     seletor de UMA classe, (0,1,0). Vinte linhas acima existe
+     `.mzx svg { display: block; }`, que e classe + TIPO, (0,1,1), e portanto
+     ganha por especificidade mesmo estando antes. Resultado: o desenho do
+     notebook aparecia junto com o da torre em TODO computador — e, como a
+     `.mzx-maq` e uma grade de duas colunas, o segundo SVG caia na coluna de
+     108px da linha de baixo, virando um notebook pequeno embaixo dos cartoes.
+     O `#mapa-zoom` na frente sobe para (1,1,0) e resolve. */
+  #mapa-zoom .mzx-maq__svg--nb { display: none; }
+  #mapa-zoom.is-notebook .mzx-maq__svg--pc { display: none; }
+  #mapa-zoom.is-notebook .mzx-maq__svg--nb { display: block; }
+
+  /* ============ ficha em lista ============ */
+  .mzx-lista { background: var(--pz-s); border: 1px solid var(--pz-line); border-radius: var(--md-shape-md); overflow: hidden; list-style: none; margin: 0; padding: 0; }
+  .mzx-lista li { display: flex; align-items: baseline; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--pz-line); }
+  .mzx-lista li:last-child { border-bottom: 0; }
+  .mzx-lista li[hidden] { display: none !important; }
+  .mzx-lista b { font: 500 10.5px/15px var(--md-font); color: var(--pz-ink3); flex: 0 0 92px; font-weight: 500; }
+  .mzx-lista span { font: 500 11.5px/16px var(--md-font); min-width: 0; overflow-wrap: anywhere; }
+
+  /* periféricos */
+  .mzx-perifs { display: flex; flex-wrap: wrap; gap: 10px 14px; padding: 2px 2px 0; }
+  .mzp-item { display: inline-flex; align-items: center; gap: 6px; font: 500 10.5px/14px var(--md-font); color: var(--pz-ink2); }
+  .mzp-item svg { width: 15px; height: 15px; flex: none; opacity: .85; }
+  .mzp-warn { width: 16px; height: 16px; vertical-align: -3px; margin-right: 4px; }
+
+  /* ============ chamado / crítico ============ */
+  .monitor__critico[hidden], .monitor__critico-msg[hidden] { display: none !important; }
+  .monitor__critico { background: #3a1512; border-radius: var(--md-shape-md); padding: 12px; display: grid; gap: 10px; }
+  .monitor__critico-msg { font: 400 11.5px/17px var(--md-font); color: #ffd6d1; margin: 0; }
+  .monitor__critico-msg b { color: #ff9a90; }
+  /* Duas colunas, com a ação principal ocupando a linha inteira. Em coluna
+     única os três botões de 40px empilhados dominavam o painel e empurravam a
+     ficha para baixo da dobra — o que importa aqui é a MÁQUINA, não o botão. */
+  .monitor__critico-acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .monitor__critico-acoes > :first-child { grid-column: 1 / -1; }
+  .monitor__critico-acoes .mz-act { min-height: 36px; font-size: 11.5px !important; padding: 0 10px; }
+
+  /* diagnóstico — o JS reescreve o className de #mz-diag, então o estilo é da classe */
+  .monitor__diag { background: var(--pz-s); border: 1px solid var(--pz-line); border-radius: var(--md-shape-md); padding: 11px 12px; }
+  .monitor__diag[hidden] { display: none !important; }
+  .monitor__diag-titulo { font: 600 11px/15px var(--md-font); color: var(--pz-ink2); margin-bottom: 6px; }
+  .monitor__diag-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+  .monitor__diag-item { font: 400 11px/16px var(--md-font); color: var(--pz-ink2); padding-left: 10px; position: relative; }
+  .monitor__diag-item::before { content: ""; position: absolute; left: 0; top: 6px; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+  .monitor__diag-item--alto { color: #ffb4ab; }
+  .monitor__diag-item--medio { color: #ffc06b; }
+  .monitor__diag--ok .monitor__diag-titulo { color: var(--pz-pri); }
+
+  /* ============ ações ============ */
+  .mzx-acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .mz-act {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    min-height: 40px; padding: 0 14px;
+    border: 0 !important; border-radius: var(--md-shape-full) !important;
+    background: var(--pz-s2) !important; color: var(--pz-ink) !important;
+    font: 600 12px/16px var(--md-font) !important; letter-spacing: .1px !important;
+    text-decoration: none; box-shadow: none !important; text-transform: none !important;
+    cursor: pointer; text-align: center;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .mz-act[hidden] { display: none !important; }
+  .mz-act svg { width: 16px; height: 16px; flex: none; }
+  .mz-act--reparo, .mz-act--ok { background: var(--pz-pri) !important; color: #00391c !important; }
+  .mz-act--danger, .mz-act--remove { background: #4d1512 !important; color: #ffb4ab !important; }
+  .mz-act--larga { grid-column: 1 / -1; }
+
+  /* o botão grande, porta única para tudo */
+  .mzx-mais {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; gap: 11px; padding: 12px 14px;
+    background: var(--pz-s); border: 1px solid var(--pz-line); border-radius: var(--md-shape-md);
+    cursor: pointer; text-align: left; width: 100%;
+  }
+  .mzx-mais:hover { background: var(--pz-s2); }
+  .mzx-mais__ic { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 auto; border-radius: 10px; background: #00341a; color: var(--pz-pri); }
+  .mzx-mais__ic svg { width: 18px; height: 18px; }
+  .mzx-mais__t { display: grid; gap: 1px; min-width: 0; }
+  .mzx-mais__n { font: 600 13px/17px var(--md-font); color: var(--pz-ink); }
+  .mzx-mais__s { font: 400 10.5px/14px var(--md-font); color: var(--pz-ink3); }
+  .mzx-mais__ch { margin-left: auto; color: var(--pz-ink3); font-size: 17px; }
+
+  /* o popup em grade */
+  /* `align-self: start` + `min-height: min-content` NÃO SÃO ENFEITE: o popup é
+     ITEM DE GRID da ficha (`.mzx`), item de grid estica por padrão, e o
+     esticamento resolvia a altura dele em 2px — só as bordas. Ele abria e não
+     aparecia nada; o dono viu isso como "o botão nem funciona". Medido depois
+     do conserto: 2px -> 336px. */
+  /* POPUP DE VERDADE: flutua por cima da ficha, não empilha no fluxo.
+     A primeira versão era um bloco dentro da coluna da ficha — abria empurrando
+     tudo para baixo e o widget de ajuda passava por cima. O dono resumiu:
+     "eu falei pra criar um popup de ações da máquina e você fez essa porra".
+     Agora é `position: fixed`, ancorado ao canto de baixo da ficha, acima do
+     botão de ajuda, com altura máxima e rolagem própria. */
+  .mzx-pop {
+    /* `absolute` DENTRO do overlay `#mapa-zoom` (que é fixed, inset 0), e não
+       `fixed` na janela: assim o popup casa com a borda da ficha por
+       construção. Com `fixed` ele media 388px terminando 22px antes da ficha,
+       porque a largura da barra de rolagem entra na conta da janela. */
+    position: absolute;
+    z-index: 12000;
+    /* MESMA LARGURA DA FICHA. A ficha (`.mzx`) tem 412px; o popup tinha 400
+       e ficava desalinhado com ela — o dono pediu para casar as duas larguras.
+       Os 24px descontados são as margens laterais internas, para o popup
+       encostar exatamente nas bordas da ficha. */
+    right: 12px;
+    bottom: 96px;
+    width: min(388px, calc(100vw - 24px));
+    max-height: min(72vh, 620px);
+    display: grid;
+    align-self: start;
+    min-height: min-content;
+    gap: 0;
+    background: var(--pz-s);
+    border: 1px solid var(--pz-line);
+    border-radius: var(--md-shape-lg);
+    box-shadow: 0 18px 48px -8px rgba(0,0,0,.5), 0 4px 12px rgba(0,0,0,.3);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  /* Véu discreto atrás do popup: deixa claro que ele está por cima e dá o
+     clique-fora para fechar (o script local já escuta o clique no véu). */
+  .mzx-pop::before { content: none; }
+  @media (max-width: 620px) {
+    .mzx-pop { right: 12px; left: 12px; width: auto; bottom: 84px; }
+  }
+  .mzx-pop[hidden] { display: none !important; }
+  .mzx-pop__cab { display: flex; align-items: center; gap: 10px; padding: 13px 14px; border-bottom: 1px solid var(--pz-line); }
+  .mzx-pop__t { font: 700 13px/17px var(--md-font); }
+  .mzx-pop__x { margin-left: auto; width: 28px; height: 28px; border: 0; border-radius: var(--md-shape-full); background: var(--pz-s2); color: var(--pz-ink2); font-size: 14px; cursor: pointer; }
+  .mzx-pop__corpo { padding: 4px 12px 14px; }
+  .mzx-pop__g { font: 600 9px/12px var(--md-font); letter-spacing: .14em; text-transform: uppercase; color: var(--pz-ink3); margin: 12px 2px 7px; }
+  .mzx-pop__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .mzx-ac {
+    display: flex; align-items: center; gap: 9px; min-height: 54px; padding: 8px 10px;
+    background: var(--pz); border: 1px solid var(--pz-line); border-radius: var(--md-shape-md);
+    color: var(--pz-ink); text-decoration: none !important; cursor: pointer; text-align: left;
+    font: 500 11.5px/15px var(--md-font);
+  }
+  .mzx-ac[hidden] { display: none !important; }
+  .mzx-ac:hover { background: var(--pz-s2); border-color: var(--ac-c); }
+  .mzx-ac__ic { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 auto; border-radius: 9px; background: var(--ac-bg); color: var(--ac-c); }
+  .mzx-ac__ic svg { width: 16px; height: 16px; }
+  .mzx-ac em { display: block; font: 500 9.5px/13px var(--md-font); font-style: normal; color: var(--pz-ink3); }
+  .mzx-ac--cham { --ac-c: #ff9a90; --ac-bg: #3a1512; }
+  .mzx-ac--disp { --ac-c: #7cecab; --ac-bg: #00341a; }
+  .mzx-ac--colab { --ac-c: #e5c95a; --ac-bg: #332c05; }
+  .mzx-ac--mov { --ac-c: #8fe0b5; --ac-bg: #0d3320; }
+  .mzx-ac--doc { --ac-c: #a3b3a9; --ac-bg: #252f28; }
+  /* Excluir é a única ação irreversível da ficha: vermelho, e por último na
+     lista. Mesmo par de cores do "Abrir reparo" (--mzx-ac--cham) porque a
+     ficha é escura e esse vermelho é o que já se provou legível aqui — o
+     --md-st-crit do tema não vale, é vermelho CLARO para texto escuro. */
+  .mzx-ac--perigo { --ac-c: #ff9a90; --ac-bg: #3a1512; }
+</style>
+
+<div class="mapa-zoom" id="mapa-zoom" aria-hidden="true">
+  <button type="button" class="mapa-zoom__fechar" id="mapa-zoom-fechar" aria-label="Fechar">×</button>
+
+  <aside class="mzx" aria-label="Ficha da máquina">
+
+    {% comment %}Identidade. Os quatro ids são preenchidos pelo JS.{% endcomment %}
+    <div class="mzx__cab">
+      <div class="mzx__id">
+        <span id="mz-patrimonio" title="Patrimônio — identificador único da máquina"></span>
+        <span id="mz-pessoa"></span>
+        <span id="mz-baia"></span>
+        <div>
+          <span id="mz-status"></span>
+          <span id="mz-tel"></span>
+        </div>
+      </div>
+    </div>
+
+    {% comment %}
+    As três leituras que o dono pediu: saúde, tempo de atividade e telemetria.
+    O `#mz-desempenho` é o mesmo elemento de antes (o JS escreve "78 · Ótimo" e
+    um `data-classe`); aqui ele mora dentro do KPI de saúde.
+    {% endcomment %}
+    <div class="mzx__tri">
+      <div class="mzx-kpi">
+        <span class="mzx-kpi__l">Saúde</span>
+        <span id="mz-desempenho" hidden></span>
+        <span class="mzx-kpi__s">índice de desempenho</span>
+      </div>
+      <div class="mzx-kpi">
+        <span class="mzx-kpi__l">Ligada há</span>
+        <span class="mzx-kpi__v" id="mz-uptime-kpi">—</span>
+        <span class="mzx-kpi__s">sem reiniciar</span>
+      </div>
+      <div class="mzx-kpi">
+        <span class="mzx-kpi__l">Preventiva</span>
+        <span class="mzx-kpi__v" id="mz-prev-kpi">—</span>
+        <span class="mzx-kpi__s">para o próximo ciclo</span>
+      </div>
+    </div>
+
+    <div class="mzx-kpi">
+      <span class="mzx-kpi__l">Faixas do índice</span>
+      <div class="mzx-esc" role="img" aria-label="Faixas: crítico até 35, baixo até 55, bom até 75, ótimo acima"></div>
+      <div class="mzx-esc__t" aria-hidden="true">
+        <span>0</span><span>35</span><span>55</span><span>75</span><span>100</span>
+      </div>
+    </div>
+
+    {% comment %}Bloco de chamado / máquina crítica — ids e `hidden` intactos.{% endcomment %}
+    <div class="monitor__critico" id="mz-chamado" hidden>
+      <p class="monitor__critico-msg" id="mz-critico-msg" hidden>
+        <svg class="mzp-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/></svg><b>Máquina em estado crítico.</b>
+        Abra um chamado de reparo ou solicite a troca do equipamento.
+      </p>
+      <div class="monitor__critico-acoes">
+        <a class="mz-act mz-act--reparo" id="mz-reparo" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0 5 5l-9.4 9.4a2 2 0 0 1-2.8 0l-2.2-2.2a2 2 0 0 1 0-2.8z"/></svg> Abrir chamado
+        </a>
+        <a class="mz-act mz-act--troca" id="mz-troca" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h13l-3-3M21 16H8l3 3"/></svg> Desativar para troca
+        </a>
+        <button type="button" class="mz-act mz-act--ok" id="mz-finalizar" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg> Finalizar reparo
+        </button>
+      </div>
+    </div>
+
+    {% comment %}
+    O desenho do gabinete, com anel na peça e o cartão de medida ao lado. Os
+    anéis não têm legenda de propósito: a COR liga o anel ao cartão.
+    Os valores vêm dos mesmos ids de antes, espelhados aqui por JS local.
+    {% endcomment %}
+    <div class="mzx-maq">
+      <div class="mzx-maq__cards">
+        <div class="mzx-mc mzx-mc--cpu">
+          <span class="mzx-mc__l1"><i class="mzx-mc__pt"></i><span class="mzx-mc__l">Processador</span></span>
+          <span class="mzx-mc__v" id="mz-cpu-mc">—</span>
+        </div>
+        <div class="mzx-mc mzx-mc--ram">
+          <span class="mzx-mc__l1"><i class="mzx-mc__pt"></i><span class="mzx-mc__l">Memória</span></span>
+          <span class="mzx-mc__v" id="mz-ram-mc">—</span>
+        </div>
+        <div class="mzx-mc mzx-mc--dis">
+          <span class="mzx-mc__l1"><i class="mzx-mc__pt"></i><span class="mzx-mc__l">Armazenamento</span></span>
+          <span class="mzx-mc__v" id="mz-disco-mc">—</span>
+        </div>
+      </div>
+
+      <svg class="mzx-maq__svg mzx-maq__svg--pc" viewBox="0 0 210 290" role="img"
+           aria-label="Gabinete com painel de vidro: cooler do processador, pentes de memória e disco, cada um com um anel da cor do cartão ao lado">
+        <defs>
+          <linearGradient id="mzx-chassi" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#101914"/><stop offset="100%" stop-color="#0a100c"/>
+          </linearGradient>
+          <radialGradient id="mzx-brilho" cx="50%" cy="40%" r="62%">
+            <stop offset="0%" stop-color="#8fe0b5" stop-opacity=".42"/>
+            <stop offset="100%" stop-color="#8fe0b5" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <path d="M34 268v9M176 268v9" stroke="#030604" stroke-width="6" stroke-linecap="round"/>
+        <rect x="18" y="12" width="174" height="258" rx="9" fill="url(#mzx-chassi)" stroke="#050806" stroke-width="1.5"/>
+        <rect x="24" y="18" width="34" height="246" rx="5" fill="#0d1410"/>
+        <g fill="#33453a">
+          <circle cx="33" cy="34" r="1.5"/><circle cx="41" cy="34" r="1.5"/><circle cx="49" cy="34" r="1.5"/>
+          <circle cx="33" cy="44" r="1.5"/><circle cx="41" cy="44" r="1.5"/><circle cx="49" cy="44" r="1.5"/>
+          <circle cx="33" cy="54" r="1.5"/><circle cx="41" cy="54" r="1.5"/><circle cx="49" cy="54" r="1.5"/>
+          <circle cx="33" cy="64" r="1.5"/><circle cx="41" cy="64" r="1.5"/><circle cx="49" cy="64" r="1.5"/>
+          <circle cx="33" cy="74" r="1.5"/><circle cx="41" cy="74" r="1.5"/><circle cx="49" cy="74" r="1.5"/>
+          <circle cx="33" cy="84" r="1.5"/><circle cx="41" cy="84" r="1.5"/><circle cx="49" cy="84" r="1.5"/>
+        </g>
+        <circle cx="41" cy="112" r="4.5" fill="#040705" stroke="#5a7a66" stroke-width="1"/>
+        <circle cx="41" cy="112" r="2" fill="#7cecab"/>
+        <rect x="64" y="20" width="122" height="242" rx="6" fill="#080d0a" stroke="#3d4f43" stroke-width="1.2"/>
+        <rect x="64" y="20" width="122" height="242" rx="6" fill="url(#mzx-brilho)"/>
+        <rect x="96" y="34" width="84" height="140" rx="3" fill="#0f1c15" stroke="#3f5a4a" stroke-width="1"/>
+        <g stroke="#2c4235" stroke-width=".8"><path d="M104 44h64M104 52h44M104 60h30M150 96h26M150 104h26"/></g>
+        <circle cx="80" cy="46" r="14" fill="#0c1410" stroke="#4f7060" stroke-width="1.2"/>
+        <g stroke="#7fd4a6" stroke-width="1.1" fill="none">
+          <path d="M80 34c7 4 8 12 3 16M80 58c-7-4-8-12-3-16M92 46c-4 7-12 8-16 3M68 46c4-7 12-8 16-3"/>
+        </g>
+        <rect x="104" y="66" width="42" height="42" rx="4" fill="#0c1410" stroke="#527a64" stroke-width="1.2"/>
+        <circle cx="125" cy="87" r="16" fill="#0d1712" stroke="#5c8a72" stroke-width="1.2"/>
+        <g stroke="#8fe0b5" stroke-width="1.2" fill="none">
+          <path d="M125 73c8 4 9 14 3 18M125 101c-8-4-9-14-3-18M139 87c-4 8-14 9-18 3M111 87c4-8 14-9 18-3"/>
+        </g>
+        <circle cx="125" cy="87" r="5" fill="#a8f0c8" opacity=".7"/>
+        <rect x="154" y="52" width="6" height="52" rx="2" fill="#12201a" stroke="#5c8a72" stroke-width="1"/>
+        <rect x="163" y="52" width="6" height="52" rx="2" fill="#12201a" stroke="#5c8a72" stroke-width="1"/>
+        <rect x="172" y="52" width="6" height="52" rx="2" fill="#0b120e" stroke="#3a5346" stroke-width="1"/>
+        <path d="M155 58h4M164 58h4M155 64h4M164 64h4M155 70h4M164 70h4" stroke="#7cecab" stroke-width=".9"/>
+        <rect x="70" y="152" width="24" height="34" rx="3" fill="#101c16" stroke="#527a64" stroke-width="1.1"/>
+        <path d="M75 160h14M75 166h14M75 172h9" stroke="#6fbf95" stroke-width="1"/>
+        <rect x="100" y="126" width="80" height="18" rx="3" fill="#111f18" stroke="#527a64" stroke-width="1.1"/>
+        <circle cx="120" cy="135" r="6" fill="#0a110d" stroke="#5f8f76" stroke-width="1"/>
+        <circle cx="146" cy="135" r="6" fill="#0a110d" stroke="#5f8f76" stroke-width="1"/>
+        <rect x="70" y="204" width="110" height="46" rx="4" fill="#0b1210" stroke="#4d7560" stroke-width="1.2"/>
+        <circle cx="98" cy="227" r="13" fill="#0e1913" stroke="#527a64" stroke-width="1.1"/>
+        <g stroke="#78c9a0" stroke-width="1" fill="none"><path d="M98 216c6 3 7 11 2 14M98 238c-6-3-7-11-2-14"/></g>
+        <path d="M124 216h48M124 226h48M124 236h30" stroke="#3f5c4c" stroke-width="1.2"/>
+        <path d="M112 204c-2-14 8-18 22-16s28-4 30-16" fill="none" stroke="#7fd8ab" stroke-width="2.2" opacity=".5" stroke-linecap="round"/>
+        <ellipse class="mzx-anel mzx-anel--cpu" cx="125" cy="87" rx="30" ry="26"/>
+        <ellipse class="mzx-anel mzx-anel--ram" cx="166" cy="78" rx="17" ry="33"/>
+        <ellipse class="mzx-anel mzx-anel--dis" cx="82" cy="169" rx="19" ry="24"/>
+      </svg>
+
+      {% comment %}
+      O MESMO CUTAWAY, PARA NOTEBOOK.
+      A torre e vista pelo painel de vidro; o notebook e visto pela tampa
+      inferior removida (a vista de manual de servico) — e o unico angulo em
+      que cabem as tres pecas dos cartoes. A tampa dobrada para tras e as duas
+      dobradicas no topo existem para a silhueta ser de notebook e nao de uma
+      caixa qualquer. Os aneis seguem a mesma regra da torre: sem legenda, a
+      COR liga o anel ao cartao, e o anel toma a forma da peca.
+      {% endcomment %}
+      <svg class="mzx-maq__svg mzx-maq__svg--nb" viewBox="0 0 232 168" role="img"
+           aria-label="Notebook aberto pela tampa inferior: cooler e processador, os dois pentes de memoria e o SSD, cada um com um anel da cor do cartao ao lado">
+        <defs>
+          <linearGradient id="mzx-chassi-nb" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#101914"/><stop offset="100%" stop-color="#0a100c"/>
+          </linearGradient>
+          <radialGradient id="mzx-brilho-nb" cx="42%" cy="34%" r="66%">
+            <stop offset="0%" stop-color="#8fe0b5" stop-opacity=".42"/>
+            <stop offset="100%" stop-color="#8fe0b5" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+
+        <rect x="30" y="4" width="172" height="13" rx="4" fill="#0d1410" stroke="#050806" stroke-width="1.2"/>
+        <rect x="52" y="15" width="26" height="9" rx="2.5" fill="#0b110d" stroke="#33453a" stroke-width="1"/>
+        <rect x="154" y="15" width="26" height="9" rx="2.5" fill="#0b110d" stroke="#33453a" stroke-width="1"/>
+
+        <rect x="8" y="20" width="216" height="142" rx="11" fill="url(#mzx-chassi-nb)" stroke="#050806" stroke-width="1.5"/>
+        <rect x="15" y="27" width="202" height="128" rx="7" fill="#080d0a" stroke="#3d4f43" stroke-width="1.2"/>
+        <rect x="15" y="27" width="202" height="128" rx="7" fill="url(#mzx-brilho-nb)"/>
+        <g fill="#040705" stroke="#33453a" stroke-width=".9">
+          <circle cx="24" cy="35" r="2.2"/><circle cx="208" cy="35" r="2.2"/>
+          <circle cx="24" cy="147" r="2.2"/><circle cx="208" cy="147" r="2.2"/>
+        </g>
+
+        <circle cx="46" cy="56" r="19" fill="#0c1410" stroke="#4f7060" stroke-width="1.2"/>
+        <g stroke="#7fd4a6" stroke-width="1.1" fill="none">
+          <path d="M46 39c9 5 10 16 4 21M46 73c-9-5-10-16-4-21M63 56c-5 9-16 10-21 4M29 56c5-9 16-10 21-4"/>
+        </g>
+        <circle cx="46" cy="56" r="4.5" fill="#a8f0c8" opacity=".55"/>
+        <path d="M20 47h6M20 53h6M20 59h6" stroke="#3f5c4c" stroke-width="1.2"/>
+        <path d="M64 50h22a4 4 0 0 1 4 4v4" fill="none" stroke="#7fd8ab" stroke-width="3" opacity=".45" stroke-linecap="round"/>
+
+        <rect x="80" y="56" width="34" height="34" rx="3" fill="#0d1712" stroke="#5c8a72" stroke-width="1.2"/>
+        <rect x="88" y="64" width="18" height="18" rx="2" fill="#12201a" stroke="#6fbf95" stroke-width="1"/>
+        <g stroke="#3f5c4c" stroke-width=".8"><path d="M84 60v26M110 60v26"/></g>
+
+        <rect x="126" y="46" width="86" height="12" rx="2" fill="#12201a" stroke="#5c8a72" stroke-width="1"/>
+        <rect x="126" y="63" width="86" height="12" rx="2" fill="#12201a" stroke="#5c8a72" stroke-width="1"/>
+        <g stroke="#7cecab" stroke-width=".9">
+          <path d="M132 52h8M146 52h8M160 52h8M174 52h8M188 52h8"/>
+          <path d="M132 69h8M146 69h8M160 69h8M174 69h8M188 69h8"/>
+        </g>
+
+        <rect x="128" y="84" width="44" height="13" rx="2" fill="#101c16" stroke="#527a64" stroke-width="1.1"/>
+        <path d="M134 90h10" stroke="#6fbf95" stroke-width="1"/>
+        <path d="M172 90c12 0 16-8 28-8" fill="none" stroke="#7fd8ab" stroke-width="2.2" opacity=".45" stroke-linecap="round"/>
+
+        <rect x="28" y="98" width="84" height="15" rx="2" fill="#101c16" stroke="#527a64" stroke-width="1.1"/>
+        <path d="M34 103h30M34 108h20" stroke="#6fbf95" stroke-width="1"/>
+        <rect x="96" y="101" width="12" height="9" rx="1.5" fill="#0a110d" stroke="#5f8f76" stroke-width="1"/>
+        <circle cx="118" cy="105" r="3" fill="#040705" stroke="#527a64" stroke-width="1"/>
+
+        <rect x="52" y="121" width="136" height="28" rx="4" fill="#0b1210" stroke="#4d7560" stroke-width="1.2"/>
+        <g stroke="#3f5c4c" stroke-width="1.2"><path d="M97 121v28M143 121v28"/></g>
+        <path d="M60 129h28M60 135h20M106 129h28M106 135h20M152 129h28M152 135h20" stroke="#3f5c4c" stroke-width="1"/>
+
+        <g fill="#33453a">
+          <circle cx="24" cy="126" r="1.4"/><circle cx="32" cy="126" r="1.4"/><circle cx="40" cy="126" r="1.4"/>
+          <circle cx="24" cy="134" r="1.4"/><circle cx="32" cy="134" r="1.4"/><circle cx="40" cy="134" r="1.4"/>
+          <circle cx="24" cy="142" r="1.4"/><circle cx="32" cy="142" r="1.4"/><circle cx="40" cy="142" r="1.4"/>
+          <circle cx="200" cy="126" r="1.4"/><circle cx="208" cy="126" r="1.4"/>
+          <circle cx="200" cy="134" r="1.4"/><circle cx="208" cy="134" r="1.4"/>
+          <circle cx="200" cy="142" r="1.4"/><circle cx="208" cy="142" r="1.4"/>
+        </g>
+
+        <ellipse class="mzx-anel mzx-anel--cpu" cx="97" cy="73" rx="23" ry="24"/>
+        <ellipse class="mzx-anel mzx-anel--ram" cx="169" cy="60" rx="46" ry="21"/>
+        <ellipse class="mzx-anel mzx-anel--dis" cx="70" cy="105" rx="48" ry="13"/>
+      </svg>
+    </div>
+
+    {% comment %}Ficha completa. Ids e `hidden` dos <li> preservados.{% endcomment %}
+    <ul class="mzx-lista monitor__specs">
+      <li><b>S.O</b><span id="mz-so"></span></li>
+      <li><b>Processador</b><span id="mz-cpu"></span></li>
+      <li><b>Placa-mãe</b><span id="mz-placa"></span></li>
+      <li><b>Memória RAM</b><span id="mz-ram"></span></li>
+      <li><b>Armazenamento</b><span id="mz-disco"></span></li>
+      {% comment %}Divergência entre o cadastro e o que o agente mediu. O
+      cadastro é o que manda na tela; esta linha existe para a diferença não
+      ficar invisível — é por ela que se descobre um erro de digitação ou uma
+      máquina que trocou de mesa sem ninguém atualizar.{% endcomment %}
+      <li id="mz-diverg-li" hidden><b>Agente leu diferente</b><span id="mz-diverg"></span></li>
+      <li id="mz-gpu-li" hidden><b>Placa de vídeo</b><span id="mz-gpu"></span></li>
+      <li id="mz-uptime-li" hidden><b>Tempo ligada</b><span id="mz-uptime"></span></li>
+      <li id="mz-local-li" hidden><b>Localização</b><span id="mz-local"></span></li>
+      {% comment %}
+      As quatro abaixo aparecem só quando existe o dado. Nº de série vale para
+      os dois tipos; unidade/setor, conta e AnyDesk hoje só o notebook tem —
+      são a razão pela qual o mapa de notebooks tinha um popup próprio, e por
+      isso entram aqui em vez de manter dois painéis.
+      {% endcomment %}
+      <li id="mz-serial-li" hidden><b>Nº de série</b><span id="mz-serial"></span></li>
+      <li id="mz-unidade-li" hidden><b>Unidade / setor</b><span id="mz-unidade"></span></li>
+      <li id="mz-conta-li" hidden><b>Conta</b><span id="mz-conta"></span></li>
+      <li id="mz-anydesk-li" hidden><b>AnyDesk</b><span id="mz-anydesk"></span></li>
+    </ul>
+
+    <div class="mzx-perifs monitor__perifs">
+      <span class="mzp-item" title="Mouse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 6v4"/></svg><span id="mz-mouse"></span></span>
+      <span class="mzp-item" title="Teclado"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7.5 14h9"/></svg><span id="mz-teclado"></span></span>
+      <span class="mzp-item" title="Webcam"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 8-6 4 6 4z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg><span id="mz-webcam"></span></span>
+      <span class="mzp-item" title="Headset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17v-5a8 8 0 0 1 16 0v5"/><path d="M4 15h3v6H5a1 1 0 0 1-1-1zM20 15h-3v6h2a1 1 0 0 0 1-1z"/></svg><span id="mz-headset"></span></span>
+      <span class="mzp-item" title="Monitor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span id="mz-monitor"></span></span>
+      <span class="mzp-item" title="Leitor de código de barras"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6v12M7.5 6v12M11 6v9M14.5 6v12M18 6v9M20.5 6v12"/></svg><span id="mz-leitor"></span></span>
+    </div>
+
+    <div class="monitor__diag" id="mz-diag" hidden>
+      <div class="monitor__diag-titulo" id="mz-diag-titulo"></div>
+      <ul class="monitor__diag-lista" id="mz-diag-lista"></ul>
+    </div>
+
+    {% comment %}
+    AÇÕES. As de todo dia ficam como botão; o resto vive no popup — e ali estão
+    TODAS as 15 que a máquina tem hoje, incluindo o "emitir protocolo", que o
+    dono notou que eu havia esquecido.
+
+    Cada ação continua sendo servida pela tela/endpoint que já é dona dela, com
+    a permissão e a trava de concorrência de lá. Esta ficha é a PORTA, não a
+    implementação — é assim que se unifica sem tocar em regra de negócio.
+    {% endcomment %}
+    <div class="mzx-acoes">
+      <button type="button" class="mz-act mz-act--pc" id="mz-alocar-pc" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> Alocar PC
+      </button>
+      <button type="button" class="mz-act mz-act--nb" id="mz-alocar-nb" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></svg> Alocar notebook
+      </button>
+      <button type="button" class="mz-act mz-act--add" id="mz-atribuir-colab" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg> Atribuir
+      </button>
+      <button type="button" class="mz-act mz-act--remove" id="mz-remover-disp" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 17H7A5 5 0 0 1 7 7h2M15 7h2a5 5 0 0 1 3.6 8.5"/><path d="M3 3l18 18"/></svg> Remover
+      </button>
+      <button type="button" class="mz-act mz-act--danger" id="mz-retirar-colab" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="4"/><path d="M22 11h-6"/></svg> Retirar
+      </button>
+
+      <button type="button" class="mzx-mais" id="mz-mais" aria-haspopup="dialog" aria-expanded="false">
+        <span class="mzx-mais__ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        </span>
+        <span class="mzx-mais__t">
+          <span class="mzx-mais__n">Ações da máquina</span>
+          <span class="mzx-mais__s">todas as opções desta baia</span>
+        </span>
+        <span class="mzx-mais__ch" aria-hidden="true">›</span>
+      </button>
+    </div>
+
+    <div class="mzx-pop" id="mz-pop" role="dialog" aria-label="Ações da máquina" hidden>
+      <div class="mzx-pop__cab">
+        <span class="mzx-mais__ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        </span>
+        <span class="mzx-pop__t">Ações da máquina</span>
+        <button type="button" class="mzx-pop__x" id="mz-pop-x" aria-label="Fechar ações">×</button>
+      </div>
+      <div class="mzx-pop__corpo">
+        <p class="mzx-pop__g">Chamado</p>
+        <div class="mzx-pop__grid">
+          <a class="mzx-ac mzx-ac--cham" id="mz-ac-reparo" href="#">
+            <span class="mzx-ac__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0 5 5l-9.4 9.4a2 2 0 0 1-2.8 0l-2.2-2.2a2 2 0 0 1 0-2.8z"/></svg></span>
+            <span>Abrir reparo</span>
+          </a>
+          <a class="mzx-ac mzx-ac--cham" id="mz-ac-troca" href="#">
+            <span class="mzx-ac__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h13l-3-3M21 16H8l3 3"/></svg></span>
+            <span>Desativação para troca</span>
+          </a>
+        </div>
+
+        <p class="mzx-pop__g">Movimentação</p>
+        <div class="mzx-pop__grid">
+          <a class="mzx-ac mzx-ac--mov" id="mz-ac-transf" href="#">
+            <span class="mzx-ac__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.3a4 4 0 0 0-1.2-2.9L19 9h-5v8h3"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></span>
+            <span>Transferir para outra loja</span>
+          </a>
+          <a class="mzx-ac mzx-ac--mov" id="mz-ac-mover" href="#">
+            <span class="mzx-ac__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4v16M8 4 5 7M8 4l3 3M16 20V4M16 20l-3-3M16 20l3-3"/></svg></span>
+            <span>Mover baia entre setores</span>
+          </a>
+          <a class="mzx-ac mzx-ac--mov" id="mz-ac-protocolo" href="#" hidden>
+            <span class="mzx-ac__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 17h12v4H6z"/></svg></span>
+            <span>Emitir protocolo</span>
+          </a>
+        </div>
+
+        <p class="mzx-pop__g">Documentos e cadastro</p>
+        <div class="mzx-pop__grid">
+          <a class="mzx-ac mzx-ac--doc" id="mz-ac-etiqueta" href="#" hidden>
+            <span class="mzx-ac__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2a2 2 0 0 1-.6-1.4V4a1 1 0 0 1 1-1h8a2 2 0 0 1 1.4.6l7.4 7.4a2 2 0 0 1 0 2.4z"/><path d="M7.5 7.5h.01"/></svg></span>
+            <span>Imprimir etiqueta</span>
+          </a>
+          <a class="mzx-ac mzx-ac--doc" id="mz-ac-preventiva" href="/parque/preventiva/">
+            <span class="mzx-ac__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg></span>
+            <span>Concluir preventiva</span>
+          </a>
+          <a class="mzx-ac mzx-ac--doc" id="mz-editar" href="#">
+            <span class="mzx-ac__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>
+            <span>Editar cadastro</span>
+          </a>
+          {% comment %}Excluir a MESA. O equipamento não vai junto: o vínculo
+          mora na baia, e o signal `liberar_dispositivo_da_baia_apagada` devolve
+          o computador ao estoque. O texto da confirmação diz isso com todas as
+          letras — "apagar a baia" soa como "apagar a máquina", e ninguém deve
+          precisar confiar na nossa palavra para clicar.{% endcomment %}
+          {% if perms.parque.delete_baia %}
+            <button type="button" class="mzx-ac mzx-ac--doc mzx-ac--perigo" id="mz-ac-excluir">
+              <span class="mzx-ac__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg></span>
+              <span>Excluir baia</span>
+            </button>
+          {% endif %}
+          {% comment %}Só para notebook: o termo de responsabilidade.{% endcomment %}
+          <button type="button" class="mzx-ac mzx-ac--doc" id="mz-ac-termo" hidden>
+            <span class="mzx-ac__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h6M9 13h6M9 17h4"/></svg></span>
+            <span>Gerar termo</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+{% if perms.parque.delete_baia %}
+  {% comment %}O POST de excluir. Reaproveita a MESMA rota da tabela
+  (`parque_excluir_dispositivos`), que confere a permissão no servidor — o
+  `{% if %}` daqui só esconde o botão, não é a trava.{% endcomment %}
+  <form id="mz-form-excluir" method="post" action="{% url 'parque_excluir_dispositivos' %}" hidden>
+    {% csrf_token %}
+    <input type="hidden" name="modelo" value="baia">
+    <input type="hidden" name="itens" id="mz-excluir-pk" value="">
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  </form>
+{% endif %}
+
+<script>
+  /* ------------------------------------------------------------------------
+     JS LOCAL da ficha. Faz três coisas e nada mais — o preenchimento dos dados
+     continua sendo do make-admin.js, que não foi tocado.
+
+     1. Abre e fecha o popup de ações.
+     2. Espelha nos cartões do desenho (Processador / Memória / Disco) os
+        valores que o make-admin.js já escreveu na lista. Espelhar em vez de
+        buscar de novo evita duplicar a lógica de formatação, que é dele.
+     3. Copia os destinos das ações principais para os itens do popup, e mostra
+        os que dependem de dado da baia (etiqueta, protocolo) só quando existem.
+
+     Roda num MutationObserver porque a ficha é preenchida depois, quando o
+     usuário clica na baia — não há evento público para escutar.
+     ------------------------------------------------------------------------ */
+  (function () {
+    var zoom = document.getElementById("mapa-zoom");
+    if (!zoom) return;
+
+    var pop = document.getElementById("mz-pop");
+    var btnMais = document.getElementById("mz-mais");
+    var btnX = document.getElementById("mz-pop-x");
+
+    function abrirPop(on) {
+      if (!pop || !btnMais) return;
+      pop.hidden = !on;
+      btnMais.setAttribute("aria-expanded", on ? "true" : "false");
+    }
+    if (btnMais) btnMais.addEventListener("click", function () { abrirPop(pop.hidden); });
+    if (btnX) btnX.addEventListener("click", function () { abrirPop(false); });
+
+    var btnExcluir = document.getElementById("mz-ac-excluir");
+    var formExcluir = document.getElementById("mz-form-excluir");
+    if (btnExcluir && formExcluir) {
+      btnExcluir.addEventListener("click", function () {
+        var campo = document.getElementById("mz-excluir-pk");
+        if (!campo || !campo.value) return;
+        var nome = btnExcluir.dataset.nome || "esta baia";
+        var pergunta = 'Excluir a baia "' + nome + '"?';
+        if (btnExcluir.dataset.temPc === "1") {
+          pergunta += "\n\nO equipamento que está nela NÃO será apagado: " +
+                      "ele volta para o estoque e continua no sistema.";
+        }
+        pergunta += "\n\nA baia em si não tem como ser recuperada.";
+        if (confirm(pergunta)) formExcluir.submit();
+      });
+    }
+
+    function txt(id) {
+      var el = document.getElementById(id);
+      return el ? (el.textContent || "").trim() : "";
+    }
+    // A baia clicada, guardada na captura: é dela que saem etiqueta, protocolo
+    // e link de edição. Captura (true) porque o clique da baia é interceptado
+    // por outros ouvintes no caminho.
+    var mkUltimaBaia = null;
+    document.addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest(".baia");
+      if (b) mkUltimaBaia = b;
+    }, true);
+
+    function por(id, valor) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = valor || "—";
+    }
+    function href(de, para) {
+      var a = document.getElementById(de), b = document.getElementById(para);
+      if (a && b) b.setAttribute("href", a.getAttribute("href") || "#");
+    }
+
+    function sincronizar() {
+      // cartões do desenho espelham a lista
+      por("mz-cpu-mc", txt("mz-cpu"));
+      por("mz-ram-mc", txt("mz-ram"));
+      por("mz-disco-mc", txt("mz-disco"));
+      por("mz-uptime-kpi", txt("mz-uptime"));
+
+      // ações do popup herdam o destino das principais
+      href("mz-reparo", "mz-ac-reparo");
+      href("mz-troca", "mz-ac-troca");
+
+      // Etiqueta e protocolo vêm dos data-* da baia CLICADA.
+      //
+      // A primeira versão procurava a baia por `.baia.is-zoom, .baia[data-aberta]`
+      // — marcadores que ninguém põe. Nunca achava nada, então "Imprimir
+      // etiqueta" ficava escondido para sempre e o dono não conseguia imprimir
+      // a etiqueta de patrimônio. Agora guardamos a baia no clique, que é o
+      // único lugar onde essa informação existe de verdade.
+      var sel = mkUltimaBaia ||
+        document.querySelector("#mapa-planta .baia.is-zoom, #mapa-planta .baia[data-aberta]");
+      var etq = document.getElementById("mz-ac-etiqueta");
+      if (etq) {
+        var url = sel && sel.getAttribute("data-etiqueta");
+        etq.hidden = !url;
+        etq.setAttribute("href", url || "#");
+      }
+      // Protocolo da máquina: mesma fonte.
+      var prot = document.getElementById("mz-ac-protocolo");
+      if (prot) {
+        var purl = sel && (sel.getAttribute("data-protocolo") ||
+                           sel.getAttribute("data-etiqueta"));
+        // Sem protocolo próprio, o caminho é a tela de transferências (onde o
+        // protocolo é emitido). Melhor levar a algum lugar do que esconder.
+        prot.hidden = false;
+        prot.setAttribute("href", sel && sel.getAttribute("data-protocolo")
+          ? sel.getAttribute("data-protocolo")
+          : "/parque/transferencias/");
+      }
+      // Editar cadastro: também é data-* da baia.
+      var ed = document.getElementById("mz-editar");
+      if (ed && sel && sel.getAttribute("data-edit")) {
+        ed.setAttribute("href", sel.getAttribute("data-edit"));
+      }
+      // Excluir baia: guarda QUAL baia, e monta a pergunta com o nome dela.
+      //
+      // A confirmação muda conforme a mesa tem equipamento ou não. "Apagar a
+      // baia" soa como "apagar a máquina" — quem tem um PC ali precisa ler,
+      // antes de clicar, que a máquina volta para o estoque e não se perde.
+      var ex = document.getElementById("mz-ac-excluir");
+      var campoPk = document.getElementById("mz-excluir-pk");
+      if (ex && campoPk) {
+        var pk = sel && sel.getAttribute("data-baia");
+        ex.hidden = !pk;
+        campoPk.value = pk || "";
+        ex.dataset.nome = (sel && sel.getAttribute("data-nome")) || "esta baia";
+        ex.dataset.temPc = (sel && sel.getAttribute("data-tem-pc")) || "0";
+      }
+      // Transferir e mover: as telas que já são donas da ação.
+      var t = document.getElementById("mz-ac-transf");
+      if (t) t.setAttribute("href", "/parque/transferencia-lojas/");
+      var m = document.getElementById("mz-ac-mover");
+      if (m) m.setAttribute("href", "/parque/mover-baia/");
+    }
+
+    // Fecha o popup a cada abertura nova da ficha, e sincroniza.
+    new MutationObserver(function () {
+      if (zoom.classList.contains("is-open")) { abrirPop(false); setTimeout(sincronizar, 30); }
+    }).observe(zoom, { attributes: true, attributeFilter: ["class"] });
+  })();
+</script>

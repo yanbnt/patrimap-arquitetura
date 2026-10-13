@@ -1,0 +1,369 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+<style>
+  {% comment %}
+    montar_caixa.html — MATERIAL DESIGN 3 (DESIGN-SYSTEM.md §4 e §5).
+
+    Migrado de `--ui-*` para `--md-*`. O que SAIU:
+      · as bordas de 1px do bloco da rota, da lista de itens, do painel da caixa
+        e de cada item avulso — todos viraram cartões/superfícies tonais
+        (`surface-container-low` e, aninhado, `surface-container`);
+      · o filete verde de 3px do item que está na caixa e o fundo em
+        color-mix: o item selecionado usa `secondary-container`, que é o papel
+        de SELEÇÃO no M3;
+      · o halo de 3px no campo de destino com erro — erro é borda `error`,
+        sem glow;
+      · a borda tracejada do "adicionar item avulso", que virou outlined button;
+      · a MAIÚSCULA e o peso 700 dos rótulos (label-medium) e o peso 700 nos
+        números (400, tabular).
+
+    Hooks preservados (make-admin.js -> initMontarCaixa): #cx-form[data-generico],
+    #cx-origem, #cx-destino (+ .is-erro), .cx-item[data-unidade/-pid/-nome],
+    .cx-item__qtd, .cx-step[data-step], input[name=peca_*], #cx-avulsos-list,
+    #cx-avulso-add, #cx-avulso-tpl, .cx-avulso, .cx-avulso__x, .cx-resumo,
+    #cx-box (+ .is-cheia/.is-pulse), #cx-box-count, #cx-total, #cx-montar,
+    #cx-anim (+ .is-open), .cx-anim__stage (+ .is-playing), #cx-anim-txt,
+    e as classes .is-na-caixa / .cx-box__* usadas pela animação.
+  {% endcomment %}
+  .cxr { display: grid; gap: 16px; }
+
+  .cxr-back {
+    justify-self: start; display: inline-flex; align-items: center; gap: 8px;
+    height: 40px; padding: 0 16px 0 12px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; text-decoration: none;
+  }
+  .cxr-back:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .cxr-back svg { width: 18px; height: 18px; flex: none; }
+
+  /* ---------- Rota do envio ---------- */
+  .cxr-rota {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px;
+    padding: 24px; border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-low);
+  }
+  .cxr-field { display: grid; gap: 8px; align-content: start; }
+  .cxr-field__lbl {
+    font: 500 12px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: none; color: var(--md-on-surface-variant);
+  }
+  .cxr-field__req { color: var(--md-error); }
+  .cxr-field__help {
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+  }
+  .cxr-field select, .cxr-field input { width: 100%; }
+  /* Erro no M3: borda `error` de 2px. Sem halo. */
+  #cx-destino.is-erro {
+    border-color: var(--md-error) !important;
+    box-shadow: inset 0 0 0 1px var(--md-error) !important;
+  }
+
+  /* ---------- Duas colunas: itens | caixa ---------- */
+  .cxr .cx-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, .8fr); gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .cxr .cx-grid { grid-template-columns: 1fr; } }
+
+  .cxr .cx-itens {
+    display: flex; flex-direction: column; gap: 0;
+    max-height: none; overflow: visible; padding: 0;
+    border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-low);
+  }
+  .cxr .cx-stock { border: 0; }
+  .cxr .cx-stock__sum {
+    display: flex; align-items: center; gap: 12px; cursor: pointer;
+    padding: 16px; list-style: none;
+    font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface);
+    border-bottom: 1px solid var(--md-outline-variant);
+  }
+  .cxr .cx-stock__sum::before { content: none; }
+  .cxr .cx-stock__sum small {
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant);
+  }
+  .cxr .cx-stock__list { display: flex; flex-direction: column; gap: 0; padding: 0; }
+
+  /* Linha de item: divisor `outline-variant`, densidade de tabela. */
+  .cxr .cx-item {
+    display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center;
+    padding: 8px 16px; border: 0; border-bottom: 1px solid var(--md-outline-variant);
+    border-radius: 0; background: transparent; box-shadow: none;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .cxr .cx-item:hover { background: color-mix(in srgb, var(--md-on-surface) 8%, transparent); }
+  /* Selecionado = `secondary-container`, o papel de seleção no M3. */
+  .cxr .cx-item.is-na-caixa { background: var(--md-secondary-container); box-shadow: none; }
+  .cxr .cx-item.is-na-caixa .cx-item__txt b,
+  .cxr .cx-item.is-na-caixa .cx-item__txt span { color: var(--md-on-secondary-container); }
+  .cxr .cx-item__txt { display: grid; gap: 2px; min-width: 0; }
+  .cxr .cx-item__txt b {
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; color: var(--md-on-surface);
+  }
+  .cxr .cx-item__txt span {
+    font: 400 12px/16px var(--md-font); letter-spacing: .4px; color: var(--md-on-surface-variant);
+  }
+
+  .cxr .cx-item__qtd, .cxr .cx-avulso .cx-item__qtd { display: flex; align-items: center; gap: 4px; }
+  .cxr .cx-item__qtd input {
+    width: 72px; height: 40px; min-height: 40px !important; text-align: center;
+    padding: 0 8px !important;
+    border: 1px solid var(--md-outline) !important; border-radius: var(--md-shape-xs) !important;
+    background: transparent !important; color: var(--md-on-surface) !important;
+    font: 400 16px/24px var(--md-font) !important; letter-spacing: .5px !important;
+  }
+  /* Icon button do M3: 40px, pílula, state layer. */
+  .cxr .cx-step {
+    width: 40px; height: 40px; display: grid; place-items: center;
+    border: 1px solid var(--md-outline-variant); border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-on-surface-variant);
+    font-size: 18px; line-height: 1; cursor: pointer; padding: 0;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .cxr .cx-step:hover {
+    background: color-mix(in srgb, var(--md-primary) 8%, transparent); color: var(--md-primary);
+  }
+
+  /* Itens fora do estoque */
+  .cxr .cx-avulsos { margin: 0; padding: 16px; border-top: 1px solid var(--md-outline-variant); }
+  .cxr .cx-avulsos__head { display: grid; gap: 2px; margin-bottom: 16px; }
+  .cxr .cx-avulsos__head b {
+    font: 500 16px/24px var(--md-font); letter-spacing: .15px; color: var(--md-on-surface);
+  }
+  .cxr .cx-avulsos__head span {
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant);
+  }
+  .cxr .cx-avulsos__list { display: flex; flex-direction: column; gap: 8px; }
+  .cxr .cx-avulso {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 12px; border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container); box-shadow: none;
+  }
+  .cxr .cx-avulso.is-na-caixa { background: var(--md-secondary-container); box-shadow: none; }
+  .cxr .cx-avulso__tipo { flex: 0 0 auto; min-width: 150px; max-width: 190px; }
+  .cxr .cx-avulso__nome { flex: 1 1 180px; min-width: 0; }
+  .cxr .cx-avulso__x {
+    width: 40px; height: 40px; display: grid; place-items: center;
+    border: 0; border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-on-surface-variant);
+    font-size: 18px; line-height: 1; cursor: pointer; padding: 0;
+  }
+  .cxr .cx-avulso__x:hover {
+    background: color-mix(in srgb, var(--md-error) 8%, transparent); color: var(--md-error);
+  }
+  /* Outlined button do M3 (era borda tracejada). */
+  .cxr .cx-avulso-add {
+    display: inline-flex; align-items: center; gap: 8px; margin-top: 16px;
+    height: 40px; padding: 0 24px;
+    border: 1px solid var(--md-outline); border-radius: var(--md-shape-full);
+    background: transparent; color: var(--md-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; cursor: pointer;
+  }
+  .cxr .cx-avulso-add:hover { background: color-mix(in srgb, var(--md-primary) 8%, transparent); }
+  .cxr .cx-avulso-add svg { width: 18px; height: 18px; flex: none; }
+
+  /* ---------- Painel da caixa (grudento) ---------- */
+  .cxr .cx-box-panel {
+    position: sticky; top: 76px;
+    display: grid; justify-items: center; gap: 16px;
+    padding: 24px; border: 0; border-radius: var(--md-shape-md);
+    background: var(--md-surface-container-low); box-shadow: none;
+  }
+  .cxr .cx-box { width: 132px; }
+  .cxr .cx-box__count { font-variant-numeric: tabular-nums; font-weight: 400; }
+  .cxr .cx-resumo {
+    list-style: none; margin: 0; padding: 0; width: 100%;
+    display: grid; gap: 0; max-height: 260px; overflow: auto;
+    border-top: 1px solid var(--md-outline-variant);
+  }
+  .cxr .cx-resumo li {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    padding: 8px 2px; border-bottom: 1px solid var(--md-outline-variant);
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px;
+  }
+  .cxr .cx-resumo li:last-child { border-bottom: 0; }
+  .cxr .cx-resumo__nome { color: var(--md-on-surface); min-width: 0; }
+  .cxr .cx-resumo__q { color: var(--md-on-surface-variant); white-space: nowrap; }
+  .cxr .cx-resumo__vazio { justify-content: center; color: var(--md-on-surface-variant); border-bottom: 0; }
+  .cxr .cx-resumo__tag {
+    font-style: normal; font: 500 11px/16px var(--md-font); letter-spacing: .5px;
+    text-transform: uppercase; color: var(--md-st-warn);
+    background: var(--md-st-warn-cont);
+    border-radius: var(--md-shape-xs); padding: 1px 6px; margin-left: 6px;
+  }
+  .cxr .cx-total {
+    width: 100%; text-align: center; min-height: 1em;
+    font: 400 14px/20px var(--md-font); letter-spacing: .25px; color: var(--md-on-surface-variant);
+  }
+  /* Filled button do M3: a ação principal da tela. */
+  .cxr .cx-montar {
+    width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 40px; padding: 0 24px;
+    border: 0; border-radius: var(--md-shape-full);
+    background: var(--md-primary); color: var(--md-on-primary);
+    font: 500 14px/20px var(--md-font); letter-spacing: .1px; cursor: pointer;
+    transition: background-color var(--md-dur-short) var(--md-ease-standard);
+  }
+  .cxr .cx-montar:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--md-on-primary) 8%, var(--md-primary));
+  }
+  /* Desabilitado no M3: 12% de `on-surface` no fundo, 38% no texto. */
+  .cxr .cx-montar:disabled {
+    background: color-mix(in srgb, var(--md-on-surface) 12%, transparent);
+    color: color-mix(in srgb, var(--md-on-surface) 38%, transparent);
+    cursor: not-allowed;
+  }
+  .cxr .cx-montar svg { width: 18px; height: 18px; flex: none; }
+</style>
+
+<div class="cxr" id="cx-wrap">
+  <a data-mk-voltar class="cxr-back" href="{{ voltar_url }}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+    {{ voltar_nome }}
+  </a>
+
+  <header class="mkpro-head">
+    <p class="mkpro-head__eyebrow">Parque de máquinas · Estoque</p>
+    <h1 class="mkpro-head__title">{% if generico %}Protocolo de envio (avulso){% else %}Montar caixa de envio{% endif %}</h1>
+    {% if generico %}
+      <p class="mkpro-head__sub">Protocolo <b>genérico</b>: escolha origem e destino e liste os itens. Não precisa ser do estoque — nada é baixado das lojas.</p>
+    {% else %}
+      <p class="mkpro-head__sub">Escolha a <b>loja de origem</b>, marque a <b>quantidade</b> de cada item e monte a caixa. Sai <b>um protocolo</b> com todos os itens.</p>
+    {% endif %}
+  </header>
+
+  <form method="post" id="cx-form"{% if generico %} data-generico="1"{% endif %}>
+    {% csrf_token %}
+
+    <div class="cxr-rota">
+      <div class="cxr-field">
+        <label class="cxr-field__lbl" for="cx-origem">Origem <span class="cxr-field__req">*</span></label>
+        <select id="cx-origem" name="unidade_origem" required>
+          {% for u in unidades %}<option value="{{ u.id }}"{% if u.id == origem_sel %} selected{% endif %}>{{ u.name }}</option>{% endfor %}
+        </select>
+        <span class="cxr-field__help">A lista de itens abaixo mostra só o estoque desta loja.</span>
+      </div>
+
+      <div class="cxr-field">
+        <label class="cxr-field__lbl" for="cx-destino">Destino <span class="cxr-field__req">*</span></label>
+        <select name="unidade_destino" id="cx-destino" required>
+          <option value="">— escolha —</option>
+          {% for u in unidades %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+        </select>
+        <span class="cxr-field__help">Precisa ser diferente da origem.</span>
+      </div>
+
+      <div class="cxr-field">
+        <label class="cxr-field__lbl" for="cx-colab">Recebido por</label>
+        <select name="colaborador_destino" id="cx-colab">
+          <option value="">— selecione —</option>
+          {% for c in colaboradores %}<option value="{{ c.id }}">{{ c.full_name }}</option>{% endfor %}
+        </select>
+        <span class="cxr-field__help">Opcional: quem assina no destino.</span>
+      </div>
+
+      <div class="cxr-field">
+        <label class="cxr-field__lbl" for="cx-data">Data de chegada</label>
+        <input type="date" name="data_chegada" id="cx-data">
+        <span class="cxr-field__help">Opcional: previsão de chegada.</span>
+      </div>
+    </div>
+
+    <div class="cx-grid" style="margin-top:16px">
+      {# ----- itens disponíveis ----- #}
+      <div class="cx-itens{% if generico %} cx-itens--generico{% endif %}" id="cx-itens">
+        {# ----- itens do ESTOQUE (recolhido no modo genérico) ----- #}
+        <details class="cx-stock" id="cx-stock"{% if not generico %} open{% endif %}>
+          <summary class="cx-stock__sum">
+            <span class="mkpro-chip mkpro-chip--sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></span>
+            Itens do estoque{% if generico %} <small>(opcional — clique para adicionar)</small>{% endif %}
+          </summary>
+          <div class="cx-stock__list">
+        {% for p in pecas %}
+          <div class="cx-item" data-unidade="{{ p.unidade_id }}" data-pid="{{ p.id }}"
+               data-nome="{{ p.descricao }}">
+            <div class="cx-item__txt">
+              <b>{{ p.descricao }}</b>
+              <span>{{ p.get_tipo_display }} · {{ p.unidade.name }} · {{ p.quantidade }} em estoque</span>
+            </div>
+            <div class="cx-item__qtd">
+              <button type="button" class="cx-step" data-step="-1" aria-label="Diminuir">−</button>
+              <input type="number" name="peca_{{ p.id }}" min="0" max="{{ p.quantidade }}" value="{% if p.id in pre_ids %}1{% else %}0{% endif %}" inputmode="numeric" aria-label="Quantidade de {{ p.descricao }}">
+              <button type="button" class="cx-step" data-step="1" aria-label="Aumentar">+</button>
+            </div>
+          </div>
+        {% empty %}
+          <div style="padding:14px">
+            <div class="mkpro-empty mkpro-empty--slim">
+              <span class="mkpro-chip mkpro-chip--lg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></span>
+              <p class="mkpro-empty__title">Nenhuma peça com estoque para enviar</p>
+              <p class="mkpro-empty__hint">Cadastre peças no estoque desta loja, ou adicione itens fora do estoque abaixo.</p>
+            </div>
+          </div>
+        {% endfor %}
+          </div>
+        </details>
+
+        {# ----- itens FORA do estoque (avulsos) ----- #}
+        <div class="cx-avulsos" id="cx-avulsos">
+          <div class="cx-avulsos__head">
+            <b>Itens fora do estoque</b>
+            <span>Entram só no protocolo — não mexem no estoque das lojas.</span>
+          </div>
+          <div class="cx-avulsos__list" id="cx-avulsos-list"></div>
+          <button type="button" class="cx-avulso-add" id="cx-avulso-add">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Adicionar item avulso
+          </button>
+        </div>
+      </div>
+
+      {# molde de uma linha de item avulso #}
+      <template id="cx-avulso-tpl">
+        <div class="cx-avulso">
+          <select name="avulso_tipo" class="cx-avulso__tipo" aria-label="Tipo do item">
+            {% for v, l in tipos_peca %}<option value="{{ v }}"{% if v == 'outro' %} selected{% endif %}>{{ l }}</option>{% endfor %}
+          </select>
+          <input type="text" name="avulso_nome" class="cx-avulso__nome" maxlength="120"
+                 placeholder="Descrição do item (ex.: Nobreak, Cabo HDMI, Suporte…)">
+          <div class="cx-item__qtd">
+            <button type="button" class="cx-step" data-step="-1" aria-label="Diminuir">−</button>
+            <input type="number" name="avulso_qtd" min="0" value="1" inputmode="numeric" aria-label="Quantidade">
+            <button type="button" class="cx-step" data-step="1" aria-label="Aumentar">+</button>
+          </div>
+          <button type="button" class="cx-avulso__x" title="Remover item" aria-label="Remover item">×</button>
+        </div>
+      </template>
+
+      {# ----- a caixa ----- #}
+      <div class="cx-box-panel">
+        <div class="cx-box" id="cx-box" aria-hidden="true">
+          <svg class="cx-box__svg" viewBox="0 0 160 130">
+            <polygon class="cx-box__flapL" points="80,8 20,30 80,52 140,30"/>
+            <polygon class="cx-box__back" points="20,30 20,98 80,120 80,52"/>
+            <polygon class="cx-box__front" points="140,30 140,98 80,120 80,52"/>
+          </svg>
+          <span class="cx-box__count" id="cx-box-count">0</span>
+        </div>
+        <ul class="cx-resumo" id="cx-resumo"><li class="cx-resumo__vazio">A caixa está vazia.</li></ul>
+        <div class="cx-total" id="cx-total"></div>
+        <button type="button" class="cx-montar" id="cx-montar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg> Montar caixa e gerar protocolo</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+{# ----- overlay da animação de montagem ----- #}
+<div class="cx-anim" id="cx-anim" aria-hidden="true">
+  <div class="cx-anim__stage">
+    <svg class="cx-anim__box" viewBox="0 0 180 150">
+      <polygon class="cx-box__back" points="24,40 24,112 90,136 90,64"/>
+      <polygon class="cx-box__front" points="156,40 156,112 90,136 90,64"/>
+      <polygon class="cx-box__flapL cx-anim__flapL" points="90,20 28,42 90,64 152,42"/>
+      <polygon class="cx-box__flapR cx-anim__flapR" points="90,20 152,42 90,64 28,42"/>
+    </svg>
+    <span class="cx-anim__tape" aria-hidden="true"></span>
+  </div>
+  <p class="cx-anim__txt" id="cx-anim-txt">Montando a caixa…</p>
+</div>
+{% endblock %}

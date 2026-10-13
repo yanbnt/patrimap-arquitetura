@@ -1,0 +1,20 @@
+{% load unfold_list %}
+{% comment %}
+PAGINAÇÃO — override Make.
+
+O original do unfold desenha os números da página E, num bloco à parte, o total
+("13 usuários"). O dono mandou print do rodapé e disse "tira isso": o total não
+informa nada que a própria lista não mostre, e ficava sozinho no rodapé de toda
+tela de administração.
+
+Só o CONTADOR sai. Os números de página continuam, porque eles são a única
+forma de chegar à segunda página de listas grandes (Colaboradores tem 91) —
+esconder o bloco inteiro por CSS teria levado a navegação junto.
+{% endcomment %}
+{% if pagination_required %}
+    {% for i in page_range %}
+        <div class="{% if forloop.last %}pr-2{% else %}pr-4{% endif %}">
+            {% paginator_number cl i %}
+        </div>
+    {% endfor %}
+{% endif %}
